@@ -1,24 +1,23 @@
 # Project Agent Notes
 
 ## What this repo is
-One-paragraph purpose.
+(Short purpose)
 
 ## Repo map
-- `...` short list of important folders
+- (Key folders)
 
-## How to work here
-- Plan first; do not scan the whole repo.
-- Use rg for discovery; read targeted sections only.
-- Minimal diffs; keep changes reversible.
-
-## Build / test
+## Setup commands
 - Install:
-- Format:
-- Lint:
+- Run:
+- Lint/Format:
 - Test:
 
 ## Conventions
 - Code style:
 - Naming:
-- Commit message style:
-- Any "gotchas":
+- Commit style:
+- Gotchas:
+
+## Guardrails
+- I plan first and avoid scanning the whole repo.
+- I use rg first and open only targeted sections.

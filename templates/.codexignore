@@ -1,0 +1,15 @@
+# Big / low-value for agent context
+**/*.pdf
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.webp
+
+# Common deps/caches
+node_modules/
+.venv/
+__pycache__/
+.cache/
+dist/
+build/
+coverage/

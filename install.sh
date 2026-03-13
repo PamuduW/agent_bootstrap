@@ -475,9 +475,10 @@ cmd_status() {
   if [ -d "$HOME/.codex" ]; then
     local codex_skills=0
     for s in "$HOME/.codex/skills"/*/; do
-      [ -L "$s" ] || continue
+      local s_path="${s%/}"
+      [ -L "$s_path" ] || continue
       local link_target
-      link_target=$(readlink -f "$s" 2>/dev/null || true)
+      link_target=$(readlink -f "$s_path" 2>/dev/null || true)
       if [[ "$link_target" == "$BOOTSTRAP_DIR"* ]]; then
         codex_skills=$((codex_skills + 1))
       fi

@@ -36,7 +36,7 @@ This repo solves that by extracting everything from Cursor's plugin cache and de
 | **GitLab** | 1 | 1 | 1 | 6 | 1 | -- |
 | **Grafana Assistant** | 1 | 1 | -- | -- | -- | -- |
 | **JFrog** | 1 | 1 | 1 | -- | 1 | -- |
-| **Total** | **35** | **5** | **4** | **9** | **3** | **2** |
+| **Total** | **35** | **5** | **4** | **9** | **2-3** | **2** |
 
 ### Skills (35)
 

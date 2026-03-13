@@ -143,9 +143,10 @@ scan_codex_skills() {
     [[ "$skill_name" == .* ]] && continue
 
     # Skip skills that are symlinks back to our bootstrap
-    if [ -L "$skill_dir" ]; then
+    local skill_path="${skill_dir%/}"
+    if [ -L "$skill_path" ]; then
       local target
-      target=$(readlink -f "$skill_dir" 2>/dev/null || true)
+      target=$(readlink -f "$skill_path" 2>/dev/null || true)
       [[ "$target" == "$BOOTSTRAP_DIR"* ]] && continue
     fi
 

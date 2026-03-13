@@ -20,6 +20,11 @@ err()   { printf "${RED}[err]${NC}   %s\n" "$*" >&2; }
 dry()   { printf "${YELLOW}[dry]${NC}   %s\n" "$*"; }
 header(){ printf "\n${BOLD}── %s${NC}\n" "$*"; }
 
+if ! command -v jq &>/dev/null; then
+  err "jq is required. Install with: sudo apt install jq"
+  exit 1
+fi
+
 run() {
   if $DRY_RUN; then dry "$*"; else "$@"; fi
 }
@@ -54,12 +59,6 @@ merge_mcp_json() {
     fi
     $cleanup && rm -f "$effective_src"
     return 0
-  fi
-
-  if ! command -v jq &>/dev/null; then
-    err "jq is required for MCP config merging. Install with: sudo apt install jq"
-    $cleanup && rm -f "$effective_src"
-    return 1
   fi
 
   if $DRY_RUN; then
@@ -131,7 +130,7 @@ HEADER
     if [ -z "$desc" ]; then
       desc=$(head -5 "$skill_dir/SKILL.md" | grep "^#" | head -1 | sed 's/^#\+\s*//' || true)
     fi
-    echo "- **$name**: \`$skill_dir/SKILL.md\`${desc:+ — $desc}" >> "$rule_file"
+    echo "- **$name**: \`${skill_dir}SKILL.md\`${desc:+ — $desc}" >> "$rule_file"
   done
 
   echo "" >> "$rule_file"
@@ -169,7 +168,6 @@ HEADER
 
 generate_claude_md() {
   local target_file="$1"
-  local context="$2"
 
   if $DRY_RUN; then
     dry "Generate $target_file with skill catalog"
@@ -296,6 +294,18 @@ HEADER
     echo "- $(basename "$agent" .md): \`$agent\`" >> "$target_file"
   done
 
+  local mcp_servers=""
+  if command -v jq &>/dev/null && [ -f "$BOOTSTRAP_DIR/mcp/mcp.json" ]; then
+    mcp_servers=$(jq -r '.mcpServers | keys | join(", ")' "$BOOTSTRAP_DIR/mcp/mcp.json" 2>/dev/null || true)
+  fi
+  if [ -n "$mcp_servers" ]; then
+    echo "" >> "$target_file"
+    echo "## MCP Servers" >> "$target_file"
+    echo "" >> "$target_file"
+    echo "Configured servers: $mcp_servers" >> "$target_file"
+    echo "See \`$BOOTSTRAP_DIR/mcp/mcp-inventory.md\` for details." >> "$target_file"
+  fi
+
   log_installed "file:$target_file"
   ok "Generated $target_file"
 }
@@ -350,7 +360,7 @@ cmd_global() {
     if [ -f "$claude_md" ] && ! $FORCE; then
       skip "$claude_md already exists (use --force to overwrite)"
     else
-      generate_claude_md "$claude_md" "global"
+      generate_claude_md "$claude_md"
     fi
   else
     info "~/.claude not found, skipping Claude Code setup"
@@ -411,7 +421,7 @@ cmd_workspace() {
     skip "$target/CLAUDE.md already exists (use --force to overwrite)"
   else
     info "Generating Claude Code CLAUDE.md"
-    generate_claude_md "$target/CLAUDE.md" "workspace"
+    generate_claude_md "$target/CLAUDE.md"
   fi
 
   echo ""
@@ -586,7 +596,7 @@ Commands:
 
 Options:
   --dry-run           Show what would be done without making changes
-  --force             Overwrite existing files (with global)
+  --force             Overwrite existing generated files (AGENTS.md, CLAUDE.md)
   -h, --help          Show this help
 
 Examples:

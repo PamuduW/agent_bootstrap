@@ -1,0 +1,275 @@
+22:51:28 wipalk@IFSCLIENT-82620 ~/ATOM/agent_bootstrap (main)
+$ ./sync.sh --check
+
+── Sync Check — 2026-03-13
+[info]  Manifest last sync: 2026-03-13
+
+
+── Cursor Plugins
+[new]   NEW plugin: compound-engineering (hash: e1906592cbd4...) — skills=19 rules=0 agents=5 commands=18
+[new]   NEW plugin: create-plugin (hash: e2a991878765...) — skills=2 rules=1 agents=1 commands=0
+[new]   NEW plugin: deploy-on-aws (hash: 437f4bed0bfd...) — skills=1 rules=0 agents=0 commands=0
+[new]   NEW plugin: firecrawl (hash: 80ce444eb020...) — skills=1 rules=1 agents=0 commands=0
+[new]   NEW plugin: notion-workspace (hash: cf1324609edb...) — skills=14 rules=0 agents=0 commands=0
+[new]   NEW plugin: parallel (hash: db86c809e263...) — skills=4 rules=1 agents=0 commands=7
+[new]   NEW plugin: runlayer (hash: 32f6a6c6c957...) — skills=3 rules=2 agents=0 commands=2
+
+── Codex Skills
+[ok]    No new Codex skills to import
+
+[info]  Run './sync.sh --pull' to apply changes
+
+22:51:31 wipalk@IFSCLIENT-82620 ~/ATOM/agent_bootstrap (main)
+$ ./sync.sh --pull
+
+── Sync Pull — 2026-03-13
+[info]  Pulling updates into bootstrap repo...
+
+── Cursor Plugins
+[new]   NEW plugin: compound-engineering (hash: e1906592cbd4...) — skills=19 rules=0 agents=5 commands=18
+[new]   NEW plugin: create-plugin (hash: e2a991878765...) — skills=2 rules=1 agents=1 commands=0
+[new]   NEW plugin: deploy-on-aws (hash: 437f4bed0bfd...) — skills=1 rules=0 agents=0 commands=0
+[new]   NEW plugin: firecrawl (hash: 80ce444eb020...) — skills=1 rules=1 agents=0 commands=0
+[new]   NEW plugin: notion-workspace (hash: cf1324609edb...) — skills=14 rules=0 agents=0 commands=0
+[new]   NEW plugin: parallel (hash: db86c809e263...) — skills=4 rules=1 agents=0 commands=7
+[new]   NEW plugin: runlayer (hash: 32f6a6c6c957...) — skills=3 rules=2 agents=0 commands=2
+
+── Codex Skills
+[ok]    No new Codex skills to import
+
+── Exporting new plugin: compound-engineering
+[info]  Exporting plugin: compound-engineering
+[ok]      skill: compound-engineering-agent-browser
+[ok]      skill: compound-engineering-agent-native-architecture
+[ok]      skill: compound-engineering-andrew-kane-gem-writer
+[ok]      skill: compound-engineering-brainstorming
+[ok]      skill: compound-engineering-compound-docs
+[ok]      skill: compound-engineering-create-agent-skills
+[ok]      skill: compound-engineering-dhh-rails-style
+[ok]      skill: compound-engineering-document-review
+[ok]      skill: compound-engineering-dspy-ruby
+[ok]      skill: compound-engineering-every-style-editor
+[ok]      skill: compound-engineering-file-todos
+[ok]      skill: compound-engineering-frontend-design
+[ok]      skill: compound-engineering-gemini-imagegen
+[ok]      skill: compound-engineering-git-worktree
+[ok]      skill: compound-engineering-orchestrating-swarms
+[ok]      skill: compound-engineering-rclone
+[ok]      skill: compound-engineering-resolve-pr-parallel
+[ok]      skill: compound-engineering-setup
+[ok]      skill: compound-engineering-skill-creator
+[ok]      command: compound-engineering-agent-native-audit.md
+[ok]      command: compound-engineering-changelog.md
+[ok]      command: compound-engineering-create-agent-skill.md
+[ok]      command: compound-engineering-deepen-plan.md
+[ok]      command: compound-engineering-deploy-docs.md
+[ok]      command: compound-engineering-feature-video.md
+[ok]      command: compound-engineering-generate_command.md
+[ok]      command: compound-engineering-heal-skill.md
+[ok]      command: compound-engineering-lfg.md
+[ok]      command: compound-engineering-report-bug.md
+[ok]      command: compound-engineering-reproduce-bug.md
+[ok]      command: compound-engineering-resolve_parallel.md
+[ok]      command: compound-engineering-resolve_todo_parallel.md
+[ok]      command: compound-engineering-slfg.md
+[ok]      command: compound-engineering-test-browser.md
+[ok]      command: compound-engineering-test-xcode.md
+[ok]      command: compound-engineering-triage.md
+[ok]      mcp: merged config
+
+── Exporting new plugin: create-plugin
+[info]  Exporting plugin: create-plugin
+[ok]      skill: create-plugin-create-plugin-scaffold
+[ok]      skill: create-plugin-review-plugin-submission
+[ok]      rule: create-plugin-plugin-quality-gates.mdc
+[ok]      agent: create-plugin-plugin-architect.md
+
+── Exporting new plugin: deploy-on-aws
+[info]  Exporting plugin: deploy-on-aws
+[ok]      skill: deploy-on-aws-deploy
+[ok]      mcp: merged config
+
+── Exporting new plugin: firecrawl
+[info]  Exporting plugin: firecrawl
+[ok]      skill: firecrawl-firecrawl
+[ok]      rule: firecrawl-install.mdc
+
+── Exporting new plugin: notion-workspace
+[info]  Exporting plugin: notion-workspace
+[ok]      skill: notion-workspace-create-database-row
+[ok]      skill: notion-workspace-create-page
+[ok]      skill: notion-workspace-create-task
+[ok]      skill: notion-workspace-database-query
+[ok]      skill: notion-workspace-find
+[ok]      skill: notion-workspace-knowledge-capture
+[ok]      skill: notion-workspace-meeting-intelligence
+[ok]      skill: notion-workspace-research-documentation
+[ok]      skill: notion-workspace-search
+[ok]      skill: notion-workspace-spec-to-implementation
+[ok]      skill: notion-workspace-tasks-build
+[ok]      skill: notion-workspace-tasks-explain-diff
+[ok]      skill: notion-workspace-tasks-plan
+[ok]      skill: notion-workspace-tasks-setup
+[ok]      mcp: merged config
+
+── Exporting new plugin: parallel
+[info]  Exporting plugin: parallel
+[ok]      skill: parallel-parallel-data-enrichment
+[ok]      skill: parallel-parallel-deep-research
+[ok]      skill: parallel-parallel-web-extract
+[ok]      skill: parallel-parallel-web-search
+[ok]      rule: parallel-citation-standards.mdc
+[ok]      command: parallel-parallel-enrich.md
+[ok]      command: parallel-parallel-extract.md
+[ok]      command: parallel-parallel-research.md
+[ok]      command: parallel-parallel-result.md
+[ok]      command: parallel-parallel-search.md
+[ok]      command: parallel-parallel-setup.md
+[ok]      command: parallel-parallel-status.md
+
+── Exporting new plugin: runlayer
+[info]  Exporting plugin: runlayer
+[ok]      skill: runlayer-mcp-builder
+[ok]      skill: runlayer-mcp-security-audit
+[ok]      skill: runlayer-plugin-builder
+[ok]      rule: runlayer-mcp-governance.mdc
+[ok]      rule: runlayer-secrets-hygiene.mdc
+[ok]      command: runlayer-build-mcp.md
+[ok]      command: runlayer-build-plugin.md
+[ok]      hooks: runlayer
+
+── Regenerating global agent configs
+
+── Global setup
+
+── Cursor: MCP servers
+[ok]    Merged MCP servers into /home/wipalk/.cursor/mcp.json
+
+── Codex: global AGENTS.md
+[ok]    Generated /home/wipalk/.codex/AGENTS.md
+
+── Codex: skills
+[skip]  Already linked: /home/wipalk/.codex/skills/atlassian-capture-tasks-from-meeting-notes
+[skip]  Already linked: /home/wipalk/.codex/skills/atlassian-generate-status-report
+[skip]  Already linked: /home/wipalk/.codex/skills/atlassian-search-company-knowledge
+[skip]  Already linked: /home/wipalk/.codex/skills/atlassian-spec-to-backlog
+[skip]  Already linked: /home/wipalk/.codex/skills/atlassian-triage-issue
+[ok]    Linked /home/wipalk/.codex/skills/compound-engineering-agent-browser -> /home/wipalk/ATOM/agent_bootstrap/skills/compound-engineering-agent-browser/
+[ok]    Linked /home/wipalk/.codex/skills/compound-engineering-agent-native-architecture -> /home/wipalk/ATOM/agent_bootstrap/skills/compound-engineering-agent-native-architecture/
+[ok]    Linked /home/wipalk/.codex/skills/compound-engineering-andrew-kane-gem-writer -> /home/wipalk/ATOM/agent_bootstrap/skills/compound-engineering-andrew-kane-gem-writer/
+[ok]    Linked /home/wipalk/.codex/skills/compound-engineering-brainstorming -> /home/wipalk/ATOM/agent_bootstrap/skills/compound-engineering-brainstorming/
+[ok]    Linked /home/wipalk/.codex/skills/compound-engineering-compound-docs -> /home/wipalk/ATOM/agent_bootstrap/skills/compound-engineering-compound-docs/
+[ok]    Linked /home/wipalk/.codex/skills/compound-engineering-create-agent-skills -> /home/wipalk/ATOM/agent_bootstrap/skills/compound-engineering-create-agent-skills/
+[ok]    Linked /home/wipalk/.codex/skills/compound-engineering-dhh-rails-style -> /home/wipalk/ATOM/agent_bootstrap/skills/compound-engineering-dhh-rails-style/
+[ok]    Linked /home/wipalk/.codex/skills/compound-engineering-document-review -> /home/wipalk/ATOM/agent_bootstrap/skills/compound-engineering-document-review/
+[ok]    Linked /home/wipalk/.codex/skills/compound-engineering-dspy-ruby -> /home/wipalk/ATOM/agent_bootstrap/skills/compound-engineering-dspy-ruby/
+[ok]    Linked /home/wipalk/.codex/skills/compound-engineering-every-style-editor -> /home/wipalk/ATOM/agent_bootstrap/skills/compound-engineering-every-style-editor/
+[ok]    Linked /home/wipalk/.codex/skills/compound-engineering-file-todos -> /home/wipalk/ATOM/agent_bootstrap/skills/compound-engineering-file-todos/
+[ok]    Linked /home/wipalk/.codex/skills/compound-engineering-frontend-design -> /home/wipalk/ATOM/agent_bootstrap/skills/compound-engineering-frontend-design/
+[ok]    Linked /home/wipalk/.codex/skills/compound-engineering-gemini-imagegen -> /home/wipalk/ATOM/agent_bootstrap/skills/compound-engineering-gemini-imagegen/
+[ok]    Linked /home/wipalk/.codex/skills/compound-engineering-git-worktree -> /home/wipalk/ATOM/agent_bootstrap/skills/compound-engineering-git-worktree/
+[ok]    Linked /home/wipalk/.codex/skills/compound-engineering-orchestrating-swarms -> /home/wipalk/ATOM/agent_bootstrap/skills/compound-engineering-orchestrating-swarms/
+[ok]    Linked /home/wipalk/.codex/skills/compound-engineering-rclone -> /home/wipalk/ATOM/agent_bootstrap/skills/compound-engineering-rclone/
+[ok]    Linked /home/wipalk/.codex/skills/compound-engineering-resolve-pr-parallel -> /home/wipalk/ATOM/agent_bootstrap/skills/compound-engineering-resolve-pr-parallel/
+[ok]    Linked /home/wipalk/.codex/skills/compound-engineering-setup -> /home/wipalk/ATOM/agent_bootstrap/skills/compound-engineering-setup/
+[ok]    Linked /home/wipalk/.codex/skills/compound-engineering-skill-creator -> /home/wipalk/ATOM/agent_bootstrap/skills/compound-engineering-skill-creator/
+[skip]  Already linked: /home/wipalk/.codex/skills/continual-learning-continual-learning
+[ok]    Linked /home/wipalk/.codex/skills/create-plugin-create-plugin-scaffold -> /home/wipalk/ATOM/agent_bootstrap/skills/create-plugin-create-plugin-scaffold/
+[ok]    Linked /home/wipalk/.codex/skills/create-plugin-review-plugin-submission -> /home/wipalk/ATOM/agent_bootstrap/skills/create-plugin-review-plugin-submission/
+[ok]    Linked /home/wipalk/.codex/skills/cursor-native-create-rule -> /home/wipalk/ATOM/agent_bootstrap/skills/cursor-native-create-rule/
+[ok]    Linked /home/wipalk/.codex/skills/cursor-native-create-skill -> /home/wipalk/ATOM/agent_bootstrap/skills/cursor-native-create-skill/
+[ok]    Linked /home/wipalk/.codex/skills/cursor-native-create-subagent -> /home/wipalk/ATOM/agent_bootstrap/skills/cursor-native-create-subagent/
+[ok]    Linked /home/wipalk/.codex/skills/cursor-native-migrate-to-skills -> /home/wipalk/ATOM/agent_bootstrap/skills/cursor-native-migrate-to-skills/
+[ok]    Linked /home/wipalk/.codex/skills/cursor-native-shell -> /home/wipalk/ATOM/agent_bootstrap/skills/cursor-native-shell/
+[ok]    Linked /home/wipalk/.codex/skills/cursor-native-update-cursor-settings -> /home/wipalk/ATOM/agent_bootstrap/skills/cursor-native-update-cursor-settings/
+[skip]  Already linked: /home/wipalk/.codex/skills/cursor-team-kit-check-compiler-errors
+[skip]  Already linked: /home/wipalk/.codex/skills/cursor-team-kit-deslop
+[skip]  Already linked: /home/wipalk/.codex/skills/cursor-team-kit-fix-ci
+[skip]  Already linked: /home/wipalk/.codex/skills/cursor-team-kit-fix-merge-conflicts
+[skip]  Already linked: /home/wipalk/.codex/skills/cursor-team-kit-get-pr-comments
+[skip]  Already linked: /home/wipalk/.codex/skills/cursor-team-kit-loop-on-ci
+[skip]  Already linked: /home/wipalk/.codex/skills/cursor-team-kit-new-branch-and-pr
+[skip]  Already linked: /home/wipalk/.codex/skills/cursor-team-kit-pr-review-canvas
+[skip]  Already linked: /home/wipalk/.codex/skills/cursor-team-kit-review-and-ship
+[skip]  Already linked: /home/wipalk/.codex/skills/cursor-team-kit-run-smoke-tests
+[skip]  Already linked: /home/wipalk/.codex/skills/cursor-team-kit-weekly-review
+[skip]  Already linked: /home/wipalk/.codex/skills/cursor-team-kit-what-did-i-get-done
+[ok]    Linked /home/wipalk/.codex/skills/deploy-on-aws-deploy -> /home/wipalk/ATOM/agent_bootstrap/skills/deploy-on-aws-deploy/
+[ok]    Linked /home/wipalk/.codex/skills/firecrawl-firecrawl -> /home/wipalk/ATOM/agent_bootstrap/skills/firecrawl-firecrawl/
+[skip]  Already linked: /home/wipalk/.codex/skills/gitlab-gitlab-ci-author
+[skip]  Already linked: /home/wipalk/.codex/skills/grafana-assistant-grafana-assistant-cli
+[skip]  Already linked: /home/wipalk/.codex/skills/jfrog-jfrog-platform
+[ok]    Linked /home/wipalk/.codex/skills/notion-workspace-create-database-row -> /home/wipalk/ATOM/agent_bootstrap/skills/notion-workspace-create-database-row/
+[ok]    Linked /home/wipalk/.codex/skills/notion-workspace-create-page -> /home/wipalk/ATOM/agent_bootstrap/skills/notion-workspace-create-page/
+[ok]    Linked /home/wipalk/.codex/skills/notion-workspace-create-task -> /home/wipalk/ATOM/agent_bootstrap/skills/notion-workspace-create-task/
+[ok]    Linked /home/wipalk/.codex/skills/notion-workspace-database-query -> /home/wipalk/ATOM/agent_bootstrap/skills/notion-workspace-database-query/
+[ok]    Linked /home/wipalk/.codex/skills/notion-workspace-find -> /home/wipalk/ATOM/agent_bootstrap/skills/notion-workspace-find/
+[ok]    Linked /home/wipalk/.codex/skills/notion-workspace-knowledge-capture -> /home/wipalk/ATOM/agent_bootstrap/skills/notion-workspace-knowledge-capture/
+[ok]    Linked /home/wipalk/.codex/skills/notion-workspace-meeting-intelligence -> /home/wipalk/ATOM/agent_bootstrap/skills/notion-workspace-meeting-intelligence/
+[ok]    Linked /home/wipalk/.codex/skills/notion-workspace-research-documentation -> /home/wipalk/ATOM/agent_bootstrap/skills/notion-workspace-research-documentation/
+[ok]    Linked /home/wipalk/.codex/skills/notion-workspace-search -> /home/wipalk/ATOM/agent_bootstrap/skills/notion-workspace-search/
+[ok]    Linked /home/wipalk/.codex/skills/notion-workspace-spec-to-implementation -> /home/wipalk/ATOM/agent_bootstrap/skills/notion-workspace-spec-to-implementation/
+[ok]    Linked /home/wipalk/.codex/skills/notion-workspace-tasks-build -> /home/wipalk/ATOM/agent_bootstrap/skills/notion-workspace-tasks-build/
+[ok]    Linked /home/wipalk/.codex/skills/notion-workspace-tasks-explain-diff -> /home/wipalk/ATOM/agent_bootstrap/skills/notion-workspace-tasks-explain-diff/
+[ok]    Linked /home/wipalk/.codex/skills/notion-workspace-tasks-plan -> /home/wipalk/ATOM/agent_bootstrap/skills/notion-workspace-tasks-plan/
+[ok]    Linked /home/wipalk/.codex/skills/notion-workspace-tasks-setup -> /home/wipalk/ATOM/agent_bootstrap/skills/notion-workspace-tasks-setup/
+[ok]    Linked /home/wipalk/.codex/skills/parallel-parallel-data-enrichment -> /home/wipalk/ATOM/agent_bootstrap/skills/parallel-parallel-data-enrichment/
+[ok]    Linked /home/wipalk/.codex/skills/parallel-parallel-deep-research -> /home/wipalk/ATOM/agent_bootstrap/skills/parallel-parallel-deep-research/
+[ok]    Linked /home/wipalk/.codex/skills/parallel-parallel-web-extract -> /home/wipalk/ATOM/agent_bootstrap/skills/parallel-parallel-web-extract/
+[ok]    Linked /home/wipalk/.codex/skills/parallel-parallel-web-search -> /home/wipalk/ATOM/agent_bootstrap/skills/parallel-parallel-web-search/
+[ok]    Linked /home/wipalk/.codex/skills/runlayer-mcp-builder -> /home/wipalk/ATOM/agent_bootstrap/skills/runlayer-mcp-builder/
+[ok]    Linked /home/wipalk/.codex/skills/runlayer-mcp-security-audit -> /home/wipalk/ATOM/agent_bootstrap/skills/runlayer-mcp-security-audit/
+[ok]    Linked /home/wipalk/.codex/skills/runlayer-plugin-builder -> /home/wipalk/ATOM/agent_bootstrap/skills/runlayer-plugin-builder/
+[skip]  Already linked: /home/wipalk/.codex/skills/superpowers-brainstorming
+[skip]  Already linked: /home/wipalk/.codex/skills/superpowers-dispatching-parallel-agents
+[skip]  Already linked: /home/wipalk/.codex/skills/superpowers-executing-plans
+[skip]  Already linked: /home/wipalk/.codex/skills/superpowers-finishing-a-development-branch
+[skip]  Already linked: /home/wipalk/.codex/skills/superpowers-receiving-code-review
+[skip]  Already linked: /home/wipalk/.codex/skills/superpowers-requesting-code-review
+[skip]  Already linked: /home/wipalk/.codex/skills/superpowers-subagent-driven-development
+[skip]  Already linked: /home/wipalk/.codex/skills/superpowers-systematic-debugging
+[skip]  Already linked: /home/wipalk/.codex/skills/superpowers-test-driven-development
+[skip]  Already linked: /home/wipalk/.codex/skills/superpowers-using-git-worktrees
+[skip]  Already linked: /home/wipalk/.codex/skills/superpowers-using-superpowers
+[skip]  Already linked: /home/wipalk/.codex/skills/superpowers-verification-before-completion
+[skip]  Already linked: /home/wipalk/.codex/skills/superpowers-writing-plans
+[skip]  Already linked: /home/wipalk/.codex/skills/superpowers-writing-skills
+[info]  ~/.claude not found, skipping Claude Code setup
+
+── Shell profile
+[skip]  AGENT_BOOTSTRAP_HOME already in /home/wipalk/.bashrc
+
+[ok]    Global setup complete. Run 'source ~/.bashrc' to load env vars.
+[ok]    Regenerated global AGENTS.md / CLAUDE.md / MCP configs
+
+── Refreshing workspace skill catalogs
+
+── Workspace: /home/wipalk/ATOM/freeplayground
+[info]  Symlinking rules into /home/wipalk/ATOM/freeplayground/.cursor/rules/
+[ok]    Linked /home/wipalk/ATOM/freeplayground/.cursor/rules/create-plugin-plugin-quality-gates.mdc -> /home/wipalk/ATOM/agent_bootstrap/rules/create-plugin-plugin-quality-gates.mdc
+[skip]  Already linked: /home/wipalk/ATOM/freeplayground/.cursor/rules/cursor-team-kit-no-inline-imports.mdc
+[skip]  Already linked: /home/wipalk/ATOM/freeplayground/.cursor/rules/cursor-team-kit-typescript-exhaustive-switch.mdc
+[ok]    Linked /home/wipalk/ATOM/freeplayground/.cursor/rules/firecrawl-install.mdc -> /home/wipalk/ATOM/agent_bootstrap/rules/firecrawl-install.mdc
+[skip]  Already linked: /home/wipalk/ATOM/freeplayground/.cursor/rules/gitlab-gitlab-workflow.mdc
+[skip]  Already linked: /home/wipalk/ATOM/freeplayground/.cursor/rules/grafana-assistant-grafana-assistant.mdc
+[skip]  Already linked: /home/wipalk/ATOM/freeplayground/.cursor/rules/jfrog-jfrog-security.mdc
+[ok]    Linked /home/wipalk/ATOM/freeplayground/.cursor/rules/parallel-citation-standards.mdc -> /home/wipalk/ATOM/agent_bootstrap/rules/parallel-citation-standards.mdc
+[ok]    Linked /home/wipalk/ATOM/freeplayground/.cursor/rules/runlayer-mcp-governance.mdc -> /home/wipalk/ATOM/agent_bootstrap/rules/runlayer-mcp-governance.mdc
+[ok]    Linked /home/wipalk/ATOM/freeplayground/.cursor/rules/runlayer-secrets-hygiene.mdc -> /home/wipalk/ATOM/agent_bootstrap/rules/runlayer-secrets-hygiene.mdc
+[ok]    Generated /home/wipalk/ATOM/freeplayground/.cursor/rules/bootstrap-skills.mdc
+[info]  Setting up workspace MCP config
+[ok]    Merged MCP servers into /home/wipalk/ATOM/freeplayground/.cursor/mcp.json
+[info]  Generating Claude Code CLAUDE.md
+[ok]    Generated /home/wipalk/ATOM/freeplayground/CLAUDE.md
+
+[ok]    Workspace /home/wipalk/ATOM/freeplayground setup complete.
+[ok]    Refreshed: /home/wipalk/ATOM/freeplayground
+
+
+── Summary
+[ok]    Sync complete. Changes pulled into bootstrap repo.
+[info]  Review with: git diff
+[info]  Commit with: git add -A && git commit -m 'sync: update from sources'
+
+22:51:43 wipalk@IFSCLIENT-82620 ~/ATOM/agent_bootstrap (main ✱?)
+$

@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "last_sync": "2026-03-13",
+  "bootstrap_home": "/home/wipalk/ATOM/agent_bootstrap",
+  "sources": {
+    "cursor-plugins": {
+      "base_path": "~/.cursor/plugins/cache/cursor-public",
+      "plugins": {
+        "atlassian": {
+          "hash": "5d300c892a43513c4c5d3ecb534bf9c78b6d6389",
+          "synced_at": "2026-03-13",
+          "skills": 5,
+          "rules": 0,
+          "agents": 0,
+          "commands": 0,
+          "hooks": 0,
+          "mcp": 1
+        },
+        "continual-learning": {
+          "hash": "1966e5222399c7f4b64d3c922244d71b3af83cd3",
+          "synced_at": "2026-03-13",
+          "skills": 1,
+          "rules": 0,
+          "agents": 0,
+          "commands": 0,
+          "hooks": 2,
+          "mcp": 0
+        },
+        "cursor-team-kit": {
+          "hash": "1966e5222399c7f4b64d3c922244d71b3af83cd3",
+          "synced_at": "2026-03-13",
+          "skills": 12,
+          "rules": 2,
+          "agents": 1,
+          "commands": 0,
+          "hooks": 0,
+          "mcp": 0
+        },
+        "gitlab": {
+          "hash": "e89ebfc384db30e3d06c840853ad67d22f5f9c94",
+          "synced_at": "2026-03-13",
+          "skills": 1,
+          "rules": 1,
+          "agents": 1,
+          "commands": 6,
+          "hooks": 0,
+          "mcp": 1
+        },
+        "grafana-assistant": {
+          "hash": "b692d67af5d3afdb54335fa2571696c55ca1a37f",
+          "synced_at": "2026-03-13",
+          "skills": 1,
+          "rules": 1,
+          "agents": 0,
+          "commands": 0,
+          "hooks": 0,
+          "mcp": 0
+        },
+        "jfrog": {
+          "hash": "2f314801d29a41473e2edd01c6d625a3f75387b7",
+          "synced_at": "2026-03-13",
+          "skills": 1,
+          "rules": 1,
+          "agents": 1,
+          "commands": 0,
+          "hooks": 0,
+          "mcp": 1
+        },
+        "superpowers": {
+          "hash": "a0b9ecce2b25aa7d703138f17650540c2e8b2cde",
+          "synced_at": "2026-03-13",
+          "skills": 14,
+          "rules": 0,
+          "agents": 1,
+          "commands": 3,
+          "hooks": 3,
+          "mcp": 0
+        }
+      }
+    },
+    "codex-skills": {
+      "base_path": "~/.codex/skills",
+      "skills": {}
+    }
+  }
+}

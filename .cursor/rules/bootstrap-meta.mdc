@@ -1,0 +1,36 @@
+---
+description: Instructions for agents working in the agent_bootstrap repo itself
+alwaysApply: true
+---
+This is the **agent_bootstrap** repo — the source of truth for all AI agent configurations deployed across workspaces.
+
+## Repo layout
+
+- `skills/` — 35+ skill definitions (each has a SKILL.md)
+- `rules/` — Cursor rule files (.mdc)
+- `mcp/` — MCP server configs and docs
+- `agents/` — Subagent definitions
+- `commands/` — Command/prompt templates
+- `hooks/` — Lifecycle hook scripts
+- `manifest.json` — Tracks source plugin hashes and sync state
+- `install.sh` — Deploys configs globally and per-workspace
+- `sync.sh` — Detects and pulls updates from Cursor plugins and Codex skills
+
+## When the user asks to update or sync this repo
+
+1. Run `./sync.sh --check` first to show what's changed
+2. If updates exist, run `./sync.sh --pull` to import them
+3. Show the user `git diff` to review
+4. Commit when asked: `git add -A && git commit -m 'sync: <description>'`
+5. Optionally propagate: `./install.sh all ~/ATOM/`
+
+## When the user asks to install or set up
+
+- `./install.sh global` — global MCP, Codex skills, env var
+- `./install.sh all ~/ATOM/` — all repos under ATOM
+- `./install.sh workspace <path>` — single repo
+- `./install.sh status` — show what's configured
+
+## Available skills in this repo
+
+You can read any skill at `skills/*/SKILL.md` to learn how to perform specialized tasks.

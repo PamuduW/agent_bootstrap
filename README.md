@@ -1,6 +1,6 @@
 # agent_bootstrap
 
-Portable, self-updating source of truth for AI agent configurations. Clone it once, run one command, and every repo you open with Cursor, Codex, or Claude Code inherits 35 skills, 3 MCP servers, 5 rule sets, 9 commands, 4 subagents, and 2 hook configs -- automatically.
+Portable, self-updating source of truth for AI agent configurations. Clone it once, run one command, and every repo you open with Cursor, Codex, or Claude Code inherits 35 skills, 2-3 MCP servers, 5 rule sets, 9 commands, 4 subagents, and 2 hook configs -- automatically.
 
 Built for a workflow where you work inside a parent folder (e.g. `~/ATOM/`), clone repos into it, and want every AI agent session to have the same capabilities regardless of which repo you're in.
 
@@ -107,13 +107,13 @@ This repo solves that by extracting everything from Cursor's plugin cache and de
 
 </details>
 
-### MCP servers (3)
+### MCP servers (2 + 1 optional)
 
-| Server | Connects to | Auth |
-|--------|------------|------|
-| `atlassian` | Jira, Confluence, Rovo | OAuth (browser flow) |
-| `GitLab` | GitLab.com (or self-managed) | OAuth (browser flow) |
-| `jfrog` | JFrog Platform (Artifactory, Xray) | OAuth |
+| Server | Connects to | Auth | Notes |
+|--------|------------|------|-------|
+| `atlassian` | Jira, Confluence, Rovo | OAuth (browser flow) | Always included |
+| `GitLab` | GitLab.com (or self-managed) | OAuth (browser flow) | Always included |
+| `jfrog` | JFrog Platform (Artifactory, Xray) | OAuth | Only added when `JFROG_PLATFORM_URL` env var is set |
 
 Full details in `mcp/mcp-inventory.md`.
 
@@ -214,8 +214,8 @@ Options:
 | Platform | Action |
 |----------|--------|
 | **Cursor** | Merges MCP server entries into `~/.cursor/mcp.json` (preserves existing entries) |
-| **Codex** | Symlinks all 35 skills into `~/.codex/skills/`; installs global `AGENTS.md` (skip if exists, `--force` to overwrite) |
-| **Claude Code** | Merges MCP into `~/.claude/mcp.json` (if `~/.claude/` exists) |
+| **Codex** | Symlinks all 35 skills into `~/.codex/skills/`; generates global `AGENTS.md` with full skill/command/agent catalog and working-agreement guardrails (skip if exists, `--force` to overwrite) |
+| **Claude Code** | Merges MCP into `~/.claude/mcp.json`; generates global `CLAUDE.md` with full skill/command/agent catalog (if `~/.claude/` exists; skip if exists, `--force` to overwrite) |
 | **Shell** | Adds `export AGENT_BOOTSTRAP_HOME=...` to `~/.bashrc` (idempotent) |
 
 ### What `workspace` does
@@ -226,6 +226,7 @@ For a given repo path:
 2. Symlinks every `rules/*.mdc` file into it
 3. Generates a `bootstrap-skills.mdc` rule -- this is the key file that makes skills discoverable to Cursor CLI agents. It lists every skill with its absolute path so the agent can read any SKILL.md on demand.
 4. Merges MCP config into `<repo>/.cursor/mcp.json`
+5. Generates a `CLAUDE.md` at the repo root with the full skill/command/agent catalog for Claude Code CLI
 
 All symlinks use absolute paths back to this repo, so edits here propagate instantly.
 
@@ -266,7 +267,7 @@ For each new Codex skill:
 - Copies into `skills/`
 - Records in manifest
 
-After pulling, it regenerates the `bootstrap-skills.mdc` for every previously configured workspace.
+After pulling, it re-runs `install.sh global --force` to regenerate `~/.codex/AGENTS.md` and `~/.claude/CLAUDE.md` with the updated catalog, then re-runs `install.sh workspace` for every previously configured workspace to regenerate `bootstrap-skills.mdc` and per-repo `CLAUDE.md`.
 
 ### manifest.json
 
@@ -294,31 +295,19 @@ Copy `.env.example` for reference.
 
 ## How agents discover skills in sibling repos
 
-This is the core trick. When you run `install.sh workspace ~/ATOM/my-repo`, it generates a file at `my-repo/.cursor/rules/bootstrap-skills.mdc` that looks like:
+Each platform has a different mechanism. `install.sh` handles all of them:
 
-```
----
-description: Agent capabilities provided by agent_bootstrap
-alwaysApply: true
----
-You have access to additional skills from the agent bootstrap repo.
-To use a skill, read its SKILL.md file and follow the instructions within.
+### Cursor CLI
 
-## Available Skills
+`install.sh workspace` generates a `bootstrap-skills.mdc` in each repo's `.cursor/rules/`. With `alwaysApply: true`, it's loaded into every conversation. The agent sees the full catalog of skills with absolute paths and can read any SKILL.md on demand.
 
-- **superpowers-brainstorming**: `/home/you/ATOM/agent_bootstrap/skills/superpowers-brainstorming/SKILL.md`
-- **cursor-team-kit-fix-ci**: `/home/you/ATOM/agent_bootstrap/skills/cursor-team-kit-fix-ci/SKILL.md`
-...
+### Codex CLI
 
-## Available Commands (prompt templates)
+`install.sh global` symlinks all 35 skills directly into `~/.codex/skills/`, where Codex discovers them natively. It also generates a global `~/.codex/AGENTS.md` that lists all available commands and agents (with paths), so the agent knows about everything beyond just skills.
 
-- superpowers-brainstorm: `/home/you/ATOM/agent_bootstrap/commands/superpowers-brainstorm.md`
-...
-```
+### Claude Code CLI
 
-Because `alwaysApply: true`, this rule is loaded into every Cursor agent conversation in that workspace. The agent sees the skill catalog and can read any SKILL.md to learn how to perform that task.
-
-For Codex, skills are symlinked directly into `~/.codex/skills/` so they're natively available.
+`install.sh global` merges MCP servers into `~/.claude/mcp.json` and generates a global `~/.claude/CLAUDE.md` with the full skill/command/agent catalog. `install.sh workspace` also generates a per-repo `CLAUDE.md` at the repo root. Claude Code reads this file automatically and gets the same skill discovery as Cursor.
 
 ---
 

@@ -255,9 +255,7 @@ export_plugin() {
     if [ -f "$existing_mcp" ]; then
       local tmp
       tmp=$(mktemp)
-      jq -s '.[0].mcpServers as $existing |
-             .[1].mcpServers as $new |
-             { mcpServers: ($existing + $new) }' "$existing_mcp" "$mcp_file" > "$tmp"
+      jq -s '.[0] * { mcpServers: (.[0].mcpServers + .[1].mcpServers) }' "$existing_mcp" "$mcp_file" > "$tmp"
       mv "$tmp" "$existing_mcp"
     else
       mkdir -p "$BOOTSTRAP_DIR/mcp"
@@ -362,7 +360,7 @@ refresh_workspaces() {
   if [ ${#workspaces[@]} -gt 0 ]; then
     header "Refreshing workspace skill catalogs"
     for ws in "${workspaces[@]}"; do
-      "$BOOTSTRAP_DIR/install.sh" workspace "$ws" 2>/dev/null || true
+      "$BOOTSTRAP_DIR/install.sh" workspace "$ws" --force || true
       ok "Refreshed: $ws"
     done
   fi
@@ -386,7 +384,7 @@ cmd_check() {
 
   local total_changes=0
   for arr in "${_NEW_PLUGINS[@]:-}" "${_UPDATED_PLUGINS[@]:-}" "${_NEW_CODEX_SKILLS[@]:-}"; do
-    [ -n "$arr" ] && ((total_changes++))
+    [ -n "$arr" ] && total_changes=$((total_changes + 1))
   done
 
   echo ""
@@ -438,6 +436,11 @@ cmd_pull() {
 
   if $did_work; then
     update_manifest_timestamp
+
+    header "Regenerating global agent configs"
+    "$BOOTSTRAP_DIR/install.sh" global --force || warn "Global regeneration had errors (see above)"
+    ok "Regenerated global AGENTS.md / CLAUDE.md / MCP configs"
+
     refresh_workspaces
 
     echo ""

@@ -1,7 +1,6 @@
 {
   "version": 1,
   "last_sync": "2026-03-13",
-  "bootstrap_home": "/home/wipalk/ATOM/agent_bootstrap",
   "sources": {
     "cursor-plugins": {
       "base_path": "~/.cursor/plugins/cache/cursor-public",

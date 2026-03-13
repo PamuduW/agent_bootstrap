@@ -14,7 +14,8 @@ CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
 info()  { printf "${CYAN}[info]${NC}  %s\n" "$*"; }
 ok()    { printf "${GREEN}[ok]${NC}    %s\n" "$*"; }
-warn()  { printf "${YELLOW}[skip]${NC}  %s\n" "$*"; }
+skip()  { printf "${YELLOW}[skip]${NC}  %s\n" "$*"; }
+warn()  { printf "${YELLOW}[warn]${NC}  %s\n" "$*"; }
 err()   { printf "${RED}[err]${NC}   %s\n" "$*" >&2; }
 dry()   { printf "${YELLOW}[dry]${NC}   %s\n" "$*"; }
 header(){ printf "\n${BOLD}── %s${NC}\n" "$*"; }
@@ -25,7 +26,7 @@ run() {
 
 log_installed() {
   $DRY_RUN && return 0
-  echo "$1" >> "$INSTALLED_LOG"
+  grep -qxF "$1" "$INSTALLED_LOG" 2>/dev/null || echo "$1" >> "$INSTALLED_LOG"
 }
 
 # ---------------------------------------------------------------------------
@@ -34,31 +35,44 @@ log_installed() {
 
 merge_mcp_json() {
   local src="$1" dst="$2"
+
+  # Build the source JSON, injecting JFrog server if env var is set
+  local effective_src="$src"
+  local cleanup=false
+  if [ -n "${JFROG_PLATFORM_URL:-}" ]; then
+    effective_src=$(mktemp)
+    cleanup=true
+    jq --arg url "https://${JFROG_PLATFORM_URL}/mcp" \
+       '.mcpServers.jfrog = { url: $url }' "$src" > "$effective_src"
+  fi
+
   if [ ! -f "$dst" ]; then
-    run cp "$src" "$dst"
+    run cp "$effective_src" "$dst"
     if ! $DRY_RUN; then
       log_installed "file:$dst"
       ok "Created $dst"
     fi
-    return
+    $cleanup && rm -f "$effective_src"
+    return 0
   fi
 
   if ! command -v jq &>/dev/null; then
     err "jq is required for MCP config merging. Install with: sudo apt install jq"
+    $cleanup && rm -f "$effective_src"
     return 1
   fi
 
   if $DRY_RUN; then
     dry "Merge MCP servers from $src into $dst"
-    return
+    $cleanup && rm -f "$effective_src"
+    return 0
   fi
 
   local tmp
   tmp=$(mktemp)
-  jq -s '.[0].mcpServers as $existing |
-         .[1].mcpServers as $new |
-         { mcpServers: ($existing + $new) }' "$dst" "$src" > "$tmp"
+  jq -s '.[0] * { mcpServers: (.[0].mcpServers + .[1].mcpServers) }' "$dst" "$effective_src" > "$tmp"
   mv "$tmp" "$dst"
+  $cleanup && rm -f "$effective_src"
   log_installed "mcp-merge:$dst"
   ok "Merged MCP servers into $dst"
 }
@@ -69,12 +83,12 @@ symlink_file() {
     local current
     current=$(readlink -f "$dst" 2>/dev/null || true)
     if [ "$current" = "$(readlink -f "$src")" ]; then
-      warn "Already linked: $dst"
+      skip "Already linked: $dst"
       return 0
     fi
     run rm "$dst"
   elif [ -e "$dst" ]; then
-    warn "Already exists (not symlink), skipping: $dst"
+    skip "Already exists (not symlink): $dst"
     return 0
   fi
   run ln -s "$src" "$dst"
@@ -153,6 +167,139 @@ HEADER
   ok "Generated $rule_file"
 }
 
+generate_claude_md() {
+  local target_file="$1"
+  local context="$2"
+
+  if $DRY_RUN; then
+    dry "Generate $target_file with skill catalog"
+    return
+  fi
+
+  mkdir -p "$(dirname "$target_file")"
+
+  cat > "$target_file" << 'HEADER'
+# Agent Bootstrap — Available Capabilities
+
+You have access to additional skills, commands, and agents from the agent bootstrap repo.
+To use a skill, read its SKILL.md file and follow the instructions within.
+To use a command, read the .md file and follow the prompt template.
+
+HEADER
+
+  echo "## Skills" >> "$target_file"
+  echo "" >> "$target_file"
+  for skill_dir in "$BOOTSTRAP_DIR"/skills/*/; do
+    [ -f "$skill_dir/SKILL.md" ] || continue
+    local name
+    name=$(basename "$skill_dir")
+    local desc=""
+    desc=$(head -20 "$skill_dir/SKILL.md" | grep -i "^description:" | head -1 | sed 's/^description:\s*//' || true)
+    if [ -z "$desc" ]; then
+      desc=$(head -5 "$skill_dir/SKILL.md" | grep "^#" | head -1 | sed 's/^#\+\s*//' || true)
+    fi
+    echo "- **$name**: \`${skill_dir}SKILL.md\`${desc:+ — $desc}" >> "$target_file"
+  done
+
+  echo "" >> "$target_file"
+  echo "## Commands (prompt templates)" >> "$target_file"
+  echo "" >> "$target_file"
+  for cmd in "$BOOTSTRAP_DIR"/commands/*.md; do
+    [ -f "$cmd" ] || continue
+    echo "- $(basename "$cmd" .md): \`$cmd\`" >> "$target_file"
+  done
+
+  echo "" >> "$target_file"
+  echo "## Agents (subagent definitions)" >> "$target_file"
+  echo "" >> "$target_file"
+  for agent in "$BOOTSTRAP_DIR"/agents/*.md; do
+    [ -f "$agent" ] || continue
+    echo "- $(basename "$agent" .md): \`$agent\`" >> "$target_file"
+  done
+
+  local mcp_servers=""
+  if command -v jq &>/dev/null && [ -f "$BOOTSTRAP_DIR/mcp/mcp.json" ]; then
+    mcp_servers=$(jq -r '.mcpServers | keys | join(", ")' "$BOOTSTRAP_DIR/mcp/mcp.json" 2>/dev/null || true)
+  fi
+  if [ -n "$mcp_servers" ]; then
+    echo "" >> "$target_file"
+    echo "## MCP Servers" >> "$target_file"
+    echo "" >> "$target_file"
+    echo "Configured servers: $mcp_servers" >> "$target_file"
+    echo "See \`$BOOTSTRAP_DIR/mcp/mcp-inventory.md\` for details." >> "$target_file"
+  fi
+
+  log_installed "generated:$target_file"
+  ok "Generated $target_file"
+}
+
+generate_codex_agents_md() {
+  local target_file="$1"
+
+  if $DRY_RUN; then
+    dry "Generate $target_file with skill catalog"
+    return
+  fi
+
+  cat > "$target_file" << 'HEADER'
+# Global Agent Working Agreement
+
+## Default behavior
+- I plan first. Before opening files, I list up to 3 files I need and why.
+- I use rg for discovery and open only the smallest relevant file sections.
+- I avoid pasting whole files. I quote only the necessary lines.
+- I keep diffs minimal and reversible. One focused change at a time.
+- I keep command output small (tail/sed ranges). I avoid huge logs.
+
+## Safety
+- I ask before destructive commands (rm, git reset --hard, mass delete).
+- I ask before installing packages or changing system configuration.
+
+## Definition of done
+- I provide a minimal diff and the exact verify commands (tests/lint/build), then I stop.
+
+HEADER
+
+  echo "## Available Skills" >> "$target_file"
+  echo "" >> "$target_file"
+  echo "Skills are available at \`~/.codex/skills/\`. Read any SKILL.md to learn and follow a workflow." >> "$target_file"
+  echo "" >> "$target_file"
+  for skill_dir in "$BOOTSTRAP_DIR"/skills/*/; do
+    [ -f "$skill_dir/SKILL.md" ] || continue
+    local name
+    name=$(basename "$skill_dir")
+    local desc=""
+    desc=$(head -20 "$skill_dir/SKILL.md" | grep -i "^description:" | head -1 | sed 's/^description:\s*//' || true)
+    if [ -z "$desc" ]; then
+      desc=$(head -5 "$skill_dir/SKILL.md" | grep "^#" | head -1 | sed 's/^#\+\s*//' || true)
+    fi
+    echo "- **$name**${desc:+: $desc}" >> "$target_file"
+  done
+
+  echo "" >> "$target_file"
+  echo "## Available Commands" >> "$target_file"
+  echo "" >> "$target_file"
+  echo "Prompt templates at \`$BOOTSTRAP_DIR/commands/\`. Read any .md file to execute the workflow." >> "$target_file"
+  echo "" >> "$target_file"
+  for cmd in "$BOOTSTRAP_DIR"/commands/*.md; do
+    [ -f "$cmd" ] || continue
+    echo "- $(basename "$cmd" .md): \`$cmd\`" >> "$target_file"
+  done
+
+  echo "" >> "$target_file"
+  echo "## Available Agents" >> "$target_file"
+  echo "" >> "$target_file"
+  echo "Subagent definitions at \`$BOOTSTRAP_DIR/agents/\`." >> "$target_file"
+  echo "" >> "$target_file"
+  for agent in "$BOOTSTRAP_DIR"/agents/*.md; do
+    [ -f "$agent" ] || continue
+    echo "- $(basename "$agent" .md): \`$agent\`" >> "$target_file"
+  done
+
+  log_installed "file:$target_file"
+  ok "Generated $target_file"
+}
+
 # ---------------------------------------------------------------------------
 # Subcommands
 # ---------------------------------------------------------------------------
@@ -166,7 +313,7 @@ cmd_global() {
     mkdir -p "$HOME/.cursor"
     merge_mcp_json "$BOOTSTRAP_DIR/mcp/mcp.json" "$HOME/.cursor/mcp.json"
   else
-    warn "~/.cursor not found, skipping Cursor MCP setup"
+    skip "~/.cursor not found, skipping Cursor MCP setup"
   fi
 
   # --- Codex ---
@@ -174,13 +321,9 @@ cmd_global() {
     header "Codex: global AGENTS.md"
     local codex_agents="$HOME/.codex/AGENTS.md"
     if [ -f "$codex_agents" ] && ! $FORCE; then
-      warn "$codex_agents already exists (use --force to overwrite)"
+      skip "$codex_agents already exists (use --force to overwrite)"
     else
-      run cp "$BOOTSTRAP_DIR/templates/AGENTS.md" "$codex_agents"
-      if ! $DRY_RUN; then
-        log_installed "file:$codex_agents"
-        ok "Installed $codex_agents"
-      fi
+      generate_codex_agents_md "$codex_agents"
     fi
 
     header "Codex: skills"
@@ -193,7 +336,7 @@ cmd_global() {
       symlink_file "$skill_dir" "$dst"
     done
   else
-    warn "~/.codex not found, skipping Codex setup"
+    skip "~/.codex not found, skipping Codex setup"
   fi
 
   # --- Claude Code ---
@@ -201,6 +344,14 @@ cmd_global() {
     header "Claude Code: MCP servers"
     mkdir -p "$HOME/.claude"
     merge_mcp_json "$BOOTSTRAP_DIR/mcp/mcp.json" "$HOME/.claude/mcp.json"
+
+    header "Claude Code: global CLAUDE.md"
+    local claude_md="$HOME/.claude/CLAUDE.md"
+    if [ -f "$claude_md" ] && ! $FORCE; then
+      skip "$claude_md already exists (use --force to overwrite)"
+    else
+      generate_claude_md "$claude_md" "global"
+    fi
   else
     info "~/.claude not found, skipping Claude Code setup"
   fi
@@ -212,7 +363,7 @@ cmd_global() {
   local export_line="export AGENT_BOOTSTRAP_HOME=\"$BOOTSTRAP_DIR\" $marker"
 
   if grep -qF "$marker" "$profile" 2>/dev/null; then
-    warn "AGENT_BOOTSTRAP_HOME already in $profile"
+    skip "AGENT_BOOTSTRAP_HOME already in $profile"
   else
     if $DRY_RUN; then
       dry "Append AGENT_BOOTSTRAP_HOME to $profile"
@@ -233,7 +384,7 @@ cmd_workspace() {
   target="$(cd "$target" 2>/dev/null && pwd)" || { err "Directory not found: $1"; return 1; }
 
   if [ "$target" = "$BOOTSTRAP_DIR" ]; then
-    warn "Skipping bootstrap repo itself"
+    skip "Skipping bootstrap repo itself"
     return 0
   fi
 
@@ -255,6 +406,14 @@ cmd_workspace() {
   run mkdir -p "$target/.cursor"
   merge_mcp_json "$BOOTSTRAP_DIR/mcp/mcp.json" "$target/.cursor/mcp.json"
 
+  # --- Claude Code: per-workspace CLAUDE.md ---
+  if [ -f "$target/CLAUDE.md" ] && ! $FORCE; then
+    skip "$target/CLAUDE.md already exists (use --force to overwrite)"
+  else
+    info "Generating Claude Code CLAUDE.md"
+    generate_claude_md "$target/CLAUDE.md" "workspace"
+  fi
+
   echo ""
   ok "Workspace $target setup complete."
 }
@@ -269,7 +428,7 @@ cmd_all() {
   for dir in "$parent"/*/; do
     [ -d "$dir/.git" ] || continue
     dir="$(cd "$dir" && pwd)"
-    [ "$dir" = "$BOOTSTRAP_DIR" ] && { warn "Skipping bootstrap repo itself"; continue; }
+    [ "$dir" = "$BOOTSTRAP_DIR" ] && { skip "Skipping bootstrap repo itself"; continue; }
     cmd_workspace "$dir"
     count=$((count + 1))
   done
@@ -319,6 +478,13 @@ cmd_status() {
     warn "Codex: not installed"
   fi
 
+  if [ -d "$HOME/.claude" ]; then
+    [ -f "$HOME/.claude/mcp.json" ] && ok "Claude Code MCP: configured" || warn "Claude Code MCP: not configured"
+    [ -f "$HOME/.claude/CLAUDE.md" ] && ok "Claude Code CLAUDE.md: present" || warn "Claude Code CLAUDE.md: missing"
+  else
+    info "Claude Code: not installed"
+  fi
+
   if grep -qF "AGENT_BOOTSTRAP_HOME" "$HOME/.bashrc" 2>/dev/null; then
     ok "AGENT_BOOTSTRAP_HOME: set in .bashrc"
   else
@@ -341,7 +507,9 @@ cmd_status() {
       esac
     done < "$INSTALLED_LOG"
   fi
-  [ "$ws_count" -eq 0 ] && info "No workspaces configured yet"
+  if [ "$ws_count" -eq 0 ]; then
+    info "No workspaces configured yet"
+  fi
 }
 
 cmd_uninstall() {

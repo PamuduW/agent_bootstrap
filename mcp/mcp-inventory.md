@@ -90,7 +90,7 @@ Replace `gitlab.example.com` with your instance URL.
 
 ---
 
-## 3. JFrog
+## 3. JFrog (conditional)
 
 | Property | Value |
 |----------|-------|
@@ -98,16 +98,18 @@ Replace `gitlab.example.com` with your instance URL.
 | **Plugin** | JFrog |
 | **Connects To** | JFrog Platform (Artifactory, Xray, Curation) |
 | **Transport Type** | HTTP (streamable-http) |
-| **URL** | `https://${JFROG_PLATFORM_URL}/mcp` |
+| **URL** | `https://<JFROG_PLATFORM_URL>/mcp` |
 | **Authentication** | OAuth via JFrog Cloud |
 | **Required Env Vars** | `JFROG_PLATFORM_URL` — your JFrog instance URL (e.g., `myteam.jfrog.io`) |
 | **Availability** | JFrog Cloud/SaaS only. Admin must enable MCP Server (Administration > General > Settings > MCP Server > ON) |
 | **Source Config** | `~/.cursor/plugins/cache/cursor-public/jfrog/2f314801d29a41473e2edd01c6d625a3f75387b7/mcp.json` |
 
+**Note:** This server is only added to MCP configs when `JFROG_PLATFORM_URL` is set at install time. Without it, the JFrog entry is skipped to avoid deploying a broken URL.
+
 ### Setup Steps
 
 1. Set `JFROG_PLATFORM_URL` environment variable to your JFrog instance (e.g., `myteam.jfrog.io`)
-2. Add the server config to `.cursor/mcp.json` with the resolved URL
+2. Run `./install.sh global --force` (or `./install.sh global` on a fresh setup) — the JFrog server is automatically injected
 3. Ensure your JFrog admin has enabled the MCP Server feature
 4. Authentication is handled via OAuth — no API keys needed
 

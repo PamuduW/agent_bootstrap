@@ -1,6 +1,6 @@
 # Quickstart
 
-Get all 35 skills, 3 MCP servers, and 5 rule sets deployed in under a minute.
+Get all 35 skills, 2-3 MCP servers, and 5 rule sets deployed in under a minute.
 
 ## Prerequisites
 
@@ -34,9 +34,10 @@ source ~/.bashrc
 ```
 
 This does:
-- Merges MCP servers (Atlassian, GitLab, JFrog) into `~/.cursor/mcp.json`
-- Symlinks 35 skills into `~/.codex/skills/`
-- Adds `AGENT_BOOTSTRAP_HOME` to your shell
+- **Cursor**: Merges MCP servers (Atlassian, GitLab, and JFrog if `JFROG_PLATFORM_URL` is set) into `~/.cursor/mcp.json`
+- **Codex**: Symlinks 35 skills into `~/.codex/skills/`, generates `~/.codex/AGENTS.md` with full catalog
+- **Claude Code**: Merges MCP into `~/.claude/mcp.json`, generates `~/.claude/CLAUDE.md` with full catalog (if installed)
+- **Shell**: Adds `AGENT_BOOTSTRAP_HOME` to your `.bashrc`
 
 ## 4. Set up your workspaces
 
@@ -48,7 +49,10 @@ This does:
 ./install.sh workspace ~/ATOM/my-repo
 ```
 
-This symlinks rules into each repo's `.cursor/rules/` and generates a skill catalog so Cursor CLI agents can discover every skill.
+This does per-repo setup for all platforms:
+- **Cursor**: Symlinks rules into `.cursor/rules/`, generates skill catalog rule, merges MCP
+- **Claude Code**: Generates a `CLAUDE.md` with skill/command/agent catalog
+- **Codex**: Already covered by global setup (skills in `~/.codex/skills/`)
 
 ## 5. Verify
 

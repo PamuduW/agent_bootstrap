@@ -7,9 +7,6 @@
     "GitLab": {
       "type": "http",
       "url": "https://gitlab.com/api/v4/mcp"
-    },
-    "jfrog": {
-      "url": "https://PLACEHOLDER_JFROG_PLATFORM_URL/mcp"
     }
   }
 }

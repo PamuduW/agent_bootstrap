@@ -18,11 +18,20 @@ This is the **agent_bootstrap** repo — the source of truth for all AI agent co
 
 ## When the user asks to update or sync this repo
 
+### Automated sync (plugins + Codex skills)
 1. Run `./sync.sh --check` first to show what's changed
 2. If updates exist, run `./sync.sh --pull` to import them
-3. Show the user `git diff` to review
-4. Commit when asked: `git add -A && git commit -m 'sync: <description>'`
-5. Optionally propagate: `./install.sh all ~/ATOM/`
+
+### Manual checks (sync.sh does NOT cover these)
+3. **Cursor native skills** — list `~/.cursor/skills-cursor/` and compare against `skills/` here. Import new/updated ones as `cursor-native-<name>`.
+4. **Deprecated plugins** — if sync.sh reports removed plugins, delete their `skills/`, `rules/`, `agents/`, `commands/` files and remove from `manifest.json`.
+5. **MCP drift** — diff `~/.cursor/mcp.json` against `mcp/mcp.json` and merge any user-added servers back.
+6. **Stale content** — verify each plugin's cache contents still match what's in the repo; remove anything dropped upstream.
+
+### Finalize
+7. Show the user `git diff` to review
+8. Commit when asked: `git add -A && git commit -m 'sync: <description>'`
+9. Optionally propagate: `./install.sh all ~/ATOM/`
 
 ## When the user asks to install or set up
 

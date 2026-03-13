@@ -80,6 +80,17 @@
     "codex-skills": {
       "base_path": "~/.codex/skills",
       "skills": {}
+    },
+    "cursor-native-skills": {
+      "base_path": "~/.cursor/skills-cursor",
+      "skills": {
+        "create-rule": { "synced_at": "2026-03-13" },
+        "create-skill": { "synced_at": "2026-03-13" },
+        "create-subagent": { "synced_at": "2026-03-13" },
+        "migrate-to-skills": { "synced_at": "2026-03-13" },
+        "shell": { "synced_at": "2026-03-13" },
+        "update-cursor-settings": { "synced_at": "2026-03-13" }
+      }
     }
   }
 }

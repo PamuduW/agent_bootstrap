@@ -424,6 +424,36 @@ cmd_workspace() {
     generate_claude_md "$target/CLAUDE.md"
   fi
 
+  # --- .gitignore: ensure bootstrap-generated files are ignored ---
+  local gitignore="$target/.gitignore"
+  local entries=(".cursor/" "CLAUDE.md")
+  if [ -f "$gitignore" ]; then
+    local added=0
+    for entry in "${entries[@]}"; do
+      local bare="${entry%/}"
+      if ! grep -qxF "$entry" "$gitignore" 2>/dev/null && ! grep -qxF "$bare" "$gitignore" 2>/dev/null; then
+        if $DRY_RUN; then
+          dry "Append '$entry' to $gitignore"
+        else
+          echo "$entry" >> "$gitignore"
+          added=$((added + 1))
+        fi
+      fi
+    done
+    if [ "$added" -gt 0 ]; then
+      ok "Added $added entry/entries to $gitignore"
+    else
+      $DRY_RUN || skip ".gitignore already has bootstrap entries"
+    fi
+  else
+    if $DRY_RUN; then
+      dry "Create $gitignore with bootstrap entries"
+    else
+      printf '%s\n' "${entries[@]}" > "$gitignore"
+      ok "Created $gitignore with bootstrap entries"
+    fi
+  fi
+
   echo ""
   ok "Workspace $target setup complete."
 }

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_sync": "2026-03-13",
+  "last_sync": "2026-03-20",
   "sources": {
     "cursor-plugins": {
       "base_path": "~/.cursor/plugins/cache/cursor-public",
@@ -144,6 +144,16 @@
           "commands": 2,
           "hooks": 1,
           "mcp": 0
+        },
+        "postman": {
+          "hash": "26862c1fc2527b9a0188d9bd417708a5db6cc10f",
+          "synced_at": "2026-03-20",
+          "skills": 3,
+          "rules": 1,
+          "agents": 1,
+          "commands": 8,
+          "hooks": 0,
+          "mcp": 1
         }
       }
     },

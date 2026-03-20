@@ -80,6 +80,7 @@ Open any repo under `~/ATOM/` with a CLI agent. It now has access to all skills,
 ./sync.sh --check          # see what changed
 ./sync.sh --pull           # pull into bootstrap
 ./install.sh all ~/ATOM/   # propagate to workspaces
+./install.sh all /home/test/Dev/ # propagate to workspaces
 ```
 
 Or just open an agent in this repo and say "update this".

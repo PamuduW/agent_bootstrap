@@ -1,2 +1,4 @@
 .installed
+.local-config
 .env
+temp/

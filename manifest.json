@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "last_sync": "2026-03-20",
   "sources": {
     "cursor-plugins": {
@@ -13,7 +13,10 @@
           "agents": 0,
           "commands": 0,
           "hooks": 0,
-          "mcp": 1
+          "mcp": 1,
+          "mcp_servers": [
+            "atlassian"
+          ]
         },
         "continual-learning": {
           "hash": "1966e5222399c7f4b64d3c922244d71b3af83cd3",
@@ -23,7 +26,8 @@
           "agents": 0,
           "commands": 0,
           "hooks": 2,
-          "mcp": 0
+          "mcp": 0,
+          "mcp_servers": []
         },
         "cursor-team-kit": {
           "hash": "1966e5222399c7f4b64d3c922244d71b3af83cd3",
@@ -33,7 +37,8 @@
           "agents": 1,
           "commands": 0,
           "hooks": 0,
-          "mcp": 0
+          "mcp": 0,
+          "mcp_servers": []
         },
         "gitlab": {
           "hash": "e89ebfc384db30e3d06c840853ad67d22f5f9c94",
@@ -43,7 +48,10 @@
           "agents": 1,
           "commands": 6,
           "hooks": 0,
-          "mcp": 1
+          "mcp": 1,
+          "mcp_servers": [
+            "GitLab"
+          ]
         },
         "grafana-assistant": {
           "hash": "b692d67af5d3afdb54335fa2571696c55ca1a37f",
@@ -53,7 +61,8 @@
           "agents": 0,
           "commands": 0,
           "hooks": 0,
-          "mcp": 0
+          "mcp": 0,
+          "mcp_servers": []
         },
         "jfrog": {
           "hash": "2f314801d29a41473e2edd01c6d625a3f75387b7",
@@ -63,7 +72,10 @@
           "agents": 1,
           "commands": 0,
           "hooks": 0,
-          "mcp": 1
+          "mcp": 1,
+          "mcp_servers": [
+            "jfrog"
+          ]
         },
         "superpowers": {
           "hash": "a0b9ecce2b25aa7d703138f17650540c2e8b2cde",
@@ -73,7 +85,8 @@
           "agents": 1,
           "commands": 3,
           "hooks": 3,
-          "mcp": 0
+          "mcp": 0,
+          "mcp_servers": []
         },
         "compound-engineering": {
           "hash": "e1906592cbd49889beb82e1be76359398b6d3d58",
@@ -83,7 +96,10 @@
           "agents": 5,
           "commands": 18,
           "hooks": 0,
-          "mcp": 1
+          "mcp": 1,
+          "mcp_servers": [
+            "context7"
+          ]
         },
         "create-plugin": {
           "hash": "e2a9918787654e001453044ea742eed826287064",
@@ -93,7 +109,8 @@
           "agents": 1,
           "commands": 0,
           "hooks": 0,
-          "mcp": 0
+          "mcp": 0,
+          "mcp_servers": []
         },
         "deploy-on-aws": {
           "hash": "437f4bed0bfd7367df7613ca932fe900f7e08d89",
@@ -103,7 +120,12 @@
           "agents": 0,
           "commands": 0,
           "hooks": 0,
-          "mcp": 1
+          "mcp": 1,
+          "mcp_servers": [
+            "awsiac",
+            "awsknowledge",
+            "awspricing"
+          ]
         },
         "firecrawl": {
           "hash": "80ce444eb020b5f41b34836c553f162d6113cd6f",
@@ -113,7 +135,8 @@
           "agents": 0,
           "commands": 0,
           "hooks": 0,
-          "mcp": 0
+          "mcp": 0,
+          "mcp_servers": []
         },
         "notion-workspace": {
           "hash": "cf1324609edba6d617164f1dec138aeb43f26735",
@@ -123,7 +146,10 @@
           "agents": 0,
           "commands": 0,
           "hooks": 0,
-          "mcp": 1
+          "mcp": 1,
+          "mcp_servers": [
+            "notion"
+          ]
         },
         "parallel": {
           "hash": "db86c809e2634744f8d968967449b984a71e2e04",
@@ -133,7 +159,8 @@
           "agents": 0,
           "commands": 7,
           "hooks": 0,
-          "mcp": 0
+          "mcp": 0,
+          "mcp_servers": []
         },
         "runlayer": {
           "hash": "32f6a6c6c957528c475406b38a5f9b77a5b15d4b",
@@ -143,7 +170,8 @@
           "agents": 0,
           "commands": 2,
           "hooks": 1,
-          "mcp": 0
+          "mcp": 0,
+          "mcp_servers": []
         },
         "postman": {
           "hash": "26862c1fc2527b9a0188d9bd417708a5db6cc10f",
@@ -153,7 +181,10 @@
           "agents": 1,
           "commands": 8,
           "hooks": 0,
-          "mcp": 1
+          "mcp": 1,
+          "mcp_servers": [
+            "postman"
+          ]
         }
       }
     },

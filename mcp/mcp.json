@@ -40,6 +40,10 @@
       "headers": {
         "Authorization": "Bearer ${POSTMAN_API_KEY}"
       }
+    },
+    "notion": {
+      "type": "http",
+      "url": "https://mcp.notion.com/mcp"
     }
   }
 }

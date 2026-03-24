@@ -5,65 +5,81 @@ This is the agent bootstrap repo — a single source of truth for AI agent confi
 ## Repo structure
 
 ```
-skills/      35+ skill definitions (SKILL.md + references)
-rules/       Cursor rule files (.mdc)
-mcp/         MCP server configs (mcp.json) and documentation
-agents/      Subagent definitions (.md)
-commands/    Command/prompt templates (.md)
-hooks/       Lifecycle hook scripts
-templates/   Templates for new projects (AGENTS.md, .codexignore)
-manifest.json  Tracks sources, plugin hashes, sync timestamps
-install.sh     Deploys configs to global and per-workspace locations
-sync.sh        Pulls updates from Cursor plugin cache and Codex skills
+skills/         35+ skill definitions (SKILL.md + references)
+rules/          Cursor rule files (.mdc)
+mcp/            MCP server configs (mcp.json) and documentation
+agents/         Subagent definitions (.md)
+commands/       Command/prompt templates (.md)
+hooks/          Lifecycle hook scripts
+templates/      Templates for new projects (AGENTS.md, .codexignore)
+manifest.json   Tracks sources, plugin hashes, sync timestamps, MCP provenance
+install.sh      Interactive plugin manager + deployment tool
+sync.sh         Deprecated — redirects to install.sh
+.local-config   Per-machine plugin selections (gitignored)
+```
+
+## Quick start
+
+```bash
+./install.sh          # Interactive mode — menu with Update/Initialize/Status
 ```
 
 ## When asked to update or sync
 
-### Step 1 — Run the automated sync
+Run `./install.sh` and choose option **1) Update** to pull the latest from GitHub, then **2) Initialize** to review and sync plugins.
 
-1. Run `./sync.sh --check` to see what's changed (new plugins, updated plugins, new Codex skills)
-2. If changes are found, run `./sync.sh --pull` to import them
-
-sync.sh covers: Cursor plugins (`~/.cursor/plugins/cache/cursor-public/`) and Codex skills (`~/.codex/skills/`). It detects new plugins, updated plugin hashes, and independently-installed Codex skills.
-
-### Step 2 — Check for things sync.sh does NOT cover
-
-These sources exist outside the plugin cache and must be checked manually:
-
-- **Cursor native skills** at `~/.cursor/skills-cursor/` — Cursor ships built-in skills (create-rule, create-skill, etc.) that are separate from plugins. List that directory and compare against `skills/` in this repo. Import any new or updated ones using the `cursor-native-<name>` naming convention.
-- **Removed or deprecated plugins** — if sync.sh reports a plugin as removed (in manifest but not in cache), delete the corresponding `skills/<plugin>-*`, `rules/<plugin>-*`, `agents/<plugin>-*`, `commands/<plugin>-*` files from this repo and remove the plugin entry from `manifest.json`.
-- **MCP config drift** — compare `~/.cursor/mcp.json` against `mcp/mcp.json` in this repo. If the user configured new MCP servers via the Cursor UI, they'll be in the global file but not here. Merge any missing servers back into `mcp/mcp.json`.
-- **Stale content** — for each plugin in `manifest.json`, verify the hash still matches the cache. If the plugin directory in the cache has fewer skills/rules/agents than what's tracked, diff the contents and remove anything that was dropped upstream.
-
-### Step 3 — Review and commit
-
-3. Review the changes with `git diff`
-4. Commit: `git add -A && git commit -m 'sync: <summary of what changed>'`
-5. Optionally run `./install.sh all ~/ATOM/` to propagate to workspaces
+The Initialize flow:
+1. Discovers plugins from three sources: repo manifest, Cursor plugin cache, local installs
+2. Shows an interactive dual-checkbox menu (Repo + Local per plugin)
+3. Previews changes and asks for confirmation
+4. Syncs: pulls new plugins into repo, removes deselected ones, deploys/removes locally
+5. Offers to git commit + push if the repo changed
 
 ## When asked to install or set up
 
-1. `./install.sh global` — sets up MCP servers, Codex skills, shell env
-2. `./install.sh all ~/ATOM/` — symlinks rules and generates skill catalogs for all repos under ~/ATOM/
-3. `./install.sh workspace ~/ATOM/<repo>` — set up a single repo
-4. `./install.sh status` — show what's installed
+### Interactive (recommended)
+```bash
+./install.sh          # Choose option 2: Initialize
+```
 
-## When editing skills, rules, or MCP configs
+### Scripted / CI
+```bash
+./install.sh --global              # Global MCP, Codex skills, shell env
+./install.sh --all ~/ATOM/         # All repos under ATOM
+./install.sh --workspace <path>    # Single repo
+./install.sh --status              # Show what's configured
+```
 
-- Skills live in `skills/<plugin>-<name>/SKILL.md`
-- Rules live in `rules/<plugin>-<name>.mdc`
-- MCP config is in `mcp/mcp.json`; documentation in `mcp/mcp-inventory.md`
-- After editing, re-run `./install.sh all ~/ATOM/` to propagate changes
+These commands respect `.local-config` if present (created by the interactive menu). Without it, all repo plugins are deployed.
+
+## Plugin model
+
+Everything is grouped by plugin name (e.g., `jfrog`, `atlassian`, `cursor-team-kit`). A plugin includes all `<plugin>-*` assets across skills/, rules/, agents/, commands/, hooks/, plus its MCP server keys.
+
+Each plugin has two independent states:
+- **Repo**: whether the plugin's files are tracked in this git repo
+- **Local**: whether the plugin is deployed on this machine
+
+`Local` requires `Repo` — you can't deploy locally without the files being in the repo.
+
+## MCP provenance
+
+The manifest.json (v2) tracks which MCP server keys each plugin contributes via the `mcp_servers` array. This enables clean removal: deselecting a plugin removes exactly its MCP servers from all configs without touching user-added servers.
+
+## Workspace-level agent config files
+
+At each workspace, `CLAUDE.md` is generated as the primary skill catalog. `AGENTS.md` is a symlink to `CLAUDE.md`, preventing divergence between agent config files.
 
 ## Conventions
 
-- Skill directories are named `<source-plugin>-<skill-name>`
-- Rule files are named `<source-plugin>-<rule-name>.mdc`
-- Agent/command files are named `<source-plugin>-<name>.md`
+- Skill directories: `skills/<source-plugin>-<skill-name>/`
+- Rule files: `rules/<source-plugin>-<rule-name>.mdc`
+- Agent/command files: `agents/<source-plugin>-<name>.md`, `commands/<source-plugin>-<name>.md`
+- Hooks: `hooks/<source-plugin>/`
 - The manifest.json tracks where each component came from
 
 ## Guardrails
 
 - Don't modify files under `skills/`, `rules/`, `agents/`, `commands/` without being asked
-- The install.sh and sync.sh scripts are the primary interface for managing this repo
-- Never run `install.sh uninstall` without explicit user request
+- The install.sh script is the primary interface for managing this repo
+- Never run `install.sh --uninstall` without explicit user request

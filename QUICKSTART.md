@@ -1,6 +1,6 @@
 # Quickstart
 
-Get all 35 skills, 2-3 MCP servers, and 5 rule sets deployed in under a minute.
+Get all skills, MCP servers, and rule sets deployed interactively.
 
 ## Prerequisites
 
@@ -19,71 +19,99 @@ git clone git@github.com:PamuduW/agent_bootstrap.git
 cd agent_bootstrap
 ```
 
-## 2. Preview what will happen (optional)
+## 2. Run the interactive installer
 
 ```bash
-./install.sh global --dry-run
-./install.sh all ~/ATOM/ --dry-run
+./install.sh
 ```
 
-## 3. Install globally
+This shows a menu:
 
-```bash
-./install.sh global
-source ~/.bashrc
+```
+  === Agent Bootstrap ===
+
+  1) Update        Pull latest from GitHub
+  2) Initialize    Manage plugins (add/remove, deploy/undeploy)
+  3) Status        Show current installation state
+  4) Quit
 ```
 
-This does:
-- **Cursor**: Merges MCP servers (Atlassian, GitLab, and JFrog if `JFROG_PLATFORM_URL` is set) into `~/.cursor/mcp.json`
-- **Codex**: Symlinks 35 skills into `~/.codex/skills/`, generates `~/.codex/AGENTS.md` with full catalog
-- **Claude Code**: Merges MCP into `~/.claude/mcp.json`, generates `~/.claude/CLAUDE.md` with full catalog (if installed)
-- **Shell**: Adds `AGENT_BOOTSTRAP_HOME` to your `.bashrc`
+Choose **2) Initialize** to see the plugin manager:
 
-## 4. Set up your workspaces
+```
+  === Plugin Manager ===
+  ↑/↓ navigate   Space toggle   Tab switch column   a all   n none   Enter confirm
+
+       Repo Local  Plugin
+  > 1. [x]  [x]   atlassian
+    2. [x]  [x]   compound-engineering
+    3. [x]  [x]   cursor-native
+    ...
+```
+
+- **Repo** column: whether to include the plugin in the git repo
+- **Local** column: whether to deploy it on this machine
+- Use **Space** to toggle, **Tab** to switch between Repo/Local columns
+- Press **Enter** to confirm, then review the change summary
+
+After confirming, the installer:
+- Pulls/removes plugins from the repo as needed
+- Syncs MCP servers to Cursor, Claude Code (selective per plugin)
+- Symlinks skills into Codex
+- Generates skill catalog files for all workspaces
+- Offers to git commit + push
+
+## 3. Set up workspaces
+
+After the interactive setup, deploy to your workspaces:
 
 ```bash
 # All repos at once:
-./install.sh all ~/ATOM/
+./install.sh --all ~/ATOM/
 
 # Or one at a time:
-./install.sh workspace ~/ATOM/my-repo
+./install.sh --workspace ~/ATOM/my-repo
 ```
 
-This does per-repo setup for all platforms:
-- **Cursor**: Symlinks rules into `.cursor/rules/`, generates skill catalog rule, merges MCP
-- **Claude Code**: Generates a `CLAUDE.md` with skill/command/agent catalog
+Per-workspace setup:
+- **Cursor**: Symlinks rules into `.cursor/rules/`, generates skill catalog, merges MCP
+- **Claude Code**: Generates `CLAUDE.md` with skill/command/agent catalog
+- **AGENTS.md**: Symlinked to `CLAUDE.md` for other agents
 - **Codex**: Already covered by global setup (skills in `~/.codex/skills/`)
 
-## 5. Verify
+## 4. Verify
 
 ```bash
-./install.sh status
+./install.sh --status
 ```
 
 ## Done
 
-Open any repo under `~/ATOM/` with a CLI agent. It now has access to all skills, MCP servers, and rules.
+Open any repo under `~/ATOM/` with a CLI agent. It now has access to all selected skills, MCP servers, and rules.
 
 ---
 
 ## Day-to-day usage
 
+### Plugins updated or new ones available?
+
+```bash
+./install.sh    # Choose 2) Initialize — shows updated plugins automatically
+```
+
 ### New repo cloned?
 
 ```bash
-./install.sh workspace ~/ATOM/new-repo
+./install.sh --workspace ~/ATOM/new-repo
 ```
 
-### Plugins updated?
+### Want to remove a plugin (e.g., JFrog)?
 
 ```bash
-./sync.sh --check          # see what changed
-./sync.sh --pull           # pull into bootstrap
-./install.sh all ~/ATOM/   # propagate to workspaces
-./install.sh all /home/test/Dev/ # propagate to workspaces
+./install.sh    # Choose 2) Initialize, untick JFrog in both columns, confirm
 ```
 
-Or just open an agent in this repo and say "update this".
+The installer removes all JFrog skills, rules, agents, MCP servers from the repo and all local configs.
 
 ### Need environment variables?
 
@@ -102,13 +130,20 @@ See `.env.example` for the full list.
 
 ```bash
 git clone git@github.com:PamuduW/agent_bootstrap.git ~/ATOM/agent_bootstrap
-~/ATOM/agent_bootstrap/install.sh global
-~/ATOM/agent_bootstrap/install.sh all ~/ATOM/
-source ~/.bashrc
+cd ~/ATOM/agent_bootstrap
+./install.sh    # Interactive — choose what to deploy on this machine
+```
+
+### CI / scripted mode (no TUI)?
+
+```bash
+./install.sh --global              # Deploy everything (or respect .local-config)
+./install.sh --all ~/ATOM/         # Set up all workspaces
+./install.sh --status              # Check state
 ```
 
 ### Removing everything?
 
 ```bash
-./install.sh uninstall
+./install.sh --uninstall
 ```

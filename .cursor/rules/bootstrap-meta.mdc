@@ -12,33 +12,35 @@ This is the **agent_bootstrap** repo — the source of truth for all AI agent co
 - `agents/` — Subagent definitions
 - `commands/` — Command/prompt templates
 - `hooks/` — Lifecycle hook scripts
-- `manifest.json` — Tracks source plugin hashes and sync state
-- `install.sh` — Deploys configs globally and per-workspace
-- `sync.sh` — Detects and pulls updates from Cursor plugins and Codex skills
+- `manifest.json` — Tracks source plugin hashes, sync state, and MCP provenance (v2)
+- `install.sh` — Interactive plugin manager + deployment tool (replaces old sync.sh)
+- `.local-config` — Per-machine plugin selections (gitignored)
 
 ## When the user asks to update or sync this repo
 
-### Automated sync (plugins + Codex skills)
-1. Run `./sync.sh --check` first to show what's changed
-2. If updates exist, run `./sync.sh --pull` to import them
+Run `./install.sh` and use the interactive menu:
+1. **Option 1: Update** — pulls latest from GitHub (`git fetch && git pull`)
+2. **Option 2: Initialize** — discovers all plugins (repo, cache, local), shows dual-checkbox menu for Repo/Local selection, confirms changes, syncs everything
 
-### Manual checks (sync.sh does NOT cover these)
-3. **Cursor native skills** — list `~/.cursor/skills-cursor/` and compare against `skills/` here. Import new/updated ones as `cursor-native-<name>`.
-4. **Deprecated plugins** — if sync.sh reports removed plugins, delete their `skills/`, `rules/`, `agents/`, `commands/` files and remove from `manifest.json`.
-5. **MCP drift** — diff `~/.cursor/mcp.json` against `mcp/mcp.json` and merge any user-added servers back.
-6. **Stale content** — verify each plugin's cache contents still match what's in the repo; remove anything dropped upstream.
-
-### Finalize
-7. Show the user `git diff` to review
-8. Commit when asked: `git add -A && git commit -m 'sync: <description>'`
-9. Optionally propagate: `./install.sh all ~/ATOM/`
+The Initialize flow handles all of:
+- Pulling new/updated plugins from Cursor cache into the repo
+- Removing deselected plugins from the repo (skills, rules, agents, commands, hooks, MCP)
+- Deploying/removing local configs (MCP servers, Codex skills, workspace rules)
+- Regenerating skill catalogs for all tracked workspaces
+- Offering git commit + push when repo files change
 
 ## When the user asks to install or set up
 
-- `./install.sh global` — global MCP, Codex skills, env var
-- `./install.sh all ~/ATOM/` — all repos under ATOM
-- `./install.sh workspace <path>` — single repo
-- `./install.sh status` — show what's configured
+### Interactive (recommended)
+- `./install.sh` — launches the plugin manager menu
+
+### Scripted / CI
+- `./install.sh --global` — global MCP, Codex skills, env var
+- `./install.sh --all ~/ATOM/` — all repos under ATOM
+- `./install.sh --workspace <path>` — single repo
+- `./install.sh --status` — show what's configured
+
+These commands respect `.local-config` if present (created by the interactive menu).
 
 ## Available skills in this repo
 

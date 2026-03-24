@@ -25,6 +25,14 @@ DRY_RUN=false
 FORCE=false
 
 # ---------------------------------------------------------------------------
+# Logging — mirror all output to a timestamped log file
+# ---------------------------------------------------------------------------
+LOG_DIR="$BOOTSTRAP_DIR/log"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/$(date '+%Y-%m-%d_%H-%M-%S')_install.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+# ---------------------------------------------------------------------------
 # Colors & output
 # ---------------------------------------------------------------------------
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -49,6 +57,8 @@ fi
 if [[ ! -f "$MANIFEST" ]]; then
   echo '{"version":2,"last_sync":"","sources":{"cursor-plugins":{"base_path":"~/.cursor/plugins/cache/cursor-public","plugins":{}},"codex-skills":{"base_path":"~/.codex/skills","skills":{}},"cursor-native-skills":{"base_path":"~/.cursor/skills-cursor","skills":{}}}}' | jq . > "$MANIFEST"
 fi
+
+trap 'err "Error on line $LINENO (exit $?). See log: $LOG_FILE"' ERR
 
 # ---------------------------------------------------------------------------
 # Utility functions
@@ -218,21 +228,30 @@ sync_target_mcp() {
     echo '{"mcpServers":{}}' > "$target"
   fi
 
+  if ! jq empty "$target" 2>/dev/null; then
+    warn "Invalid JSON in $target, resetting"
+    echo '{"mcpServers":{}}' > "$target"
+  fi
+
   local all_keys=()
   for name in "${PLUGIN_NAMES[@]}"; do
     local keys="${PLUGIN_MCP_KEYS[$name]:-}"
     [[ -z "$keys" ]] && continue
     IFS=',' read -ra ks <<< "$keys"
-    all_keys+=("${ks[@]}")
+    for k in "${ks[@]}"; do
+      [[ -n "$k" ]] && all_keys+=("$k")
+    done
   done
 
   local filter='.'
   for key in "${all_keys[@]}"; do
-    [[ -z "$key" ]] && continue
     filter+=" | del(.mcpServers[\"$key\"])"
   done
   local tmp; tmp=$(mktemp)
-  jq "$filter" "$target" > "$tmp"
+  if ! jq "$filter" "$target" > "$tmp" 2>/dev/null; then
+    warn "jq filter failed on $target, resetting"
+    echo '{"mcpServers":{}}' > "$tmp"
+  fi
 
   for name in "${PLUGIN_NAMES[@]}"; do
     [[ "${PLUGIN_LOCAL_SEL[$name]:-0}" != "1" ]] && continue
@@ -241,23 +260,20 @@ sync_target_mcp() {
     IFS=',' read -ra ks <<< "$keys"
     for key in "${ks[@]}"; do
       [[ -z "$key" ]] && continue
-      # JFrog: use env var URL, skip if unset
       if [[ "$key" == "jfrog" ]]; then
         if [[ -n "${JFROG_PLATFORM_URL:-}" ]]; then
           local tmp2; tmp2=$(mktemp)
           jq --arg url "https://${JFROG_PLATFORM_URL}/mcp" \
-             '.mcpServers.jfrog = { url: $url }' "$tmp" > "$tmp2"
-          mv "$tmp2" "$tmp"
+             '.mcpServers.jfrog = { url: $url }' "$tmp" > "$tmp2" && mv "$tmp2" "$tmp"
         fi
         continue
       fi
       local server_config
-      server_config=$(jq ".mcpServers[\"$key\"]" "$MCP_REPO" 2>/dev/null)
+      server_config=$(jq ".mcpServers[\"$key\"]" "$MCP_REPO" 2>/dev/null || echo "null")
       if [[ "$server_config" != "null" ]] && [[ -n "$server_config" ]]; then
         local tmp2; tmp2=$(mktemp)
         jq --arg key "$key" --argjson val "$server_config" \
-           '.mcpServers[$key] = $val' "$tmp" > "$tmp2"
-        mv "$tmp2" "$tmp"
+           '.mcpServers[$key] = $val' "$tmp" > "$tmp2" && mv "$tmp2" "$tmp"
       fi
     done
   done
@@ -548,11 +564,11 @@ pull_plugin_to_repo() {
 
   # Manifest
   local skills_count rules_count agents_count commands_count hooks_count mcp_count
-  skills_count=$(ls "$src/skills/" 2>/dev/null | wc -l)
-  rules_count=$(ls "$src/rules/" 2>/dev/null | wc -l)
-  agents_count=$(ls "$src/agents/" 2>/dev/null | wc -l)
-  commands_count=$(ls "$src/commands/" 2>/dev/null | wc -l)
-  hooks_count=$(ls "$src/hooks/" 2>/dev/null | wc -l)
+  skills_count=0;  [[ -d "$src/skills" ]]  && skills_count=$(ls "$src/skills/" 2>/dev/null | wc -l)
+  rules_count=0;   [[ -d "$src/rules" ]]   && rules_count=$(ls "$src/rules/" 2>/dev/null | wc -l)
+  agents_count=0;  [[ -d "$src/agents" ]]  && agents_count=$(ls "$src/agents/" 2>/dev/null | wc -l)
+  commands_count=0;[[ -d "$src/commands" ]] && commands_count=$(ls "$src/commands/" 2>/dev/null | wc -l)
+  hooks_count=0;   [[ -d "$src/hooks" ]]   && hooks_count=1
   mcp_count=0
   local mcp_file=""
   [[ -f "$src/.mcp.json" ]] && mcp_file="$src/.mcp.json"
@@ -951,7 +967,7 @@ _draw_plugin_menu() {
   local count=${#PLUGIN_NAMES[@]}
 
   printf "\n  \e[1m=== Plugin Manager ===\e[0m\n"
-  printf "  ↑/↓ navigate   Space toggle   Tab switch column   a all   n none   Enter confirm\n\n"
+  printf "  ↑/↓ navigate   Space toggle   Tab switch column   a all   n none   Enter confirm   q back\n\n"
   printf "  ${DIM}     Repo Local  Plugin${NC}\n"
 
   for i in "${!PLUGIN_NAMES[@]}"; do
@@ -1028,8 +1044,7 @@ plugin_menu() {
         if [[ "$active_col" == "repo" ]]; then
           if [[ "${PLUGIN_REPO_SEL[$name]}" == "1" ]]; then
             PLUGIN_REPO_SEL["$name"]=0
-            PLUGIN_LOCAL_SEL["$name"]=0
-            status_msg="Disabled $name (repo + local)"
+            status_msg="Disabled $name in repo"
           else
             PLUGIN_REPO_SEL["$name"]=1
             status_msg="Enabled $name in repo"
@@ -1042,17 +1057,16 @@ plugin_menu() {
             status_msg="Disabled $name locally"
           else
             PLUGIN_LOCAL_SEL["$name"]=1
-            if [[ "${PLUGIN_REPO_SEL[$name]}" == "0" ]]; then
-              PLUGIN_REPO_SEL["$name"]=1
-              status_msg="Enabled $name locally (auto-enabled in repo)"
-            else
-              status_msg="Enabled $name locally"
-            fi
+            status_msg="Enabled $name locally"
           fi
         fi
         ;;
       '')
         break
+        ;;
+      q|Q)
+        tput cnorm 2>/dev/null || true
+        return 1
         ;;
       a|A)
         for n in "${PLUGIN_NAMES[@]}"; do
@@ -1061,7 +1075,6 @@ plugin_menu() {
           else
             [[ "${PLUGIN_SOURCE[$n]:-}" == "cursor-native" ]] && continue
             PLUGIN_LOCAL_SEL["$n"]=1
-            PLUGIN_REPO_SEL["$n"]=1
           fi
         done
         status_msg="All enabled in $active_col"
@@ -1070,7 +1083,6 @@ plugin_menu() {
         for n in "${PLUGIN_NAMES[@]}"; do
           if [[ "$active_col" == "repo" ]]; then
             PLUGIN_REPO_SEL["$n"]=0
-            PLUGIN_LOCAL_SEL["$n"]=0
           else
             [[ "${PLUGIN_SOURCE[$n]:-}" == "cursor-native" ]] && continue
             PLUGIN_LOCAL_SEL["$n"]=0
@@ -1177,7 +1189,7 @@ confirm_loop() {
     case "$answer" in
       c|C) return 0 ;;
       e|E) plugin_menu ;;
-      q|Q) echo "  Aborted."; exit 0 ;;
+      q|Q) echo "  Aborted."; return 1 ;;
       *)   echo "    Invalid choice." ;;
     esac
   done
@@ -1639,48 +1651,104 @@ cmd_uninstall() {
 }
 
 # ---------------------------------------------------------------------------
-# Interactive mode — main menu
+# Interactive mode — arrow-key main menu
 # ---------------------------------------------------------------------------
+MAIN_MENU_ITEMS=("Update" "Initialize" "Status" "Quit")
+MAIN_MENU_DESCS=(
+  "Pull latest from GitHub"
+  "Manage plugins (add/remove, deploy/undeploy)"
+  "Show current installation state"
+  "Exit"
+)
+
+_draw_main_menu() {
+  local cur=$1
+  local count=${#MAIN_MENU_ITEMS[@]}
+
+  printf "\n  ${BOLD}=== Agent Bootstrap ===${NC}\n"
+  printf "  ↑/↓ navigate   Enter select\n\n"
+
+  for i in "${!MAIN_MENU_ITEMS[@]}"; do
+    if [[ $i -eq $cur ]]; then
+      printf "  ${BOLD}${REVERSE} %d) %-14s${NC}  ${DIM}%s${NC}\e[K\n" \
+        "$((i + 1))" "${MAIN_MENU_ITEMS[$i]}" "${MAIN_MENU_DESCS[$i]}"
+    else
+      printf "   %d) %-14s  ${DIM}%s${NC}\e[K\n" \
+        "$((i + 1))" "${MAIN_MENU_ITEMS[$i]}" "${MAIN_MENU_DESCS[$i]}"
+    fi
+  done
+  printf "\e[K\n"
+}
+
+main_menu() {
+  local count=${#MAIN_MENU_ITEMS[@]}
+  local cursor=0
+  local menu_lines=$((count + 4))
+
+  tput civis 2>/dev/null || true
+  _draw_main_menu 0
+
+  while true; do
+    local key seq
+    IFS= read -rsn1 key < /dev/tty
+
+    case "$key" in
+      $'\e')
+        IFS= read -rsn2 -t 0.1 seq < /dev/tty || true
+        case "${seq:-}" in
+          '[A') [[ $cursor -gt 0 ]] && cursor=$((cursor - 1)) ;;
+          '[B') [[ $cursor -lt $((count - 1)) ]] && cursor=$((cursor + 1)) ;;
+        esac
+        ;;
+      '')
+        tput cnorm 2>/dev/null || true
+        echo "$cursor"
+        return
+        ;;
+      *)
+        continue
+        ;;
+    esac
+
+    printf "\e[%dA" "$menu_lines"
+    _draw_main_menu "$cursor"
+  done
+}
+
 cmd_interactive() {
   migrate_manifest_v2
 
-  echo ""
-  printf "  ${BOLD}=== Agent Bootstrap ===${NC}\n"
-  echo ""
-  echo "  1) Update        Pull latest from GitHub"
-  echo "  2) Initialize    Manage plugins (add/remove, deploy/undeploy)"
-  echo "  3) Status        Show current installation state"
-  echo "  4) Quit"
-  echo ""
+  while true; do
+    local choice
+    choice=$(main_menu)
 
-  read -rp "  Select [1-4]: " choice < /dev/tty
-  case "$choice" in
-    1)
-      header "Updating from GitHub"
-      cd "$BOOTSTRAP_DIR"
-      git fetch origin
-      local branch; branch=$(git branch --show-current 2>/dev/null || echo "main")
-      git pull origin "$branch"
-      ok "Updated to latest"
-      echo ""
-      info "Re-launching menu..."
-      exec "$0"
-      ;;
-    2)
-      cmd_initialize
-      ;;
-    3)
-      cmd_status
-      ;;
-    4|q|Q)
-      echo "  Bye."
-      exit 0
-      ;;
-    *)
-      echo "  Invalid choice."
-      exec "$0"
-      ;;
-  esac
+    case "$choice" in
+      0)
+        header "Updating from GitHub"
+        cd "$BOOTSTRAP_DIR"
+        git fetch origin
+        local branch; branch=$(git branch --show-current 2>/dev/null || echo "main")
+        git pull origin "$branch"
+        ok "Updated to latest"
+        echo ""
+        read -rsn1 -p "  Press any key to continue..." < /dev/tty
+        ;;
+      1)
+        cmd_initialize
+        echo ""
+        read -rsn1 -p "  Press any key to continue..." < /dev/tty
+        ;;
+      2)
+        cmd_status
+        echo ""
+        read -rsn1 -p "  Press any key to continue..." < /dev/tty
+        ;;
+      3)
+        echo "  Bye."
+        exit 0
+        ;;
+    esac
+  done
 }
 
 cmd_initialize() {
@@ -1689,8 +1757,8 @@ cmd_initialize() {
   info "Found ${#PLUGIN_NAMES[@]} plugins"
   echo ""
 
-  plugin_menu
-  confirm_loop
+  plugin_menu || return 0
+  confirm_loop || return 0
   execute_sync
 }
 

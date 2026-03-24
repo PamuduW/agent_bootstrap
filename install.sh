@@ -60,13 +60,6 @@ fi
 
 trap 'err "Error on line $LINENO (exit $?). See log: $LOG_FILE"' ERR
 
-# #region agent log
-_dbg() { printf '{"sessionId":"801de2","hypothesisId":"%s","location":"%s","message":"%s","data":%s,"timestamp":%s}\n' "$1" "$2" "$3" "${4:-null}" "$(date +%s%3N)" >> /home/wipalk/ATOM/agent_bootstrap/.cursor/debug-801de2.log; }
-# #endregion
-# #region agent log
-_dbg "H-C" "install.sh:startup" "script-reached-after-trap" '{"pid":"'$$'"}' 
-# #endregion
-
 # ---------------------------------------------------------------------------
 # Utility functions
 # ---------------------------------------------------------------------------
@@ -128,6 +121,28 @@ update_manifest_timestamp() {
 # ---------------------------------------------------------------------------
 manifest_plugin_hash() {
   jq -r ".sources[\"cursor-plugins\"].plugins[\"$1\"].hash // empty" "$MANIFEST"
+}
+
+manifest_plugin_synced_epoch() {
+  local raw
+  raw=$(jq -r ".sources[\"cursor-plugins\"].plugins[\"$1\"].synced_at // \"0\"" "$MANIFEST")
+  if [[ "$raw" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+    date -d "$raw" +%s 2>/dev/null || echo 0
+  else
+    echo "${raw:-0}"
+  fi
+}
+
+_cache_is_newer() {
+  local name="$1"
+  local cache_hash="${PLUGIN_CACHE_HASH[$name]:-}"
+  [[ -z "$cache_hash" ]] && return 1
+  local cache_dir="$CURSOR_PLUGIN_CACHE/$name/$cache_hash"
+  local cache_mtime
+  cache_mtime=$(stat -c %Y "$cache_dir" 2>/dev/null || echo 0)
+  local synced_epoch
+  synced_epoch=$(manifest_plugin_synced_epoch "$name")
+  [[ $cache_mtime -gt $synced_epoch ]]
 }
 
 manifest_plugin_mcp_servers() {
@@ -584,9 +599,9 @@ pull_plugin_to_repo() {
 
   local mcp_servers_json
   mcp_servers_json=$(get_mcp_keys_from_cache "$plugin_name")
-  local today; today=$(date +%Y-%m-%d)
+  local now_epoch; now_epoch=$(date +%s)
 
-  manifest_set_plugin "$plugin_name" "$hash" "$today" \
+  manifest_set_plugin "$plugin_name" "$hash" "$now_epoch" \
     "$skills_count" "$rules_count" "$agents_count" "$commands_count" \
     "$hooks_count" "$mcp_count" "$mcp_servers_json"
 
@@ -1164,22 +1179,32 @@ show_confirmation() {
     echo ""
   fi
 
-  # Check for hash updates (plugins in repo with changed cache hash)
-  local updates=()
+  # Check for hash updates — distinguish cache-newer vs repo-newer
+  local cache_updates=()
+  local repo_newer=()
   for name in "${PLUGIN_NAMES[@]}"; do
     [[ "${PLUGIN_REPO_SEL[$name]:-0}" != "1" ]] && continue
     [[ "${PLUGIN_IN_REPO[$name]:-0}" != "1" ]] && continue
     local manifest_hash; manifest_hash=$(manifest_plugin_hash "$name")
     local cache_hash="${PLUGIN_CACHE_HASH[$name]:-}"
     if [[ -n "$cache_hash" ]] && [[ -n "$manifest_hash" ]] && [[ "$cache_hash" != "$manifest_hash" ]]; then
-      updates+=("$name")
+      if _cache_is_newer "$name"; then
+        cache_updates+=("$name")
+      else
+        repo_newer+=("$name")
+      fi
     fi
   done
-  if [[ ${#updates[@]} -gt 0 ]]; then
-    printf "  ${YELLOW}Update (hash):${NC}    "
-    printf "%s " "${updates[@]}"
+  if [[ ${#cache_updates[@]} -gt 0 ]]; then
+    printf "  ${YELLOW}Update from cache:${NC} "
+    printf "%s " "${cache_updates[@]}"
     echo ""
-    total=$((total + ${#updates[@]}))
+    total=$((total + ${#cache_updates[@]}))
+  fi
+  if [[ ${#repo_newer[@]} -gt 0 ]]; then
+    printf "  ${DIM}Repo is newer:${NC}    "
+    printf "%s " "${repo_newer[@]}"
+    printf "${DIM}(keeping repo version)${NC}\n"
   fi
 
   if [[ $total -eq 0 ]]; then
@@ -1229,16 +1254,20 @@ execute_sync() {
     did_repo_change=true
   done
 
-  # 3. Update plugins with changed cache hashes
+  # 3. Update plugins where cache is genuinely newer than repo
   for name in "${PLUGIN_NAMES[@]}"; do
     [[ "${PLUGIN_REPO_SEL[$name]:-0}" != "1" ]] && continue
     [[ "${PLUGIN_IN_REPO[$name]:-0}" != "1" ]] && continue
     local manifest_hash; manifest_hash=$(manifest_plugin_hash "$name")
     local cache_hash="${PLUGIN_CACHE_HASH[$name]:-}"
     if [[ -n "$cache_hash" ]] && [[ -n "$manifest_hash" ]] && [[ "$cache_hash" != "$manifest_hash" ]]; then
-      header "Updating plugin: $name"
-      pull_plugin_to_repo "$name" "$cache_hash"
-      did_repo_change=true
+      if _cache_is_newer "$name"; then
+        header "Updating plugin: $name (cache is newer)"
+        pull_plugin_to_repo "$name" "$cache_hash"
+        did_repo_change=true
+      else
+        skip "Keeping repo version of $name (repo is newer than local cache)"
+      fi
     fi
   done
 
@@ -1658,12 +1687,151 @@ cmd_uninstall() {
 }
 
 # ---------------------------------------------------------------------------
+# Interactive mode — workspace management
+# ---------------------------------------------------------------------------
+_get_tracked_workspaces() {
+  TRACKED_WS=()
+  [[ -f "$INSTALLED_LOG" ]] || return 0
+  while IFS= read -r line; do
+    case "$line" in
+      generated:*rules/bootstrap-skills.mdc)
+        local ws_path="${line#generated:}"
+        ws_path="${ws_path%/.cursor/rules/bootstrap-skills.mdc}"
+        [[ "$ws_path" == "$BOOTSTRAP_DIR" ]] && continue
+        TRACKED_WS+=("$ws_path")
+        ;;
+    esac
+  done < "$INSTALLED_LOG"
+}
+
+cmd_workspaces_interactive() {
+  discover_plugins
+
+  while true; do
+    _get_tracked_workspaces
+    header "Workspaces"
+
+    if [[ ${#TRACKED_WS[@]} -gt 0 ]]; then
+      echo ""
+      info "Currently tracked workspaces:"
+      local i=1
+      for ws in "${TRACKED_WS[@]}"; do
+        if [[ -d "$ws" ]]; then
+          printf "    %2d. ${GREEN}●${NC} %s\n" "$i" "$ws"
+        else
+          printf "    %2d. ${RED}✗${NC} %s ${DIM}(missing)${NC}\n" "$i" "$ws"
+        fi
+        i=$((i + 1))
+      done
+    else
+      echo ""
+      info "No workspaces tracked yet."
+    fi
+
+    echo ""
+    printf "  ${BOLD}Options:${NC}\n"
+    echo "    [a] Add a workspace or scan a parent directory"
+    echo "    [r] Remove a stale/missing workspace"
+    echo "    [q] Back to main menu"
+    echo ""
+
+    local action
+    read -rsn1 -p "  Choose: " action < /dev/tty
+    echo ""
+
+    case "$action" in
+      a|A)
+        echo ""
+        read -rp "  Path (workspace or parent dir): " ws_path < /dev/tty
+        [[ -z "$ws_path" ]] && continue
+
+        # Expand ~ and resolve
+        ws_path="${ws_path/#\~/$HOME}"
+        ws_path="$(cd "$ws_path" 2>/dev/null && pwd)" || { err "Directory not found: $ws_path"; continue; }
+
+        if [[ -d "$ws_path/.git" ]]; then
+          header "Setting up workspace: $ws_path"
+          cmd_workspace "$ws_path"
+        else
+          local repos=()
+          for dir in "$ws_path"/*/; do
+            [[ -d "$dir/.git" ]] || continue
+            dir="$(cd "$dir" && pwd)"
+            [[ "$dir" == "$BOOTSTRAP_DIR" ]] && continue
+            repos+=("$dir")
+          done
+
+          if [[ ${#repos[@]} -eq 0 ]]; then
+            warn "No git repos found under $ws_path"
+            continue
+          fi
+
+          info "Found ${#repos[@]} git repo(s) under $ws_path:"
+          for r in "${repos[@]}"; do
+            echo "    $(basename "$r")"
+          done
+          echo ""
+          read -rp "  Set up all of them? [y/n]: " yn < /dev/tty
+          case "$yn" in
+            y|Y)
+              for r in "${repos[@]}"; do
+                cmd_workspace "$r"
+              done
+              ok "Set up ${#repos[@]} workspace(s)"
+              ;;
+            *) info "Skipped." ;;
+          esac
+        fi
+        ;;
+      r|R)
+        if [[ ${#TRACKED_WS[@]} -eq 0 ]]; then
+          warn "Nothing to remove."
+          continue
+        fi
+        echo ""
+        read -rp "  Enter number to remove (or 'all-missing' for stale ones): " choice < /dev/tty
+        if [[ "$choice" == "all-missing" ]]; then
+          local removed=0
+          for ws in "${TRACKED_WS[@]}"; do
+            if [[ ! -d "$ws" ]]; then
+              local tmp; tmp=$(mktemp)
+              grep -v "^generated:${ws}/" "$INSTALLED_LOG" > "$tmp" || true
+              grep -v "^symlink:${ws}/" "$tmp" > "$INSTALLED_LOG" || true
+              rm -f "$tmp"
+              ok "Removed stale: $ws"
+              removed=$((removed + 1))
+            fi
+          done
+          [[ $removed -eq 0 ]] && info "No stale workspaces found."
+        elif [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 ]] && [[ "$choice" -le ${#TRACKED_WS[@]} ]]; then
+          local ws="${TRACKED_WS[$((choice - 1))]}"
+          local tmp; tmp=$(mktemp)
+          grep -v "^generated:${ws}/" "$INSTALLED_LOG" > "$tmp" || true
+          grep -v "^symlink:${ws}/" "$tmp" > "$INSTALLED_LOG" || true
+          rm -f "$tmp"
+          ok "Removed workspace: $ws"
+        else
+          warn "Invalid choice."
+        fi
+        ;;
+      q|Q)
+        return 0
+        ;;
+      *)
+        continue
+        ;;
+    esac
+  done
+}
+
+# ---------------------------------------------------------------------------
 # Interactive mode — arrow-key main menu
 # ---------------------------------------------------------------------------
-MAIN_MENU_ITEMS=("Update" "Initialize" "Status" "Quit")
+MAIN_MENU_ITEMS=("Update" "Initialize" "Workspaces" "Status" "Quit")
 MAIN_MENU_DESCS=(
   "Pull latest from GitHub"
   "Manage plugins (add/remove, deploy/undeploy)"
+  "Add/remove project folders"
   "Show current installation state"
   "Exit"
 )
@@ -1694,9 +1862,6 @@ main_menu() {
   local cursor=0
   local menu_lines=$((count + 5))
 
-  # #region agent log
-  _dbg "H-A" "install.sh:main_menu" "entered-main_menu" '{"count":'"$count"'}'
-  # #endregion
   tput civis 2>/dev/null || true
   _draw_main_menu 0
 
@@ -1715,9 +1880,6 @@ main_menu() {
       '')
         tput cnorm 2>/dev/null || true
         _MAIN_CHOICE=$cursor
-        # #region agent log
-        _dbg "H-A" "install.sh:main_menu" "selection-made" '{"choice":'"$cursor"'}'
-        # #endregion
         return
         ;;
       *)
@@ -1731,22 +1893,10 @@ main_menu() {
 }
 
 cmd_interactive() {
-  # #region agent log
-  _dbg "H-B" "install.sh:cmd_interactive" "before-migrate" 'null'
-  # #endregion
   migrate_manifest_v2
-  # #region agent log
-  _dbg "H-B" "install.sh:cmd_interactive" "after-migrate" 'null'
-  # #endregion
 
   while true; do
-    # #region agent log
-    _dbg "H-A" "install.sh:cmd_interactive" "before-main_menu-call" 'null'
-    # #endregion
     main_menu
-    # #region agent log
-    _dbg "H-A" "install.sh:cmd_interactive" "after-main_menu-call" '{"choice":'"$_MAIN_CHOICE"'}'
-    # #endregion
 
     case "$_MAIN_CHOICE" in
       0)
@@ -1760,16 +1910,30 @@ cmd_interactive() {
         read -rsn1 -p "  Press any key to continue..." < /dev/tty
         ;;
       1)
-        cmd_initialize
+        _get_tracked_workspaces
+        if [[ ${#TRACKED_WS[@]} -eq 0 ]]; then
+          echo ""
+          warn "No workspaces configured yet. Add at least one workspace first."
+          echo ""
+          read -rsn1 -p "  Press any key to continue..." < /dev/tty
+          cmd_workspaces_interactive
+        else
+          cmd_initialize
+        fi
         echo ""
         read -rsn1 -p "  Press any key to continue..." < /dev/tty
         ;;
       2)
-        cmd_status
+        cmd_workspaces_interactive
         echo ""
         read -rsn1 -p "  Press any key to continue..." < /dev/tty
         ;;
       3)
+        cmd_status
+        echo ""
+        read -rsn1 -p "  Press any key to continue..." < /dev/tty
+        ;;
+      4)
         echo "  Bye."
         exit 0
         ;;

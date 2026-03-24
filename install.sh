@@ -25,12 +25,12 @@ DRY_RUN=false
 FORCE=false
 
 # ---------------------------------------------------------------------------
-# Logging — mirror all output to a timestamped log file
+# Logging — write a parallel log file (no pipe/tee to avoid TUI buffering)
 # ---------------------------------------------------------------------------
 LOG_DIR="$BOOTSTRAP_DIR/log"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/$(date '+%Y-%m-%d_%H-%M-%S')_install.log"
-exec > >(tee -a "$LOG_FILE") 2>&1
+_log() { printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*" >> "$LOG_FILE"; }
 
 # ---------------------------------------------------------------------------
 # Colors & output
@@ -39,12 +39,12 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; DIM='\033[2m'
 REVERSE='\033[7m'; NC='\033[0m'
 
-info()   { printf "${CYAN}[info]${NC}  %s\n" "$*"; }
-ok()     { printf "${GREEN}[ok]${NC}    %s\n" "$*"; }
-skip()   { printf "${YELLOW}[skip]${NC}  %s\n" "$*"; }
-warn()   { printf "${YELLOW}[warn]${NC}  %s\n" "$*"; }
-err()    { printf "${RED}[err]${NC}   %s\n" "$*" >&2; }
-header() { printf "\n${BOLD}── %s${NC}\n" "$*"; }
+info()   { printf "${CYAN}[info]${NC}  %s\n" "$*"; _log "INFO  $*"; }
+ok()     { printf "${GREEN}[ok]${NC}    %s\n" "$*"; _log "OK    $*"; }
+skip()   { printf "${YELLOW}[skip]${NC}  %s\n" "$*"; _log "SKIP  $*"; }
+warn()   { printf "${YELLOW}[warn]${NC}  %s\n" "$*"; _log "WARN  $*"; }
+err()    { printf "${RED}[err]${NC}   %s\n" "$*" >&2; _log "ERR   $*"; }
+header() { printf "\n${BOLD}── %s${NC}\n" "$*"; _log "── $*"; }
 
 # ---------------------------------------------------------------------------
 # Prerequisites
@@ -59,6 +59,13 @@ if [[ ! -f "$MANIFEST" ]]; then
 fi
 
 trap 'err "Error on line $LINENO (exit $?). See log: $LOG_FILE"' ERR
+
+# #region agent log
+_dbg() { printf '{"sessionId":"801de2","hypothesisId":"%s","location":"%s","message":"%s","data":%s,"timestamp":%s}\n' "$1" "$2" "$3" "${4:-null}" "$(date +%s%3N)" >> /home/wipalk/ATOM/agent_bootstrap/.cursor/debug-801de2.log; }
+# #endregion
+# #region agent log
+_dbg "H-C" "install.sh:startup" "script-reached-after-trap" '{"pid":"'$$'"}' 
+# #endregion
 
 # ---------------------------------------------------------------------------
 # Utility functions
@@ -1680,11 +1687,16 @@ _draw_main_menu() {
   printf "\e[K\n"
 }
 
+_MAIN_CHOICE=0
+
 main_menu() {
   local count=${#MAIN_MENU_ITEMS[@]}
   local cursor=0
-  local menu_lines=$((count + 4))
+  local menu_lines=$((count + 5))
 
+  # #region agent log
+  _dbg "H-A" "install.sh:main_menu" "entered-main_menu" '{"count":'"$count"'}'
+  # #endregion
   tput civis 2>/dev/null || true
   _draw_main_menu 0
 
@@ -1702,7 +1714,10 @@ main_menu() {
         ;;
       '')
         tput cnorm 2>/dev/null || true
-        echo "$cursor"
+        _MAIN_CHOICE=$cursor
+        # #region agent log
+        _dbg "H-A" "install.sh:main_menu" "selection-made" '{"choice":'"$cursor"'}'
+        # #endregion
         return
         ;;
       *)
@@ -1716,13 +1731,24 @@ main_menu() {
 }
 
 cmd_interactive() {
+  # #region agent log
+  _dbg "H-B" "install.sh:cmd_interactive" "before-migrate" 'null'
+  # #endregion
   migrate_manifest_v2
+  # #region agent log
+  _dbg "H-B" "install.sh:cmd_interactive" "after-migrate" 'null'
+  # #endregion
 
   while true; do
-    local choice
-    choice=$(main_menu)
+    # #region agent log
+    _dbg "H-A" "install.sh:cmd_interactive" "before-main_menu-call" 'null'
+    # #endregion
+    main_menu
+    # #region agent log
+    _dbg "H-A" "install.sh:cmd_interactive" "after-main_menu-call" '{"choice":'"$_MAIN_CHOICE"'}'
+    # #endregion
 
-    case "$choice" in
+    case "$_MAIN_CHOICE" in
       0)
         header "Updating from GitHub"
         cd "$BOOTSTRAP_DIR"

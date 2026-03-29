@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_sync": "2026-03-24",
+  "last_sync": "2026-03-29",
   "sources": {
     "cursor-plugins": {
       "base_path": "~/.cursor/plugins/cache/cursor-public",
@@ -19,19 +19,19 @@
           ]
         },
         "continual-learning": {
-          "hash": "1966e5222399c7f4b64d3c922244d71b3af83cd3",
-          "synced_at": "2026-03-13",
-          "skills": 1,
+          "hash": "e2a9918787654e001453044ea742eed826287064",
+          "synced_at": "1774792721",
+          "skills": 0,
           "rules": 0,
           "agents": 0,
           "commands": 0,
-          "hooks": 2,
+          "hooks": 0,
           "mcp": 0,
           "mcp_servers": []
         },
         "cursor-team-kit": {
-          "hash": "1966e5222399c7f4b64d3c922244d71b3af83cd3",
-          "synced_at": "2026-03-13",
+          "hash": "e2a9918787654e001453044ea742eed826287064",
+          "synced_at": "1774792721",
           "skills": 12,
           "rules": 2,
           "agents": 1,

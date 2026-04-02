@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "last_sync": "2026-03-29",
+  "last_sync": "2026-04-02",
   "sources": {
     "cursor-plugins": {
       "base_path": "~/.cursor/plugins/cache/cursor-public",
@@ -64,19 +64,6 @@
           "mcp": 0,
           "mcp_servers": []
         },
-        "jfrog": {
-          "hash": "2f314801d29a41473e2edd01c6d625a3f75387b7",
-          "synced_at": "2026-03-13",
-          "skills": 1,
-          "rules": 1,
-          "agents": 1,
-          "commands": 0,
-          "hooks": 0,
-          "mcp": 1,
-          "mcp_servers": [
-            "jfrog"
-          ]
-        },
         "superpowers": {
           "hash": "8ea39819eed74fe2a0338e71789f06b30e953041",
           "synced_at": "2026-03-24",
@@ -101,17 +88,6 @@
             "context7"
           ]
         },
-        "create-plugin": {
-          "hash": "e2a9918787654e001453044ea742eed826287064",
-          "synced_at": "2026-03-13",
-          "skills": 2,
-          "rules": 1,
-          "agents": 1,
-          "commands": 0,
-          "hooks": 0,
-          "mcp": 0,
-          "mcp_servers": []
-        },
         "deploy-on-aws": {
           "hash": "437f4bed0bfd7367df7613ca932fe900f7e08d89",
           "synced_at": "2026-03-13",
@@ -127,17 +103,6 @@
             "awspricing"
           ]
         },
-        "firecrawl": {
-          "hash": "80ce444eb020b5f41b34836c553f162d6113cd6f",
-          "synced_at": "2026-03-13",
-          "skills": 1,
-          "rules": 1,
-          "agents": 0,
-          "commands": 0,
-          "hooks": 0,
-          "mcp": 0,
-          "mcp_servers": []
-        },
         "notion-workspace": {
           "hash": "cf1324609edba6d617164f1dec138aeb43f26735",
           "synced_at": "2026-03-13",
@@ -151,17 +116,6 @@
             "notion"
           ]
         },
-        "parallel": {
-          "hash": "db86c809e2634744f8d968967449b984a71e2e04",
-          "synced_at": "2026-03-13",
-          "skills": 4,
-          "rules": 1,
-          "agents": 0,
-          "commands": 7,
-          "hooks": 0,
-          "mcp": 0,
-          "mcp_servers": []
-        },
         "runlayer": {
           "hash": "32f6a6c6c957528c475406b38a5f9b77a5b15d4b",
           "synced_at": "2026-03-13",
@@ -172,19 +126,6 @@
           "hooks": 1,
           "mcp": 0,
           "mcp_servers": []
-        },
-        "postman": {
-          "hash": "26862c1fc2527b9a0188d9bd417708a5db6cc10f",
-          "synced_at": "2026-03-20",
-          "skills": 3,
-          "rules": 1,
-          "agents": 1,
-          "commands": 8,
-          "hooks": 0,
-          "mcp": 1,
-          "mcp_servers": [
-            "postman"
-          ]
         }
       }
     },

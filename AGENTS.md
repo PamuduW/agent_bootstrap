@@ -1,82 +1,86 @@
 # Agent Bootstrap
 
-This is the agent bootstrap repo — a single source of truth for AI agent configurations (skills, rules, MCP servers, commands, subagents, hooks) that get deployed across all workspaces.
+This is the agent bootstrap repo — a bootstrap-first control plane for AI agent configurations across global and repo scopes.
 
 ## Repo structure
 
 ```
-skills/         35+ skill definitions (SKILL.md + references)
+catalog/        Curated package catalog
+global/         Canonical machine-level AGENTS.md baseline
+src/            Python control-plane engine
+state/          Local operator state and audit log (gitignored)
+skills/         Skill definitions (SKILL.md + references)
 rules/          Cursor rule files (.mdc)
-mcp/            MCP server configs (mcp.json) and documentation
+mcp/            MCP server config
 agents/         Subagent definitions (.md)
 commands/       Command/prompt templates (.md)
 hooks/          Lifecycle hook scripts
-templates/      Templates for new projects (AGENTS.md, .codexignore)
-manifest.json   Tracks sources, plugin hashes, sync timestamps, MCP provenance
-install.sh      Interactive plugin manager + deployment tool
-sync.sh         Deprecated — redirects to install.sh
-.local-config   Per-machine plugin selections (gitignored)
+templates/      Templates for new projects
+install.sh      Launcher for the interactive control plane
+sync.sh         Deprecated alias to install.sh
 ```
 
 ## Quick start
 
 ```bash
-./install.sh          # Interactive mode — menu with Update/Initialize/Status
+./install.sh
 ```
 
 ## When asked to update or sync
 
-Run `./install.sh` and choose option **1) Update** to pull the latest from GitHub, then **2) Initialize** to review and sync plugins.
+Run the interactive menu with `./install.sh`, or use the non-interactive commands:
 
-The Initialize flow:
-1. Discovers plugins from three sources: repo manifest, Cursor plugin cache, local installs
-2. Shows an interactive dual-checkbox menu (Repo + Local per plugin)
-3. Previews changes and asks for confirmation
-4. Syncs: pulls new plugins into repo, removes deselected ones, deploys/removes locally
-5. Offers to git commit + push if the repo changed
+1. `./install.sh status`
+2. `./install.sh global`
+3. `./install.sh workspace <path>`
+4. `./install.sh all <parent-dir>`
+5. `./install.sh import-local <package-id>`
+6. `./install.sh remove-managed <package-id>`
+7. `./install.sh delete-local <package-id>`
 
 ## When asked to install or set up
 
 ### Interactive (recommended)
 ```bash
-./install.sh          # Choose option 2: Initialize
+./install.sh
 ```
 
-### Scripted / CI
+### Scripted / CLI
 ```bash
-./install.sh --global              # Global MCP, Codex skills, shell env
-./install.sh --all ~/ATOM/         # All repos under ATOM
-./install.sh --workspace <path>    # Single repo
-./install.sh --status              # Show what's configured
+./install.sh global
+./install.sh all ~/ATOM/
+./install.sh workspace <path>
+./install.sh status
 ```
-
-These commands respect `.local-config` if present (created by the interactive menu). Without it, all repo plugins are deployed.
 
 ## Plugin model
 
-Everything is grouped by plugin name (e.g., `jfrog`, `atlassian`, `cursor-team-kit`). A plugin includes all `<plugin>-*` assets across skills/, rules/, agents/, commands/, hooks/, plus its MCP server keys.
+The current control plane distinguishes these states:
 
-Each plugin has two independent states:
-- **Repo**: whether the plugin's files are tracked in this git repo
-- **Local**: whether the plugin is deployed on this machine
-
-`Local` requires `Repo` — you can't deploy locally without the files being in the repo.
+- **Managed**: the package exists in `catalog/packages.json`
+- **Detected local**: the package exists in local sources such as Cursor plugin cache
+- **Detected repo**: the repo already contains canonical assets for that package
+- **Enabled**: the package is selected for rendering into generated outputs
 
 ## MCP provenance
 
-The manifest.json (v2) tracks which MCP server keys each plugin contributes via the `mcp_servers` array. This enables clean removal: deselecting a plugin removes exactly its MCP servers from all configs without touching user-added servers.
+Package ownership for MCP keys lives in `catalog/packages.json`, and rendered outputs only include keys owned by enabled managed packages.
 
 ## Workspace-level agent config files
 
-At each workspace, `CLAUDE.md` is generated as the primary skill catalog. `AGENTS.md` is a symlink to `CLAUDE.md`, preventing divergence between agent config files.
+The canonical authored files are:
+
+- `global/AGENTS.md` for the machine-level baseline
+- `<repo>/AGENTS.md` for repo-level overlays
+
+Everything else is generated compatibility output.
 
 ## Conventions
 
-- Skill directories: `skills/<source-plugin>-<skill-name>/`
+- Skill directories: `skills/<package>-<skill-name>/`
 - Rule files: `rules/<source-plugin>-<rule-name>.mdc`
 - Agent/command files: `agents/<source-plugin>-<name>.md`, `commands/<source-plugin>-<name>.md`
 - Hooks: `hooks/<source-plugin>/`
-- The manifest.json tracks where each component came from
 
 ## Guardrails
 

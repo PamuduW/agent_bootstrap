@@ -95,8 +95,12 @@ _KNOWN_PLUGINS_CACHE=""
 get_plugin_for_asset() {
   local asset_name="$1"
   if [[ -z "$_KNOWN_PLUGINS_CACHE" ]]; then
-    _KNOWN_PLUGINS_CACHE=$(jq -r '.sources["cursor-plugins"].plugins | keys[]' "$MANIFEST" 2>/dev/null || true)
-    _KNOWN_PLUGINS_CACHE+=$'\ncursor-native'
+    if [[ ${#PLUGIN_NAMES[@]} -gt 0 ]]; then
+      _KNOWN_PLUGINS_CACHE=$(printf "%s\n" "${PLUGIN_NAMES[@]}")
+    else
+      _KNOWN_PLUGINS_CACHE=$(jq -r '.sources["cursor-plugins"].plugins | keys[]' "$MANIFEST" 2>/dev/null || true)
+      _KNOWN_PLUGINS_CACHE+=$'\ncursor-native'
+    fi
   fi
   local best="" best_len=0
   while IFS= read -r pname; do
@@ -403,21 +407,66 @@ _count_repo_assets() {
   PLUGIN_HOOKS["$plugin"]=$hooks
 }
 
+_plugin_has_repo_state() {
+  local plugin="$1"
+  local asset_total=0
+  asset_total=$((asset_total + ${PLUGIN_SKILLS[$plugin]:-0}))
+  asset_total=$((asset_total + ${PLUGIN_RULES[$plugin]:-0}))
+  asset_total=$((asset_total + ${PLUGIN_AGENTS[$plugin]:-0}))
+  asset_total=$((asset_total + ${PLUGIN_COMMANDS[$plugin]:-0}))
+  asset_total=$((asset_total + ${PLUGIN_HOOKS[$plugin]:-0}))
+  if [[ $asset_total -gt 0 ]]; then
+    return 0
+  fi
+
+  local mcp_keys="${PLUGIN_MCP_KEYS[$plugin]:-}"
+  [[ -z "$mcp_keys" || ! -f "$MCP_REPO" ]] && return 1
+
+  local key
+  local key_arr=()
+  IFS=',' read -ra key_arr <<< "$mcp_keys"
+  for key in "${key_arr[@]}"; do
+    [[ -z "$key" ]] && continue
+    if jq -e --arg key "$key" '.mcpServers[$key]' "$MCP_REPO" >/dev/null 2>&1; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 # ---------------------------------------------------------------------------
 # Plugin discovery
 # ---------------------------------------------------------------------------
 discover_plugins() {
   PLUGIN_NAMES=()
+  PLUGIN_IN_REPO=()
+  PLUGIN_IN_LOCAL=()
+  PLUGIN_IN_CACHE=()
+  PLUGIN_REPO_SEL=()
+  PLUGIN_LOCAL_SEL=()
+  PLUGIN_SKILLS=()
+  PLUGIN_RULES=()
+  PLUGIN_AGENTS=()
+  PLUGIN_COMMANDS=()
+  PLUGIN_HOOKS=()
+  PLUGIN_MCP_KEYS=()
+  PLUGIN_CACHE_HASH=()
+  PLUGIN_SOURCE=()
+  _KNOWN_PLUGINS_CACHE=""
 
   # 1. From manifest — cursor plugins
   for plugin_name in $(jq -r '.sources["cursor-plugins"].plugins | keys[]' "$MANIFEST" 2>/dev/null); do
-    _add_plugin "$plugin_name"
-    PLUGIN_IN_REPO["$plugin_name"]=1
-    PLUGIN_SOURCE["$plugin_name"]="cursor-plugin"
     local mcp_keys
     mcp_keys=$(jq -r ".sources[\"cursor-plugins\"].plugins[\"$plugin_name\"].mcp_servers // [] | join(\",\")" "$MANIFEST" 2>/dev/null)
     PLUGIN_MCP_KEYS["$plugin_name"]="$mcp_keys"
     _count_repo_assets "$plugin_name"
+    if ! _plugin_has_repo_state "$plugin_name"; then
+      continue
+    fi
+    _add_plugin "$plugin_name"
+    PLUGIN_IN_REPO["$plugin_name"]=1
+    PLUGIN_SOURCE["$plugin_name"]="cursor-plugin"
   done
 
   # 2. cursor-native skills
@@ -489,6 +538,7 @@ discover_plugins() {
 
   # 7. Override local selections from saved config
   load_local_config
+  prune_unselected_plugins
 
   # Invalidate plugin name cache
   _KNOWN_PLUGINS_CACHE=""
@@ -512,6 +562,17 @@ load_local_config() {
       PLUGIN_LOCAL_SEL["$pname"]="$pval"
     fi
   done < "$LOCAL_CONFIG"
+}
+
+prune_unselected_plugins() {
+  local kept=()
+  local name
+  for name in "${PLUGIN_NAMES[@]}"; do
+    if [[ "${PLUGIN_REPO_SEL[$name]:-0}" == "1" ]] || [[ "${PLUGIN_LOCAL_SEL[$name]:-0}" == "1" ]]; then
+      kept+=("$name")
+    fi
+  done
+  PLUGIN_NAMES=("${kept[@]}")
 }
 
 is_plugin_locally_enabled() {

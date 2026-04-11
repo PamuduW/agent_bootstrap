@@ -27,10 +27,9 @@ def scan_cursor_cache(cache_root: Path) -> Dict[str, DiscoveryRecord]:
         return discovered
 
     for plugin_dir in sorted(path for path in cache_root.iterdir() if path.is_dir()):
-        versions = sorted(path for path in plugin_dir.iterdir() if path.is_dir())
-        if not versions:
+        version_dir = _preferred_version_dir(plugin_dir)
+        if version_dir is None:
             continue
-        version_dir = versions[0]
         discovered[plugin_dir.name] = DiscoveryRecord(
             package_id=plugin_dir.name,
             source="cursor-cache",
@@ -43,12 +42,7 @@ def scan_cursor_cache(cache_root: Path) -> Dict[str, DiscoveryRecord]:
 
 def cache_version_dir(cache_root: Path, package_id: str) -> Path | None:
     plugin_dir = cache_root / package_id
-    if not plugin_dir.exists():
-        return None
-    versions = sorted(path for path in plugin_dir.iterdir() if path.is_dir())
-    if not versions:
-        return None
-    return versions[0]
+    return _preferred_version_dir(plugin_dir)
 
 
 def merge_discovery(
@@ -101,3 +95,12 @@ def _has_artifacts(artifacts: ArtifactSummary) -> bool:
             artifacts.hooks_present,
         ]
     )
+
+
+def _preferred_version_dir(plugin_dir: Path) -> Path | None:
+    if not plugin_dir.exists():
+        return None
+    versions = [path for path in plugin_dir.iterdir() if path.is_dir()]
+    if not versions:
+        return None
+    return max(versions, key=lambda path: (path.stat().st_mtime_ns, path.name))

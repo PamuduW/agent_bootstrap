@@ -31,7 +31,10 @@ This opens the terminal-first menu for:
 ./install.sh import-local create-plugin
 ./install.sh remove-managed superpowers
 ./install.sh delete-local postman
+./install.sh doctor
 ```
+
+The `workspace` command expects the root of a git repo.
 
 ## 4. Understand the generated outputs
 

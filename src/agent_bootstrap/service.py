@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 from pathlib import Path
 
 from .catalog import load_catalog, save_catalog
 from .discovery import cache_version_dir, merge_discovery, scan_cursor_cache, scan_managed_packages
-from .models import ArtifactSummary, Overview, PackageCatalogEntry, PackageRow
+from .models import ArtifactSummary, DoctorIssue, Overview, PackageCatalogEntry, PackageRow
 from .paths import BootstrapPaths
-from .render import render_global_outputs, render_workspace_outputs
+from .render import GENERATED_AGENTS_HEADER, render_global_outputs, render_workspace_outputs
 from .state import StateSnapshot, append_audit, load_state, save_state
 
 
@@ -105,7 +106,7 @@ class BootstrapService:
         render_workspace_outputs(
             self.paths,
             workspace,
-            self.enabled_package_ids(discovery.keys()),
+            self.enabled_managed_package_ids("cursor"),
             self.catalog,
             discovery,
         )
@@ -113,11 +114,23 @@ class BootstrapService:
 
     def render_global(self) -> None:
         self.record_instruction_change_audit()
-        render_global_outputs(self.paths, self.enabled_package_ids(self.catalog.keys()), self.catalog)
+        render_global_outputs(
+            self.paths,
+            self.enabled_managed_package_ids("codex"),
+            self.enabled_managed_package_ids("cursor"),
+            self.catalog,
+        )
         append_audit(self.paths.audit_log, "render-global", str(self.paths.root))
 
-    def enabled_package_ids(self, package_ids) -> list[str]:
-        return sorted(package_id for package_id in package_ids if self._is_enabled(package_id, package_id in self.catalog))
+    def enabled_managed_package_ids(self, surface: str | None = None) -> list[str]:
+        package_ids = []
+        for package_id, entry in self.catalog.items():
+            if not self._is_enabled(package_id, True):
+                continue
+            if surface and entry.supported_surfaces and surface not in entry.supported_surfaces:
+                continue
+            package_ids.append(package_id)
+        return sorted(package_ids)
 
     def track_workspace(self, workspace: Path) -> None:
         resolved = str(workspace.resolve())
@@ -126,6 +139,16 @@ class BootstrapService:
             self.state.tracked_workspaces.sort()
             save_state(self.paths.state_file, self.state)
             append_audit(self.paths.audit_log, "workspace-add", resolved)
+
+    def track_and_render_workspace(self, workspace: Path) -> None:
+        workspace = workspace.resolve()
+        if not (workspace / ".git").exists():
+            raise ValueError(
+                "Workspace path must point to a git repository root. "
+                f"Missing .git entry in {workspace}."
+            )
+        self.render_workspace(workspace)
+        self.track_workspace(workspace)
 
     def untrack_workspace(self, workspace: Path) -> None:
         resolved = str(workspace.resolve())
@@ -138,6 +161,81 @@ class BootstrapService:
         self.render_global()
         for workspace in self.state.tracked_workspaces:
             self.render_workspace(Path(workspace))
+
+    def doctor_issues(self) -> list[DoctorIssue]:
+        issues: list[DoctorIssue] = []
+
+        owners: dict[str, list[str]] = {}
+        for package_id, entry in self.catalog.items():
+            for key in entry.mcp_keys:
+                owners.setdefault(key, []).append(package_id)
+        for key, package_ids in sorted(owners.items()):
+            if len(package_ids) > 1:
+                issues.append(
+                    DoctorIssue(
+                        level="error",
+                        scope="catalog",
+                        message=f"MCP key '{key}' is owned by multiple packages: {', '.join(sorted(package_ids))}",
+                    )
+                )
+
+        for workspace_entry in self.state.tracked_workspaces:
+            workspace = Path(workspace_entry)
+            if not workspace.exists():
+                issues.append(
+                    DoctorIssue(
+                        level="error",
+                        scope=workspace_entry,
+                        message=f"Tracked workspace does not exist: {workspace_entry}",
+                    )
+                )
+                continue
+            if not (workspace / ".git").exists():
+                issues.append(
+                    DoctorIssue(
+                        level="warning",
+                        scope=workspace_entry,
+                        message=f"Tracked workspace is missing a .git entry: {workspace_entry}",
+                    )
+                )
+            agents_file = workspace / "AGENTS.md"
+            if agents_file.is_symlink():
+                issues.append(
+                    DoctorIssue(
+                        level="error",
+                        scope=workspace_entry,
+                        message=f"Workspace AGENTS.md is a symlink: {agents_file} -> {agents_file.resolve()}",
+                    )
+                )
+            elif agents_file.exists():
+                content = agents_file.read_text(encoding="utf-8")
+                if content.startswith(GENERATED_AGENTS_HEADER):
+                    issues.append(
+                        DoctorIssue(
+                            level="error",
+                            scope=workspace_entry,
+                            message=f"Workspace AGENTS.md looks generated instead of authored: {agents_file}",
+                        )
+                    )
+            if not os.access(workspace, os.W_OK):
+                issues.append(
+                    DoctorIssue(
+                        level="warning",
+                        scope=workspace_entry,
+                        message=f"Workspace directory is not writable: {workspace_entry}",
+                    )
+                )
+            gitignore = workspace / ".gitignore"
+            if gitignore.exists() and not os.access(gitignore, os.W_OK):
+                issues.append(
+                    DoctorIssue(
+                        level="warning",
+                        scope=workspace_entry,
+                        message=f"Workspace .gitignore is not writable: {gitignore}",
+                    )
+                )
+
+        return issues
 
     def record_instruction_change_audit(self) -> None:
         candidates = [self.paths.global_agents]

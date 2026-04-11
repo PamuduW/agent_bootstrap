@@ -52,6 +52,13 @@ class Overview:
     package_rows: List[PackageRow]
 
 
+@dataclass(frozen=True)
+class DoctorIssue:
+    level: str
+    scope: str
+    message: str
+
+
 @dataclass
 class StateSnapshot:
     enabled_packages: Dict[str, bool] = field(default_factory=dict)

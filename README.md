@@ -83,6 +83,7 @@ Non-interactive commands:
 ./install.sh import-local <package-id>
 ./install.sh remove-managed <package-id>
 ./install.sh delete-local <package-id>
+./install.sh doctor
 ```
 
 What they do:
@@ -91,7 +92,7 @@ What they do:
 - `global`: render global Codex, Claude, and Cursor outputs from
   `global/AGENTS.md`
 - `workspace`: track a repo and render workspace outputs from merged global +
-  repo `AGENTS.md`
+  repo `AGENTS.md` at a git repository root
 - `all`: track and render every git repo under a parent directory, then refresh
   global outputs
 - `import-local`: copy a detected local package from Cursor cache into this repo
@@ -99,6 +100,7 @@ What they do:
 - `remove-managed`: remove a managed package from this repo catalog and repo
   artifacts
 - `delete-local`: delete a detected local package from the local Cursor cache
+- `doctor`: validate tracked workspaces and catalog state for common problems
 
 ## Repo layout
 

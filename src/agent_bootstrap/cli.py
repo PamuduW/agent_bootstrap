@@ -44,8 +44,7 @@ def main() -> int:
             if not args.path:
                 raise SystemExit("workspace path is required")
             workspace = Path(args.path).resolve()
-            service.track_workspace(workspace)
-            service.render_workspace(workspace)
+            service.track_and_render_workspace(workspace)
             return 0
         if command in {"all", "--all"}:
             if not args.path:
@@ -68,10 +67,9 @@ def main() -> int:
             service.delete_local_package(args.path)
             return 0
         if command == "doctor":
-            print_status(service)
-            return 0
+            return print_doctor(service)
         raise SystemExit(f"unknown command: {command}")
-    except ValueError as error:
+    except (ValueError, OSError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
 
@@ -116,9 +114,10 @@ def package_menu_rows(service: BootstrapService) -> list[dict[str, str]]:
     rows = []
     for row in overview.package_rows:
         managed = "M" if row.managed else " "
-        detected = "L" if row.detected_local else ("R" if row.detected_repo else " ")
+        detected_local = "L" if row.detected_local else " "
+        detected_repo = "R" if row.detected_repo else " "
         enabled = "x" if row.enabled else " "
-        label = f"[{managed}] [{detected}] [{enabled}] {row.package_id}"
+        label = f"[{managed}] [{detected_local}] [{detected_repo}] [{enabled}] {row.package_id}"
         rows.append({"id": f"package:{row.package_id}", "label": label})
     return rows
 
@@ -150,6 +149,7 @@ def run_interactive(service: BootstrapService) -> int:
         ("Workspaces", "Track repo overlays and outputs"),
         ("Apply", "Render global and tracked workspace outputs"),
         ("Status", "Show current control-plane state"),
+        ("Doctor", "Validate tracked workspaces and catalog state"),
         ("Quit", "Exit"),
     ]
     cursor = 0
@@ -183,12 +183,14 @@ def run_interactive(service: BootstrapService) -> int:
                 elif label == "Apply":
                     try:
                         service.apply_all()
-                    except ValueError as error:
+                    except (ValueError, OSError) as error:
                         flash_message(f"Error: {error}")
                     else:
                         flash_message("Applied global and tracked workspace outputs.")
                 elif label == "Status":
                     run_status_screen(service)
+                elif label == "Doctor":
+                    run_doctor_screen(service)
                 elif label == "Quit":
                     return 0
 
@@ -276,8 +278,11 @@ def run_workspace_menu(service: BootstrapService) -> None:
             if selected == "action:add":
                 path = prompt_line("Workspace path: ")
                 if path:
-                    workspace = Path(path).expanduser().resolve()
-                    service.track_workspace(workspace)
+                    try:
+                        workspace = Path(path).expanduser().resolve()
+                        service.track_and_render_workspace(workspace)
+                    except (ValueError, OSError) as error:
+                        flash_message(f"Error: {error}")
             elif selected == "action:remove":
                 workspace = resolve_workspace_target(rows, cursor, last_workspace_index)
                 if workspace:
@@ -325,7 +330,7 @@ def run_package_actions(service: BootstrapService, package_row: PackageRow) -> N
             elif selected == "action:import-local":
                 try:
                     service.import_from_local(package_row.package_id)
-                except ValueError as error:
+                except (ValueError, OSError) as error:
                     flash_message(f"Error: {error}")
                 else:
                     flash_message(f"Imported {package_row.package_id} from local cache.")
@@ -373,11 +378,53 @@ def print_status(service: BootstrapService) -> None:
     print(f"Tracked workspaces: {len(service.state.tracked_workspaces)}")
 
 
+def run_doctor_screen(service: BootstrapService) -> None:
+    issues = service.doctor_issues()
+    lines = [
+        "",
+        f"  {BOLD}=== Doctor ==={NC}",
+        "",
+    ]
+    if not issues:
+        lines.extend(
+            [
+                f"  {CYAN}No issues found.{NC}",
+                "",
+                f"  {DIM}Press any key to return.{NC}",
+            ]
+        )
+        draw_screen(lines)
+        read_key()
+        return
+
+    lines.append(f"  Found {len(issues)} issue(s):")
+    lines.append("")
+    for issue in issues:
+        level = issue.level.upper()
+        lines.append(f"  [{level}] {issue.scope}")
+        lines.append(f"  {issue.message}")
+        lines.append("")
+    lines.append(f"  {DIM}Press any key to return.{NC}")
+    draw_screen(lines)
+    read_key()
+
+
+def print_doctor(service: BootstrapService) -> int:
+    issues = service.doctor_issues()
+    print("\n=== Doctor ===")
+    if not issues:
+        print("No issues found.")
+        return 0
+    print(f"Found {len(issues)} issue(s):")
+    for issue in issues:
+        print(f"- [{issue.level.upper()}] {issue.scope}: {issue.message}")
+    return 1
+
+
 def apply_all_under(service: BootstrapService, parent: Path) -> None:
     for child in sorted(parent.iterdir()):
         if (child / ".git").exists():
-            service.track_workspace(child)
-            service.render_workspace(child)
+            service.track_and_render_workspace(child)
     service.render_global()
 
 

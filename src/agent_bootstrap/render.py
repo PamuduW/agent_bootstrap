@@ -28,7 +28,7 @@ def merge_instruction_text(global_agents: Path, repo_agents: Path | None) -> str
 def render_workspace_outputs(
     paths: BootstrapPaths,
     workspace: Path,
-    enabled_packages: Iterable[str],
+    cursor_packages: Iterable[str],
     catalog: Dict[str, PackageCatalogEntry],
     discovery: Dict[str, DiscoveryRecord],
 ) -> None:
@@ -46,26 +46,30 @@ def render_workspace_outputs(
     cursor_rules_dir = workspace / ".cursor" / "rules"
     cursor_rules_dir.mkdir(parents=True, exist_ok=True)
     (cursor_rules_dir / "bootstrap-skills.mdc").write_text(
-        _render_cursor_skills_rule(paths, enabled_packages, discovery), encoding="utf-8"
+        _render_cursor_skills_rule(paths, cursor_packages, discovery), encoding="utf-8"
     )
 
     cursor_dir = workspace / ".cursor"
     cursor_dir.mkdir(parents=True, exist_ok=True)
     (cursor_dir / "mcp.json").write_text(
-        json.dumps(_build_mcp_payload(paths, enabled_packages, catalog), indent=2) + "\n",
+        json.dumps(_build_mcp_payload(paths, cursor_packages, catalog), indent=2) + "\n",
         encoding="utf-8",
     )
 
 
 def render_global_outputs(
-    paths: BootstrapPaths, enabled_packages: Iterable[str], catalog: Dict[str, PackageCatalogEntry]
+    paths: BootstrapPaths,
+    codex_packages: Iterable[str],
+    cursor_packages: Iterable[str],
+    catalog: Dict[str, PackageCatalogEntry],
 ) -> None:
     merged = merge_instruction_text(paths.global_agents, None)
-    enabled_packages = sorted(enabled_packages)
+    codex_packages = sorted(codex_packages)
+    cursor_packages = sorted(cursor_packages)
 
     paths.codex_home.mkdir(parents=True, exist_ok=True)
     (paths.codex_home / "AGENTS.md").write_text(merged, encoding="utf-8")
-    _sync_codex_skills(paths, enabled_packages)
+    _sync_codex_skills(paths, codex_packages)
 
     paths.claude_home.mkdir(parents=True, exist_ok=True)
     (paths.claude_home / "CLAUDE.md").write_text(merged, encoding="utf-8")
@@ -73,7 +77,7 @@ def render_global_outputs(
 
     paths.cursor_home.mkdir(parents=True, exist_ok=True)
     (paths.cursor_home / "mcp.json").write_text(
-        json.dumps(_build_mcp_payload(paths, enabled_packages, catalog), indent=2) + "\n",
+        json.dumps(_build_mcp_payload(paths, cursor_packages, catalog), indent=2) + "\n",
         encoding="utf-8",
     )
 
@@ -186,9 +190,6 @@ def _read_repo_overlay(repo_agents: Path | None) -> str | None:
     if repo_agents is None or not repo_agents.exists():
         return None
     content = repo_agents.read_text(encoding="utf-8").rstrip()
-    if content.startswith(GENERATED_AGENTS_HEADER):
-        # A stale generated file should never be reused as the authored repo overlay.
-        return None
     return content or None
 
 
@@ -201,3 +202,11 @@ def _validate_workspace_agents_file(workspace: Path) -> None:
             f"Found symlink: {agents_file} -> {target}. "
             "Restore the repo-specific AGENTS.md as a regular file, then rerun agent_bootstrap."
         )
+    if agents_file.exists():
+        content = agents_file.read_text(encoding="utf-8")
+        if content.startswith(GENERATED_AGENTS_HEADER):
+            raise ValueError(
+                "Workspace AGENTS.md looks generated instead of authored. "
+                f"Found generated content in {agents_file}. "
+                "Restore the repo-specific AGENTS.md as a normal authored file, then rerun agent_bootstrap."
+            )

@@ -30,46 +30,50 @@ def main() -> int:
     paths = default_paths(Path(args.root))
     service = BootstrapService(paths)
 
-    command = args.command
-    if command == "interactive":
-        return run_interactive(service)
-    if command in {"status", "--status"}:
-        print_status(service)
-        return 0
-    if command in {"global", "--global"}:
-        service.render_global()
-        return 0
-    if command in {"workspace", "--workspace"}:
-        if not args.path:
-            raise SystemExit("workspace path is required")
-        workspace = Path(args.path).resolve()
-        service.track_workspace(workspace)
-        service.render_workspace(workspace)
-        return 0
-    if command in {"all", "--all"}:
-        if not args.path:
-            raise SystemExit("parent directory is required")
-        apply_all_under(service, Path(args.path).resolve())
-        return 0
-    if command == "import-local":
-        if not args.path:
-            raise SystemExit("package id is required")
-        service.import_from_local(args.path)
-        return 0
-    if command == "remove-managed":
-        if not args.path:
-            raise SystemExit("package id is required")
-        service.remove_managed_package(args.path)
-        return 0
-    if command == "delete-local":
-        if not args.path:
-            raise SystemExit("package id is required")
-        service.delete_local_package(args.path)
-        return 0
-    if command == "doctor":
-        print_status(service)
-        return 0
-    raise SystemExit(f"unknown command: {command}")
+    try:
+        command = args.command
+        if command == "interactive":
+            return run_interactive(service)
+        if command in {"status", "--status"}:
+            print_status(service)
+            return 0
+        if command in {"global", "--global"}:
+            service.render_global()
+            return 0
+        if command in {"workspace", "--workspace"}:
+            if not args.path:
+                raise SystemExit("workspace path is required")
+            workspace = Path(args.path).resolve()
+            service.track_workspace(workspace)
+            service.render_workspace(workspace)
+            return 0
+        if command in {"all", "--all"}:
+            if not args.path:
+                raise SystemExit("parent directory is required")
+            apply_all_under(service, Path(args.path).resolve())
+            return 0
+        if command == "import-local":
+            if not args.path:
+                raise SystemExit("package id is required")
+            service.import_from_local(args.path)
+            return 0
+        if command == "remove-managed":
+            if not args.path:
+                raise SystemExit("package id is required")
+            service.remove_managed_package(args.path)
+            return 0
+        if command == "delete-local":
+            if not args.path:
+                raise SystemExit("package id is required")
+            service.delete_local_package(args.path)
+            return 0
+        if command == "doctor":
+            print_status(service)
+            return 0
+        raise SystemExit(f"unknown command: {command}")
+    except ValueError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
 
 
 def move_cursor(index: int, direction: str, count: int) -> int:
@@ -177,8 +181,12 @@ def run_interactive(service: BootstrapService) -> int:
                 elif label == "Workspaces":
                     run_workspace_menu(service)
                 elif label == "Apply":
-                    service.apply_all()
-                    flash_message("Applied global and tracked workspace outputs.")
+                    try:
+                        service.apply_all()
+                    except ValueError as error:
+                        flash_message(f"Error: {error}")
+                    else:
+                        flash_message("Applied global and tracked workspace outputs.")
                 elif label == "Status":
                     run_status_screen(service)
                 elif label == "Quit":
@@ -268,7 +276,8 @@ def run_workspace_menu(service: BootstrapService) -> None:
             if selected == "action:add":
                 path = prompt_line("Workspace path: ")
                 if path:
-                    service.track_workspace(Path(path).expanduser().resolve())
+                    workspace = Path(path).expanduser().resolve()
+                    service.track_workspace(workspace)
             elif selected == "action:remove":
                 workspace = resolve_workspace_target(rows, cursor, last_workspace_index)
                 if workspace:
@@ -314,8 +323,12 @@ def run_package_actions(service: BootstrapService, package_row: PackageRow) -> N
                 service.set_package_enabled(package_row.package_id, not package_row.enabled)
                 flash_message(f"Toggled {package_row.package_id}.")
             elif selected == "action:import-local":
-                service.import_from_local(package_row.package_id)
-                flash_message(f"Imported {package_row.package_id} from local cache.")
+                try:
+                    service.import_from_local(package_row.package_id)
+                except ValueError as error:
+                    flash_message(f"Error: {error}")
+                else:
+                    flash_message(f"Imported {package_row.package_id} from local cache.")
             elif selected == "action:remove-managed":
                 service.remove_managed_package(package_row.package_id)
                 flash_message(f"Removed managed package {package_row.package_id}.")

@@ -1,13 +1,13 @@
 # Deferred AgentOS features
 
-Out of scope for agent_bootstrap v0.1 (Stage 5). Planned or deferred work:
+Delivered in v0.1 / Stages 5–7 (Phase 7.1): curated skills install/update, AGENTS.md exports, `agentboot`, and the Obsidian memory vault layout in `memory-vault/`.
+
+Still deferred:
 
 - Full numbered taxonomy (`00-core/`, `10-rules/`, `80-adapters/`, …)
 - TUI overhaul and `agentos tui`
 - Full source-ingest pipeline (`agentos ingest`, diff/review/accept)
-- Hermes / opencode integration
+- **Hermes / opencode integration** (Phase 7.2–7.3 — laptop stays CLI-only; home server out of scope for this project)
 - OpenClaw bootstrap file set (`SOUL.md`, `USER.md`, …)
 - ChatGPT and additional export adapters
-- Memory vault content and hot/warm/cold routing (see `memory-vault/` — Stage 7)
-
-v0.1 delivers: curated skills install/update, AGENTS.md exports, and doctor.
+- Memory graph upgrades — Graphify, Mem0, Graphiti (Phase 7.4)

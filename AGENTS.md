@@ -12,8 +12,8 @@ skills-lock.json       Vercel skills lockfile (committed)
 skills/                Personal authored skills pack (SKILL.md each)
 global/                Canonical machine-level AGENTS.md baseline
 templates/             Per-repo AGENTS.md overlay template
-base/                  Stage 6 stub — agentboot templates
-memory-vault/          Stage 7 stub — Obsidian memory store
+base/                  agentboot templates (AGENTS.md, CLAUDE.md)
+memory-vault/          Obsidian memory store (Phase 7.1 — active-context, preferences, decisions/, lessons/)
 future/                Deferred AgentOS features
 catalog/               Curated package catalog + MCP provenance
 mcp/                   MCP server config (mcp.json)
@@ -107,10 +107,9 @@ Everything else is generated compatibility output. Do not hand-edit `CLAUDE.md`,
 
 Superseded v1 vendored skills, rules, agents, commands, hooks, and stale docs live at `../temp/archive/` (outside this repo). **Do not add new work there.** See `temp/archive/README.md` from the `new_setup` workspace root.
 
-## Stage stubs
+## Memory vault
 
-- **`base/`** — Stage 6: `agentboot` templates (AGENTS.md + CLAUDE.md scaffold)
-- **`memory-vault/`** — Stage 7: Obsidian memory layout (stub only)
+- **`memory-vault/`** — human-owned Obsidian store (`active-context.md`, `preferences.md`, `decisions/`, `lessons/`). Agents draft; operator approves. Architecture: `docs/harness-architecture.md` (repo root `new_setup/docs/`).
 
 ## Conventions
 

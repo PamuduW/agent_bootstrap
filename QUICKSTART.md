@@ -115,10 +115,20 @@ Fixes common problems: missing workspaces, generated `AGENTS.md` in repos, dupli
 python3 -m unittest tests.test_bootstrap_engine
 ```
 
+## 10. Memory vault (Stage 7)
+
+Human-owned context lives in [`memory-vault/`](memory-vault/):
+
+- `active-context.md` — what you're working on now
+- `preferences.md` — stable preferences
+- `decisions/` — decision log
+- `lessons/` — lessons learned
+
+Agents may draft; you approve before entries are canonical. See [`docs/harness-architecture.md`](../docs/harness-architecture.md) for how the vault fits the three-plane harness model.
+
 ## What's next
 
-- **Stage 6** — `agentboot` command and templates in [`base/`](base/) for one-command repo scaffolding
-- **Stage 7** — memory vault content in [`memory-vault/`](memory-vault/) (design stub only)
+- **Deferred harness work** — opencode, Hermes/Proxmox, graph memory upgrades (Phases 7.2–7.4) — see [`future/README.md`](future/README.md)
 - **Dotfiles** — boot-menu option 4 clones this repo and runs `./install.sh` automatically
 
 See [`README.md`](README.md) for the full config-plane model and [`temp/archive/README.md`](../temp/archive/README.md) for legacy artifacts (outside this repo).

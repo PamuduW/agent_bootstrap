@@ -161,7 +161,7 @@ agent_bootstrap/
 ├── global/AGENTS.md        # machine-level baseline (authored)
 ├── templates/              # per-repo AGENTS.md overlay template
 ├── base/                   # agentboot templates (AGENTS.md, CLAUDE.md)
-├── memory-vault/           # Stage 7 stub — Obsidian memory store
+├── memory-vault/           # Obsidian memory store (Phase 7.1)
 ├── future/                 # deferred AgentOS features
 ├── catalog/packages.json   # managed package catalog + MCP provenance
 ├── mcp/mcp.json            # MCP server definitions
@@ -178,13 +178,20 @@ Superseded v1 artifacts from the Stage 5 rebuild — vendored skills, imported r
 
 Do not add new skills or sync scripts under the legacy archive.
 
-## Stage 7 (stub)
+## Memory vault (Stage 7 — Phase 7.1)
 
-| Directory | Stage | Purpose |
-|-----------|-------|---------|
-| [`memory-vault/`](memory-vault/) | **Stage 7** | Obsidian-compatible memory store (`active-context.md`, `preferences.md`, `decisions/`, `lessons/`) — design-only for now; Hermes/home-server rollout is out of scope |
+Human-owned Obsidian-compatible memory in [`memory-vault/`](memory-vault/):
 
-Stage 5 delivers the config plane, skills installer, and exports. Stage 6 adds per-repo bootstrapping via `agentboot`; Stage 7 adds memory vault content and optional central harness integration.
+| Path | Purpose |
+|------|---------|
+| `active-context.md` | Current focus and open threads |
+| `preferences.md` | Stable working preferences |
+| `decisions/` | ADR-style decision log |
+| `lessons/` | Durable lessons learned |
+
+Agents may draft entries; you approve before they become canonical. See [`docs/harness-architecture.md`](../docs/harness-architecture.md) for the three-plane model (config / work / control) and how the vault fits the config plane.
+
+Phases 7.2–7.4 (opencode, Hermes/Proxmox, graph upgrades) are deferred — see [`future/README.md`](future/README.md).
 
 ## Configuration
 

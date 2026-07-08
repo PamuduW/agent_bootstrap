@@ -56,16 +56,10 @@ def collect_repo_artifacts(root: Path, package_id: str) -> ArtifactSummary:
                 names.append(path.name)
         return names
 
-    skills = []
-    if (root / "skills").exists():
-        for skill_dir in sorted((root / "skills").glob(f"{package_id}-*")):
-            if (skill_dir / "SKILL.md").exists():
-                skills.append(skill_dir.name)
-
     hooks_present = (root / "hooks" / package_id).exists()
 
     return ArtifactSummary(
-        skills=skills,
+        skills=[],
         rules=matched_names(root / "rules", f"{package_id}-*.mdc", ".mdc"),
         commands=matched_names(root / "commands", f"{package_id}-*.md", ".md"),
         agents=matched_names(root / "agents", f"{package_id}-*.md", ".md"),

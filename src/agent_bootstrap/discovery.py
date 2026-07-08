@@ -6,6 +6,9 @@ from typing import Dict
 from .catalog import collect_repo_artifacts
 from .models import ArtifactSummary, DiscoveryRecord, PackageCatalogEntry
 
+# Discovery scans are opt-in maintainer tooling (import-local, cache inspection).
+# Runtime render paths use installed skills under ~/.agents/skills and skills-lock.json.
+
 
 def scan_managed_packages(root: Path, catalog: Dict[str, PackageCatalogEntry]) -> Dict[str, DiscoveryRecord]:
     discovered: Dict[str, DiscoveryRecord] = {}

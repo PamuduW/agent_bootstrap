@@ -3,8 +3,9 @@ import hashlib
 import io
 import tempfile
 import unittest
+from contextlib import contextmanager, redirect_stdout
 from pathlib import Path
-from contextlib import redirect_stdout
+from unittest.mock import patch
 
 
 class BootstrapEngineTests(unittest.TestCase):
@@ -105,6 +106,31 @@ class BootstrapEngineTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
+    @property
+    def fake_home(self) -> Path:
+        return self.root / "fake-home"
+
+    def _setup_installed_skills(self, skill_names: list[str]) -> None:
+        agents_skills = self.fake_home / ".agents" / "skills"
+        for name in skill_names:
+            skill_dir = agents_skills / name
+            skill_dir.mkdir(parents=True, exist_ok=True)
+            (skill_dir / "SKILL.md").write_text(f"# {name}\n", encoding="utf-8")
+
+        lock = {
+            "version": 1,
+            "skills": {name: {"source": "test"} for name in skill_names},
+        }
+        (self.root / "skills-lock.json").write_text(
+            json.dumps(lock, indent=2), encoding="utf-8"
+        )
+
+    @contextmanager
+    def _mock_agents_home(self, skill_names: list[str]):
+        self._setup_installed_skills(skill_names)
+        with patch.object(Path, "home", return_value=self.fake_home):
+            yield
+
     def _engine(self):
         from src.agent_bootstrap.paths import BootstrapPaths
         from src.agent_bootstrap.service import BootstrapService
@@ -160,7 +186,8 @@ class BootstrapEngineTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-        service.render_workspace(workspace)
+        with self._mock_agents_home(["alpha-skill"]):
+            service.render_workspace(workspace)
 
         claude_md = (workspace / "CLAUDE.md").read_text(encoding="utf-8")
         copilot_md = (workspace / ".github" / "copilot-instructions.md").read_text(
@@ -253,20 +280,22 @@ class BootstrapEngineTests(unittest.TestCase):
     def test_render_global_outputs_syncs_codex_skill_links(self):
         service = self._engine()
 
-        service.render_global()
+        with self._mock_agents_home(["alpha-skill", "beta-skill"]):
+            service.render_global()
 
         codex_agents = (self.root / "home" / ".codex" / "AGENTS.md").read_text(
             encoding="utf-8"
         )
         codex_skill_link = self.root / "home" / ".codex" / "skills" / "alpha-skill"
+        agents_alpha = self.fake_home / ".agents" / "skills" / "alpha-skill"
+        agents_beta = self.fake_home / ".agents" / "skills" / "beta-skill"
 
         self.assertIn("Global Baseline", codex_agents)
         self.assertTrue(codex_skill_link.is_symlink())
-        self.assertEqual(
-            (self.root / "skills" / "alpha-skill").resolve(),
-            codex_skill_link.resolve(),
-        )
-        self.assertTrue((self.root / "home" / ".codex" / "skills" / "beta-skill").is_symlink())
+        self.assertEqual(agents_alpha.resolve(), codex_skill_link.resolve())
+        beta_link = self.root / "home" / ".codex" / "skills" / "beta-skill"
+        self.assertTrue(beta_link.is_symlink())
+        self.assertEqual(agents_beta.resolve(), beta_link.resolve())
 
     def test_track_workspace_only_persists_after_successful_render(self):
         service = self._engine()

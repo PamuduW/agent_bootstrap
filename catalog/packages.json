@@ -1,42 +1,30 @@
 {
   "packages": [
     {
-      "id": "continual-learning",
-      "display_name": "Continual Learning",
-      "origin": "curated",
-      "dedupe_group": "continual-learning",
+      "id": "context7",
+      "display_name": "Context7",
+      "origin": "cursor-plugin",
+      "dedupe_group": "context7",
       "supported_surfaces": [
-        "codex",
-        "claude",
         "cursor"
       ],
-      "mcp_keys": []
-    },
-    {
-      "id": "cursor-team-kit",
-      "display_name": "Cursor Team Kit",
-      "origin": "cursor-plugin",
-      "dedupe_group": "cursor-team-kit",
-      "supported_surfaces": [
-        "codex",
-        "claude",
-        "cursor",
-        "copilot"
-      ],
-      "mcp_keys": []
+      "mcp_keys": [
+        "context7"
+      ]
     },
     {
       "id": "deploy-on-aws",
       "display_name": "Deploy on AWS",
-      "origin": "curated",
+      "origin": "cursor-plugin",
       "dedupe_group": "deploy-on-aws",
       "supported_surfaces": [
-        "codex",
-        "claude",
-        "cursor",
-        "copilot"
+        "cursor"
       ],
-      "mcp_keys": []
+      "mcp_keys": [
+        "awsiac",
+        "awsknowledge",
+        "awspricing"
+      ]
     },
     {
       "id": "gitlab",
@@ -44,66 +32,23 @@
       "origin": "cursor-plugin",
       "dedupe_group": "gitlab",
       "supported_surfaces": [
-        "codex",
-        "claude",
-        "cursor",
-        "copilot"
+        "cursor"
       ],
       "mcp_keys": [
         "GitLab"
       ]
     },
     {
-      "id": "grafana-assistant",
-      "display_name": "Grafana Assistant",
-      "origin": "cursor-plugin",
-      "dedupe_group": "grafana-assistant",
-      "supported_surfaces": [
-        "codex",
-        "claude",
-        "cursor",
-        "copilot"
-      ],
-      "mcp_keys": []
-    },
-    {
       "id": "notion-workspace",
       "display_name": "Notion Workspace",
-      "origin": "curated",
+      "origin": "cursor-plugin",
       "dedupe_group": "notion-workspace",
       "supported_surfaces": [
-        "codex",
-        "claude",
-        "cursor",
-        "copilot"
+        "cursor"
       ],
-      "mcp_keys": []
-    },
-    {
-      "id": "runlayer",
-      "display_name": "Runlayer",
-      "origin": "curated",
-      "dedupe_group": "runlayer",
-      "supported_surfaces": [
-        "codex",
-        "claude",
-        "cursor",
-        "copilot"
-      ],
-      "mcp_keys": []
-    },
-    {
-      "id": "superpowers",
-      "display_name": "Superpowers",
-      "origin": "cursor-plugin",
-      "dedupe_group": "superpowers",
-      "supported_surfaces": [
-        "codex",
-        "claude",
-        "cursor",
-        "copilot"
-      ],
-      "mcp_keys": []
+      "mcp_keys": [
+        "notion"
+      ]
     }
   ]
 }

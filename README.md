@@ -1,141 +1,188 @@
 # agent_bootstrap
 
-Bootstrap-first control plane for multi-agent development environments.
+Bootstrap-first **config plane** for multi-agent development environments.
 
-This repo now treats agent configuration as a layered system instead of a
-single shell script that mixes discovery, selection, rendering, and deployment.
-The goal is one canonical authored `AGENTS.md` per scope, generated
-compatibility outputs for each agent surface, curated package ownership, and a
-terminal-first operator workflow.
+This repo is the source of truth for machine-level agent policy, curated upstream
+skills, MCP server config, and generated compatibility outputs for Codex, Claude
+Code, Cursor, and GitHub Copilot. It replaces the old v1 model (vendored plugin
+mirrors + sync menu) with a layered control plane and Vercel [`npx skills`](https://www.npmjs.com/package/skills)
+for skill installation.
 
-## Core model
+## What this repo does
 
-The architecture is split into four layers:
+On a fresh machine (or after `git pull`):
 
-- `Catalog`: curated canonical packages declared in
-  [`catalog/packages.json`](catalog/packages.json)
-- `Discovery`: read-only detection of what exists in the repo and in local
-  sources such as Cursor plugin cache
-- `Selection`: operator-managed enablement state stored in `state/`
-- `Render`: generated outputs for Codex, Claude, Cursor, Copilot, and future
-  adapters
+1. **Bootstrap** — `./install.sh` checks dependencies, exports `AGENT_BOOTSTRAP_HOME` from the clone location, installs curated skills globally, and renders AGENTS.md / MCP exports.
+2. **Curate** — you edit canonical instruction files and `skills.sources.yaml`; the installer materializes skills and compatibility surfaces.
+3. **Validate** — `./install.sh doctor` checks catalog, workspaces, and instruction-file hygiene.
 
-This keeps these concepts separate:
+v0.1 scope: skills install/update, AGENTS.md exports, and doctor. Hermes, opencode, and full AgentOS features are deferred — see [`future/README.md`](future/README.md).
 
-- managed package
-- detected package
-- enabled package
-- applied package
+## Config-plane model
 
-## Canonical instruction files
+The architecture separates concerns into layers:
 
-There is exactly one authored instruction file per scope:
+| Layer | Role | Source |
+|-------|------|--------|
+| **Catalog** | Curated package metadata and MCP ownership | [`catalog/packages.json`](catalog/packages.json) |
+| **Discovery** | Read-only detection of repo and Cursor cache packages | Python `discovery.py` |
+| **Selection** | Operator enablement state | `state/` (gitignored) |
+| **Render** | Generated compatibility outputs per agent surface | Python `render.py` |
+| **Skills sources** | Curated upstream repos + personal pack | [`skills.sources.yaml`](skills.sources.yaml), [`skills/`](skills/) |
 
-- global baseline: [`global/AGENTS.md`](global/AGENTS.md)
-- project overlay: `<repo>/AGENTS.md`
+Keep these concepts distinct:
 
-Everything else is generated compatibility output:
+- **Managed** — listed in `catalog/packages.json`
+- **Detected** — found in repo artifacts or local Cursor cache
+- **Enabled** — selected for rendering
+- **Applied** — enabled and rendered to agent paths
 
-- `CLAUDE.md`
-- `.github/copilot-instructions.md`
-- `.cursor/rules/bootstrap-skills.mdc`
-- `.cursor/mcp.json`
-- `~/.codex/AGENTS.md`
-- `~/.claude/AGENTS.md`
-- `~/.claude/CLAUDE.md`
+### Canonical instruction files
 
-Generated files are disposable outputs. Edit canonical `AGENTS.md` files
-instead.
+There is exactly one **authored** instruction file per scope:
 
-Canonical `AGENTS.md` changes are hash-tracked in `state/audit.log` when the
-control plane renders global or workspace outputs.
+- **Global baseline:** [`global/AGENTS.md`](global/AGENTS.md)
+- **Project overlay:** `<repo>/AGENTS.md`
 
-## Current implementation
+Everything else is **generated** compatibility output (do not hand-edit):
 
-The new engine lives in [`src/agent_bootstrap`](src/agent_bootstrap).
+| Output | Purpose |
+|--------|---------|
+| `~/.codex/AGENTS.md` | Codex CLI global instructions |
+| `~/.claude/AGENTS.md`, `~/.claude/CLAUDE.md` | Claude Code global instructions |
+| `<repo>/CLAUDE.md` | Claude Code repo overlay |
+| `<repo>/.github/copilot-instructions.md` | GitHub Copilot repo overlay |
+| `<repo>/.cursor/rules/bootstrap-skills.mdc` | Cursor skill catalog rule |
+| `<repo>/.cursor/mcp.json` | MCP servers (filtered by enabled packages) |
 
-Key modules:
+Canonical `AGENTS.md` changes are hash-tracked in `state/audit.log` when the control plane renders outputs.
 
-- `catalog.py`: loads curated package metadata and repo-owned artifacts
-- `discovery.py`: scans managed repo packages and local Cursor cache
-- `state.py`: stores enablement, tracked workspaces, and audit history
-- `render.py`: writes compatibility outputs for supported surfaces
-- `service.py`: high-level orchestration for status, selection, and apply flows
-- `cli.py`: terminal-first command interface
+## Skills: sources, install, and lockfile
 
-`install.sh` is now a thin launcher for the Python control plane.
+### Personal pack
 
-## Operator workflow
+[`skills/`](skills/) holds **your authored skills** only — one folder per skill, each with a `SKILL.md`. Do not re-vendor upstream repos here.
 
-Interactive mode:
+The old 52+ vendored skill directories live in [`archive/skills/`](archive/skills/) for history only.
 
-```bash
-./install.sh
-```
+### Curated upstreams
 
-Non-interactive commands:
+[`skills.sources.yaml`](skills.sources.yaml) lists upstream GitHub repos and which skills to install. Each entry is installed globally to all four agents:
 
 ```bash
-./install.sh status
-./install.sh global
-./install.sh workspace /path/to/repo
-./install.sh all /path/to/parent
-./install.sh import-local <package-id>
-./install.sh remove-managed <package-id>
-./install.sh delete-local <package-id>
-./install.sh doctor
+npx skills add <repo> --skill <name> \
+  -a cursor -a codex -a claude-code -a github-copilot -g -y
 ```
 
-What they do:
+`-a claude-code` is mandatory so skills reach Claude Code's skill paths. The installer may also bridge `~/.agents/skills/` → `~/.claude/skills/` when needed.
 
-- `status`: show managed, detected, enabled, and tracked state counts
-- `global`: render global Codex, Claude, and Cursor outputs from
-  `global/AGENTS.md`
-- `workspace`: track a repo and render workspace outputs from merged global +
-  repo `AGENTS.md` at a git repository root
-- `all`: track and render every git repo under a parent directory, then refresh
-  global outputs
-- `import-local`: copy a detected local package from Cursor cache into this repo
-  and add/update its managed catalog entry
-- `remove-managed`: remove a managed package from this repo catalog and repo
-  artifacts
-- `delete-local`: delete a detected local package from the local Cursor cache
-- `doctor`: validate tracked workspaces and catalog state for common problems
+### Lockfile
+
+[`skills-lock.json`](skills-lock.json) is the Vercel skills lockfile — **commit it**. It records pinned upstream versions for reproducible installs. Materialized skill trees under agent home directories are gitignored.
+
+Refresh all sources:
+
+```bash
+./install.sh skills update
+# or: python3 -m src.agent_bootstrap.cli skills update
+```
+
+## Bootstrap entrypoint
+
+[`install.sh`](install.sh) is the machine-facing entrypoint. It:
+
+1. Resolves the repo root and exports **`AGENT_BOOTSTRAP_HOME`** (see below)
+2. Checks for `python3` and `node`/`npx`
+3. Dispatches to the Python control plane and skills installer
+
+```bash
+./install.sh                  # interactive menu
+./install.sh status           # show managed/detected/enabled counts
+./install.sh global           # render global Codex/Claude outputs
+./install.sh workspace <path> # track a git repo and render workspace outputs
+./install.sh all <parent>     # render every git repo under a parent dir
+./install.sh skills install   # install from skills.sources.yaml + personal pack
+./install.sh skills update    # refresh all upstream skills
+./install.sh doctor           # validate catalog and tracked workspaces
+```
+
+Legacy flags `--status`, `--global`, `--workspace`, and `--all` still map to the subcommands above.
+
+Package management commands (`import-local`, `remove-managed`, `delete-local`) remain available for Cursor-cache imports during the transition.
+
+## AGENT_BOOTSTRAP_HOME
+
+`AGENT_BOOTSTRAP_HOME` is **not** a secret and **not** set via `.env`. It is derived from wherever you clone this repo:
+
+```bash
+export AGENT_BOOTSTRAP_HOME="/path/to/agent_bootstrap"  # set by install.sh from repo root
+```
+
+`install.sh` exports it for the current session. For persistent shells, add the export to your dotfiles (e.g. `~/.bashrc`) pointing at your clone path — typically `~/Dev/agent_bootstrap`. See [`agentos.yaml`](agentos.yaml) for the config-plane contract.
+
+Dotfiles boot-menu option 4 clones/pulls this repo and runs `./install.sh`.
+
+## Doctor
+
+`./install.sh doctor` validates:
+
+- **Catalog** — no duplicate MCP key ownership across packages
+- **Tracked workspaces** — paths exist, are git repos, and have authored (not generated) `AGENTS.md`
+- **Permissions** — workspace directories are writable
+
+Exit code `1` when issues are found; `0` when clean.
 
 ## Repo layout
 
 ```text
 agent_bootstrap/
-├── install.sh
-├── catalog/
-│   └── packages.json
-├── docs/
-│   └── openclaw-plan.md
-├── global/
-│   └── AGENTS.md
-├── src/
-│   └── agent_bootstrap/
-├── state/
-├── skills/
-├── rules/
-├── commands/
-├── agents/
-├── hooks/
-└── templates/
+├── install.sh              # bootstrap entrypoint
+├── agentos.yaml            # v4 Lite profiles and export targets
+├── skills.sources.yaml     # curated upstream skill sources
+├── skills-lock.json        # Vercel lockfile (committed)
+├── skills/                 # personal authored skills pack
+├── global/AGENTS.md        # machine-level baseline (authored)
+├── templates/              # per-repo AGENTS.md overlay template
+├── base/                   # Stage 6 stub — agentboot templates
+├── memory-vault/           # Stage 7 stub — Obsidian memory store
+├── future/                 # deferred AgentOS features
+├── catalog/packages.json   # managed package catalog + MCP provenance
+├── mcp/mcp.json            # MCP server definitions
+├── src/agent_bootstrap/    # Python control-plane engine
+├── exports/                # generated outputs (gitignored)
+├── state/                  # local operator state (gitignored)
+├── archive/                # legacy v1 artifacts (read-only)
+├── docs/openclaw-plan.md   # future OpenClaw adapter plan
+└── tests/
 ```
 
-## OpenClaw
+## archive/
 
-OpenClaw is planned as a future adapter, not the current foundation. The
-forward plan is captured in [`docs/openclaw-plan.md`](docs/openclaw-plan.md).
+[`archive/`](archive/) holds **superseded v1 artifacts** moved during the Stage 5 rebuild — vendored skills, imported rules/agents/commands/hooks, deprecated `sync.sh`, and stale docs. Nothing here is live code. See [`archive/README.md`](archive/README.md) for the full inventory.
 
-The intent is to map OpenClaw onto the same canonical global/repo `AGENTS.md`
-model rather than creating a second authored policy system.
+Do not add new skills or sync scripts under `archive/`.
+
+## Stage 6 and Stage 7 (stubs)
+
+| Directory | Stage | Purpose |
+|-----------|-------|---------|
+| [`base/`](base/) | **Stage 6** | Canonical `AGENTS.md` + `CLAUDE.md` templates for the **`agentboot`** command — scaffold base agent files in any repo with one command |
+| [`memory-vault/`](memory-vault/) | **Stage 7** | Obsidian-compatible memory store (`active-context.md`, `preferences.md`, `decisions/`, `lessons/`) — design-only for now; Hermes/home-server rollout is out of scope |
+
+Stage 5 delivers the config plane, skills installer, and exports. Stage 6 adds per-repo bootstrapping; Stage 7 adds memory vault content and optional central harness integration.
+
+## Configuration
+
+- **[`agentos.yaml`](agentos.yaml)** — active profile, export targets, bootstrap home derivation
+- **[`.env.example`](.env.example)** — optional MCP-related environment variables (copy to `.env` for local overrides)
+- **[`QUICKSTART.md`](QUICKSTART.md)** — step-by-step first-run guide
 
 ## Tests
-
-Run the current foundation tests with:
 
 ```bash
 python3 -m unittest tests.test_bootstrap_engine
 ```
+
+## OpenClaw
+
+OpenClaw is planned as a future adapter, not the current foundation. See [`docs/openclaw-plan.md`](docs/openclaw-plan.md).

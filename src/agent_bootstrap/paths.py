@@ -56,6 +56,26 @@ class BootstrapPaths:
     def hooks_dir(self) -> Path:
         return self.root / "hooks"
 
+    @property
+    def skills_sources_file(self) -> Path:
+        return self.root / "skills.sources.yaml"
+
+    @property
+    def skills_lock_file(self) -> Path:
+        return self.root / "skills-lock.json"
+
+    @property
+    def exports_dir(self) -> Path:
+        return self.root / "exports"
+
+    @property
+    def agents_skills_home(self) -> Path:
+        return Path.home() / ".agents" / "skills"
+
+    @property
+    def claude_skills_home(self) -> Path:
+        return self.claude_home / "skills"
+
 
 def default_paths(root: Path) -> BootstrapPaths:
     home = Path.home()

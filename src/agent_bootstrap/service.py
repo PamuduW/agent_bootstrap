@@ -7,10 +7,17 @@ import shutil
 from pathlib import Path
 
 from .catalog import load_catalog, save_catalog
+from .claude_bridge import bridge_claude_skills
 from .discovery import cache_version_dir, merge_discovery, scan_cursor_cache, scan_managed_packages
 from .models import ArtifactSummary, DoctorIssue, Overview, PackageCatalogEntry, PackageRow
 from .paths import BootstrapPaths
 from .render import GENERATED_AGENTS_HEADER, render_global_outputs, render_workspace_outputs
+from .skills_installer import (
+    doctor_skills,
+    install_skills as run_skills_install,
+    list_installed_skills,
+    update_skills as run_skills_update,
+)
 from .state import StateSnapshot, append_audit, load_state, save_state
 
 
@@ -161,6 +168,34 @@ class BootstrapService:
         self.render_global()
         for workspace in self.state.tracked_workspaces:
             self.render_workspace(Path(workspace))
+
+    def install_skills(self) -> None:
+        run_skills_install(self.paths)
+        bridge_claude_skills(
+            agents_home=self.paths.agents_skills_home,
+            claude_home=self.paths.claude_skills_home,
+        )
+        append_audit(self.paths.audit_log, "skills-install", str(self.paths.skills_sources_file))
+
+    def update_skills(self) -> None:
+        run_skills_update(self.paths)
+        bridge_claude_skills(
+            agents_home=self.paths.agents_skills_home,
+            claude_home=self.paths.claude_skills_home,
+        )
+        append_audit(self.paths.audit_log, "skills-update", str(self.paths.skills_sources_file))
+
+    def list_skills(self) -> list[str]:
+        return list_installed_skills(self.paths)
+
+    def skills_doctor_issues(self) -> list[DoctorIssue]:
+        return doctor_skills(self.paths)
+
+    def run_bootstrap(self) -> int:
+        self.install_skills()
+        self.render_global()
+        issues = self.doctor_issues() + self.skills_doctor_issues()
+        return 0 if not issues else 1
 
     def doctor_issues(self) -> list[DoctorIssue]:
         issues: list[DoctorIssue] = []

@@ -8,7 +8,7 @@ import tty
 from contextlib import contextmanager
 from pathlib import Path
 
-from .paths import default_paths
+from .paths import BootstrapPaths, default_paths
 from .models import PackageRow
 from .service import BootstrapService
 
@@ -21,57 +21,124 @@ NC = "\033[0m"
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(prog="agent_bootstrap")
-    parser.add_argument("command", nargs="?", default="interactive")
-    parser.add_argument("path", nargs="?")
-    parser.add_argument("--root", dest="root", default=str(Path(__file__).resolve().parents[2]))
+    parser = build_parser()
     args = parser.parse_args()
 
     paths = default_paths(Path(args.root))
     service = BootstrapService(paths)
 
     try:
-        command = args.command
+        command = args.command or "interactive"
         if command == "interactive":
             return run_interactive(service)
-        if command in {"status", "--status"}:
+        if command == "status":
             print_status(service)
             return 0
-        if command in {"global", "--global"}:
+        if command == "global":
             service.render_global()
             return 0
-        if command in {"workspace", "--workspace"}:
-            if not args.path:
-                raise SystemExit("workspace path is required")
+        if command == "workspace":
             workspace = Path(args.path).resolve()
             service.track_and_render_workspace(workspace)
             return 0
-        if command in {"all", "--all"}:
-            if not args.path:
-                raise SystemExit("parent directory is required")
+        if command == "all":
             apply_all_under(service, Path(args.path).resolve())
             return 0
         if command == "import-local":
-            if not args.path:
-                raise SystemExit("package id is required")
             service.import_from_local(args.path)
             return 0
         if command == "remove-managed":
-            if not args.path:
-                raise SystemExit("package id is required")
             service.remove_managed_package(args.path)
             return 0
         if command == "delete-local":
-            if not args.path:
-                raise SystemExit("package id is required")
             service.delete_local_package(args.path)
             return 0
         if command == "doctor":
             return print_doctor(service)
+        if command == "bootstrap":
+            return run_bootstrap_command(service, paths)
+        if command == "skills":
+            return handle_skills_command(service, args.skills_command)
         raise SystemExit(f"unknown command: {command}")
     except (ValueError, OSError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="agent_bootstrap")
+    parser.add_argument("--root", dest="root", default=str(Path(__file__).resolve().parents[2]))
+    subparsers = parser.add_subparsers(dest="command")
+
+    subparsers.add_parser("interactive", help="Interactive TUI (default when no command is given)")
+    subparsers.add_parser("status", help="Show current control-plane state")
+    subparsers.add_parser("global", help="Render global outputs")
+    subparsers.add_parser("bootstrap", help="Run full fresh-machine bootstrap flow")
+
+    workspace = subparsers.add_parser("workspace", help="Track and render a workspace")
+    workspace.add_argument("path")
+
+    all_cmd = subparsers.add_parser("all", help="Render all git repos under a parent directory")
+    all_cmd.add_argument("path")
+
+    import_local = subparsers.add_parser("import-local", help="Import a package from local cache")
+    import_local.add_argument("path", help="Package id")
+
+    remove_managed = subparsers.add_parser("remove-managed", help="Remove a managed package from this repo")
+    remove_managed.add_argument("path", help="Package id")
+
+    delete_local = subparsers.add_parser("delete-local", help="Delete a package from local cache")
+    delete_local.add_argument("path", help="Package id")
+
+    subparsers.add_parser("doctor", help="Validate tracked workspaces and catalog state")
+
+    skills = subparsers.add_parser("skills", help="Install and manage curated skills")
+    skills_sub = skills.add_subparsers(dest="skills_command", required=True)
+    skills_sub.add_parser("install", help="Install skills from skills.sources.yaml")
+    skills_sub.add_parser("update", help="Update skills from skills.sources.yaml")
+    skills_sub.add_parser("list", help="List installed skills under ~/.agents/skills")
+    skills_sub.add_parser("doctor", help="Validate skills sources and tooling")
+
+    return parser
+
+
+def handle_skills_command(service: BootstrapService, skills_command: str) -> int:
+    if skills_command == "install":
+        service.install_skills()
+        return 0
+    if skills_command == "update":
+        service.update_skills()
+        return 0
+    if skills_command == "list":
+        skills = service.list_skills()
+        if not skills:
+            print("No installed skills found.")
+            return 0
+        print("\n=== Installed Skills ===")
+        for skill in skills:
+            print(skill)
+        return 0
+    if skills_command == "doctor":
+        return print_skills_doctor(service)
+    raise SystemExit(f"unknown skills command: {skills_command}")
+
+
+def run_bootstrap_command(service: BootstrapService, paths: BootstrapPaths) -> int:
+    exit_code = service.run_bootstrap()
+    print(f"AGENT_BOOTSTRAP_HOME={paths.root.resolve()}")
+    return exit_code
+
+
+def print_skills_doctor(service: BootstrapService) -> int:
+    issues = service.skills_doctor_issues()
+    print("\n=== Skills Doctor ===")
+    if not issues:
+        print("No issues found.")
+        return 0
+    print(f"Found {len(issues)} issue(s):")
+    for issue in issues:
+        print(f"- [{issue.level.upper()}] {issue.scope}: {issue.message}")
+    return 1
 
 
 def move_cursor(index: int, direction: str, count: int) -> int:

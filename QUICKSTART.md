@@ -1,61 +1,124 @@
 # Quickstart
 
-## 1. Review the global baseline
+Get the agent config plane running on a new machine in a few steps.
 
-Edit the canonical machine-level policy in:
+## Prerequisites
+
+- **Git** — to clone this repo
+- **Python 3** — control-plane engine (`install.sh` requires it)
+- **Node.js + npx** — Vercel `skills` CLI for multi-agent skill installs
+
+## 1. Clone and enter the repo
+
+```bash
+git clone <your-remote>/agent_bootstrap ~/Dev/agent_bootstrap
+cd ~/Dev/agent_bootstrap
+```
+
+`AGENT_BOOTSTRAP_HOME` is derived from this clone path — not from `.env`. After install, add to your shell profile if you want it in every session:
+
+```bash
+export AGENT_BOOTSTRAP_HOME="$HOME/Dev/agent_bootstrap"
+```
+
+## 2. Optional: MCP environment variables
+
+If you use MCP integrations that need credentials, copy the template and fill in values:
+
+```bash
+cp .env.example .env
+# edit .env — see comments for each variable
+```
+
+Most servers in `mcp/mcp.json` (GitLab, Notion, Context7) authenticate via OAuth in the IDE. Env vars are only needed for servers or skills that require them — see `.env.example`.
+
+## 3. Review the global baseline
+
+Edit the canonical machine-level policy:
 
 - [`global/AGENTS.md`](global/AGENTS.md)
 
-Project-specific behavior belongs in each repo's `AGENTS.md`.
+Per-repo behavior belongs in each project's `AGENTS.md`, not in generated compatibility files.
 
-## 2. Start the control plane
+## 4. Run the bootstrap installer
 
 ```bash
 ./install.sh
 ```
 
-This opens the terminal-first menu for:
+The interactive menu covers package enablement, workspace tracking, apply/render, status, and doctor.
 
-- package visibility and enablement
-- tracked workspace management
-- applying global and repo outputs
-- status checks
+For a scripted first run:
 
-## 3. Use non-interactive commands when needed
+```bash
+./install.sh skills install   # install curated upstream + personal skills
+./install.sh global           # render ~/.codex and ~/.claude outputs
+./install.sh workspace ~/Dev/my-repo   # track and render one repo
+./install.sh doctor           # validate state
+```
+
+## 5. Understand skills flow
+
+| File | Role |
+|------|------|
+| [`skills.sources.yaml`](skills.sources.yaml) | Upstream repos and skill names to install |
+| [`skills/`](skills/) | Your personal authored skills (optional) |
+| [`skills-lock.json`](skills-lock.json) | Pinned versions — commit after install |
+
+Each upstream entry installs globally to Cursor, Codex, Claude Code, and GitHub Copilot:
+
+```bash
+npx skills add <repo> --skill <name> \
+  -a cursor -a codex -a claude-code -a github-copilot -g -y
+```
+
+Update all sources later:
+
+```bash
+./install.sh skills update
+```
+
+## 6. Non-interactive commands
 
 ```bash
 ./install.sh status
 ./install.sh global
 ./install.sh workspace ~/Dev/my-repo
 ./install.sh all ~/Dev
-./install.sh import-local create-plugin
-./install.sh remove-managed superpowers
-./install.sh delete-local postman
+./install.sh skills install
+./install.sh skills update
 ./install.sh doctor
 ```
 
-The `workspace` command expects the root of a git repo.
+`workspace` expects the root of a git repository.
 
-## 4. Understand the generated outputs
+## 7. Generated outputs (do not edit)
 
-The system renders compatibility files from canonical `AGENTS.md` sources:
+The control plane renders these from canonical `AGENTS.md` sources:
 
-- global Codex and Claude files under `~/.codex/` and `~/.claude/`
-- repo `CLAUDE.md`
-- repo `.github/copilot-instructions.md`
-- repo `.cursor/rules/bootstrap-skills.mdc`
-- repo `.cursor/mcp.json`
+- Global: `~/.codex/AGENTS.md`, `~/.claude/AGENTS.md`, `~/.claude/CLAUDE.md`
+- Per repo: `CLAUDE.md`, `.github/copilot-instructions.md`, `.cursor/rules/bootstrap-skills.mdc`, `.cursor/mcp.json`
 
-Do not hand-edit generated compatibility files.
+Re-run `./install.sh global` or `./install.sh workspace <path>` after changing authored files.
 
-## 5. Run tests
+## 8. Verify with doctor
+
+```bash
+./install.sh doctor
+```
+
+Fixes common problems: missing workspaces, generated `AGENTS.md` in repos, duplicate MCP catalog keys.
+
+## 9. Run tests
 
 ```bash
 python3 -m unittest tests.test_bootstrap_engine
 ```
 
-## 6. OpenClaw future path
+## What's next
 
-The future OpenClaw adapter plan lives in:
+- **Stage 6** — `agentboot` command and templates in [`base/`](base/) for one-command repo scaffolding
+- **Stage 7** — memory vault content in [`memory-vault/`](memory-vault/) (design stub only)
+- **Dotfiles** — boot-menu option 4 clones this repo and runs `./install.sh` automatically
 
-- [`docs/openclaw-plan.md`](docs/openclaw-plan.md)
+See [`README.md`](README.md) for the full config-plane model and [`archive/README.md`](archive/README.md) for legacy artifacts.

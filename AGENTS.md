@@ -1,23 +1,28 @@
 # Agent Bootstrap
 
-This is the agent bootstrap repo — a bootstrap-first control plane for AI agent configurations across global and repo scopes.
+This is the agent bootstrap repo — a bootstrap-first **config plane** for AI agent configurations across global and repo scopes.
 
 ## Repo structure
 
 ```
-catalog/        Curated package catalog
-global/         Canonical machine-level AGENTS.md baseline
-src/            Python control-plane engine
-state/          Local operator state and audit log (gitignored)
-skills/         Skill definitions (SKILL.md + references)
-rules/          Cursor rule files (.mdc)
-mcp/            MCP server config
-agents/         Subagent definitions (.md)
-commands/       Command/prompt templates (.md)
-hooks/          Lifecycle hook scripts
-templates/      Templates for new projects
-install.sh      Launcher for the interactive control plane
-sync.sh         Deprecated alias to install.sh
+agentos.yaml           v4 Lite profiles and export targets
+install.sh             Bootstrap entrypoint (skills + Python control plane)
+skills.sources.yaml    Curated upstream skill sources
+skills-lock.json       Vercel skills lockfile (committed)
+skills/                Personal authored skills pack (SKILL.md each)
+global/                Canonical machine-level AGENTS.md baseline
+templates/             Per-repo AGENTS.md overlay template
+base/                  Stage 6 stub — agentboot templates
+memory-vault/          Stage 7 stub — Obsidian memory store
+future/                Deferred AgentOS features
+catalog/               Curated package catalog + MCP provenance
+mcp/                   MCP server config (mcp.json)
+src/                   Python control-plane engine
+exports/               Generated outputs (gitignored)
+state/                 Local operator state and audit log (gitignored)
+archive/               Legacy v1 artifacts (read-only — do not use)
+docs/                  Plans (e.g. openclaw-plan.md)
+tests/                 Foundation tests
 ```
 
 ## Quick start
@@ -26,64 +31,97 @@ sync.sh         Deprecated alias to install.sh
 ./install.sh
 ```
 
+Or scripted:
+
+```bash
+./install.sh skills install
+./install.sh global
+./install.sh workspace <path>
+./install.sh doctor
+```
+
 ## When asked to update or sync
 
-Run the interactive menu with `./install.sh`, or use the non-interactive commands:
+Run the interactive menu with `./install.sh`, or use non-interactive commands:
 
-1. `./install.sh status`
-2. `./install.sh global`
-3. `./install.sh workspace <path>`
-4. `./install.sh all <parent-dir>`
-5. `./install.sh import-local <package-id>`
-6. `./install.sh remove-managed <package-id>`
-7. `./install.sh delete-local <package-id>`
+1. `./install.sh skills update` — refresh all upstreams in `skills.sources.yaml`
+2. `./install.sh global` — re-render global Codex/Claude outputs
+3. `./install.sh workspace <path>` — re-render one repo
+4. `./install.sh all <parent-dir>` — re-render every git repo under a parent
+5. `./install.sh doctor` — validate catalog and tracked workspaces
+
+Package import/removal (`import-local`, `remove-managed`, `delete-local`) is for Cursor-cache transitions.
 
 ## When asked to install or set up
 
 ### Interactive (recommended)
+
 ```bash
 ./install.sh
 ```
 
 ### Scripted / CLI
+
 ```bash
+./install.sh skills install
 ./install.sh global
-./install.sh all ~/ATOM/
+./install.sh all ~/Dev/
 ./install.sh workspace <path>
 ./install.sh status
+./install.sh doctor
 ```
 
-## Plugin model
+## Config-plane model
 
-The current control plane distinguishes these states:
+The control plane distinguishes these states:
 
-- **Managed**: the package exists in `catalog/packages.json`
-- **Detected local**: the package exists in local sources such as Cursor plugin cache
-- **Detected repo**: the repo already contains canonical assets for that package
-- **Enabled**: the package is selected for rendering into generated outputs
+- **Managed** — package exists in `catalog/packages.json`
+- **Detected local** — package exists in Cursor plugin cache
+- **Detected repo** — repo contains canonical assets for that package
+- **Enabled** — package is selected for rendering into generated outputs
+
+Skills come from two places:
+
+- **Upstream** — `skills.sources.yaml` → `npx skills add … -a cursor -a codex -a claude-code -a github-copilot -g`
+- **Personal** — authored folders under `skills/`
+
+Lockfile: `skills-lock.json` (commit it). Do not edit materialized trees under agent home dirs.
+
+## AGENT_BOOTSTRAP_HOME
+
+Derived from the clone location — **not** set in `.env`. `install.sh` exports it from the repo root. Dotfiles should point shell config at the same path (e.g. `~/Dev/agent_bootstrap`).
 
 ## MCP provenance
 
-Package ownership for MCP keys lives in `catalog/packages.json`, and rendered outputs only include keys owned by enabled managed packages.
+Package ownership for MCP keys lives in `catalog/packages.json`. Rendered outputs only include keys owned by enabled managed packages. Optional MCP env vars: see `.env.example`.
 
 ## Workspace-level agent config files
 
-The canonical authored files are:
+Canonical authored files:
 
-- `global/AGENTS.md` for the machine-level baseline
-- `<repo>/AGENTS.md` for repo-level overlays
+- `global/AGENTS.md` — machine-level baseline
+- `<repo>/AGENTS.md` — repo-level overlay
 
-Everything else is generated compatibility output.
+Everything else is generated compatibility output. Do not hand-edit `CLAUDE.md`, `.github/copilot-instructions.md`, or `.cursor/` bootstrap files.
+
+## archive/
+
+`archive/` holds superseded v1 vendored skills, rules, agents, commands, hooks, and stale docs. **Do not add new work there.** See `archive/README.md`.
+
+## Stage stubs
+
+- **`base/`** — Stage 6: `agentboot` templates (AGENTS.md + CLAUDE.md scaffold)
+- **`memory-vault/`** — Stage 7: Obsidian memory layout (stub only)
 
 ## Conventions
 
-- Skill directories: `skills/<package>-<skill-name>/`
-- Rule files: `rules/<source-plugin>-<rule-name>.mdc`
-- Agent/command files: `agents/<source-plugin>-<name>.md`, `commands/<source-plugin>-<name>.md`
-- Hooks: `hooks/<source-plugin>/`
+- Personal skill dirs: `skills/<skill-name>/SKILL.md`
+- Upstream skills: listed in `skills.sources.yaml`, not vendored into `skills/`
+- Archived v1 naming (do not recreate): `skills/<package>-<skill-name>/`, `rules/<source>-*.mdc`
 
 ## Guardrails
 
-- Don't modify files under `skills/`, `rules/`, `agents/`, `commands/` without being asked
-- The install.sh script is the primary interface for managing this repo
-- Never run `install.sh --uninstall` without explicit user request
+- Don't modify files under `archive/` or add vendored upstream mirrors to `skills/`
+- Don't modify `skills/`, `rules/`, `agents/`, `commands/` in archive without being asked
+- `install.sh` is the primary interface for managing this repo
+- Never run uninstall flows without explicit user request

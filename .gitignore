@@ -5,3 +5,11 @@ temp/
 log/
 state/
 __pycache__/
+
+# Generated per-agent export surfaces (render output)
+exports/
+
+# Materialized upstream skill trees copied into repo (never commit)
+.materialized-skills/
+
+# skills-lock.json is tracked — records installed upstream versions

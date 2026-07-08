@@ -20,7 +20,6 @@ mcp/                   MCP server config (mcp.json)
 src/                   Python control-plane engine
 exports/               Generated outputs (gitignored)
 state/                 Local operator state and audit log (gitignored)
-archive/               Legacy v1 artifacts (read-only — do not use)
 docs/                  Plans (e.g. openclaw-plan.md)
 tests/                 Foundation tests
 ```
@@ -104,9 +103,9 @@ Canonical authored files:
 
 Everything else is generated compatibility output. Do not hand-edit `CLAUDE.md`, `.github/copilot-instructions.md`, or `.cursor/` bootstrap files.
 
-## archive/
+## Legacy archive (external)
 
-`archive/` holds superseded v1 vendored skills, rules, agents, commands, hooks, and stale docs. **Do not add new work there.** See `archive/README.md`.
+Superseded v1 vendored skills, rules, agents, commands, hooks, and stale docs live at `../temp/archive/` (outside this repo). **Do not add new work there.** See `temp/archive/README.md` from the `new_setup` workspace root.
 
 ## Stage stubs
 
@@ -121,7 +120,7 @@ Everything else is generated compatibility output. Do not hand-edit `CLAUDE.md`,
 
 ## Guardrails
 
-- Don't modify files under `archive/` or add vendored upstream mirrors to `skills/`
-- Don't modify `skills/`, `rules/`, `agents/`, `commands/` in archive without being asked
+- Don't modify files under `temp/archive/` or add vendored upstream mirrors to `skills/`
+- Don't modify legacy v1 paths under `temp/archive/` without being asked
 - `install.sh` is the primary interface for managing this repo
 - Never run uninstall flows without explicit user request

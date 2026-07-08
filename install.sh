@@ -93,6 +93,15 @@ run_claude_bridge() {
   "$CLAUDE_BRIDGE_SH"
 }
 
+link_agentboot() {
+  local source="${BOOTSTRAP_DIR}/bin/agentboot"
+  local target="${HOME}/bin/agentboot"
+
+  mkdir -p "${HOME}/bin"
+  ln -sf "$source" "$target"
+  info "linked ${target} -> ${source}"
+}
+
 run_bootstrap() {
   check_deps
   info "bootstrapping agent_bootstrap from ${BOOTSTRAP_DIR}"
@@ -107,6 +116,7 @@ run_bootstrap() {
   fi
 
   run_cli doctor || true
+  link_agentboot
   printf '\nAGENT_BOOTSTRAP_HOME=%s\n' "$AGENT_BOOTSTRAP_HOME"
   info "bootstrap complete"
 }
@@ -141,6 +151,10 @@ Commands:
   workspace <path>       Track and render a workspace
   all <parent-dir>       Render all git repos under a parent directory
   interactive            Launch interactive control-plane menu
+  link-agentboot         Symlink bin/agentboot -> ~/bin/agentboot (idempotent)
+
+After bootstrap, run agentboot in any repo to scaffold AGENTS.md + CLAUDE.md.
+Ensure ~/bin is on PATH (install.sh creates ~/bin/agentboot when bin/agentboot exists).
 
 Legacy flags (backward compatible):
   --status, --global, --workspace <path>, --all <parent-dir>
@@ -178,6 +192,9 @@ main() {
         check_deps
       fi
       run_cli "$@"
+      ;;
+    link-agentboot)
+      link_agentboot
       ;;
     -h|--help|help)
       usage

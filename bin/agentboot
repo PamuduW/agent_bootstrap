@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ -n "${AGENT_BOOTSTRAP_HOME:-}" && -d "${AGENT_BOOTSTRAP_HOME}" ]]; then
+  AGENT_BOOTSTRAP_HOME="$(cd "$AGENT_BOOTSTRAP_HOME" && pwd)"
+else
+  AGENT_BOOTSTRAP_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
+
+MODE="minimal"
+FORCE=false
+
+die() {
+  printf '[err] %s\n' "$*" >&2
+  exit 1
+}
+
+info() {
+  printf '[info] %s\n' "$*"
+}
+
+warn() {
+  printf '[warn] %s\n' "$*" >&2
+}
+
+usage() {
+  cat <<EOF
+Usage: agentboot [OPTIONS]
+
+Scaffold AGENTS.md and CLAUDE.md in the current directory.
+
+Options:
+  --minimal   Copy AGENTS.md + CLAUDE.md only (default)
+  --full      Also render Copilot/Cursor/MCP workspace outputs
+  --force     Overwrite existing target files
+  -h, --help  Show this help
+
+Environment:
+  AGENT_BOOTSTRAP_HOME  Path to agent_bootstrap root (auto-detected from script location)
+EOF
+}
+
+copy_template() {
+  local src="$1"
+  local dest="$2"
+
+  if [[ ! -f "$src" ]]; then
+    die "missing template: $src"
+  fi
+
+  if [[ -e "$dest" && "$FORCE" != "true" ]]; then
+    info "skip (exists): ${dest}"
+    return 0
+  fi
+
+  cp "$src" "$dest"
+  info "wrote: ${dest}"
+}
+
+print_next_steps() {
+  cat <<EOF
+
+Next steps:
+  1. Edit AGENTS.md — fill in the Project section for this repo
+  2. git add AGENTS.md CLAUDE.md
+  3. Optional: run skills install from agent_bootstrap (./install.sh skills install)
+EOF
+}
+
+run_workspace_render() {
+  if ! command -v python3 >/dev/null 2>&1; then
+    warn "python3 not found; skipping workspace render"
+    return 0
+  fi
+
+  if ! (
+    cd "$AGENT_BOOTSTRAP_HOME"
+    python3 -m src.agent_bootstrap.cli --root "$AGENT_BOOTSTRAP_HOME" workspace "$(pwd)"
+  ); then
+    warn "workspace render failed (minimal files were written)"
+  fi
+}
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --minimal)
+        MODE="minimal"
+        shift
+        ;;
+      --full)
+        MODE="full"
+        shift
+        ;;
+      --force)
+        FORCE=true
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        die "unknown option: $1 (try --help)"
+        ;;
+    esac
+  done
+
+  local agents_src="${AGENT_BOOTSTRAP_HOME}/base/AGENTS.md"
+  local claude_src="${AGENT_BOOTSTRAP_HOME}/base/CLAUDE.md"
+  local agents_dest="./AGENTS.md"
+  local claude_dest="./CLAUDE.md"
+
+  copy_template "$agents_src" "$agents_dest"
+  copy_template "$claude_src" "$claude_dest"
+
+  if [[ "$MODE" == "full" ]]; then
+    run_workspace_render
+  fi
+
+  print_next_steps
+}
+
+main "$@"

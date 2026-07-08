@@ -2,7 +2,7 @@
 
 This directory holds **your authored skills** only — one folder per skill, each with a `SKILL.md`.
 
-The old vendored plugin mirrors (52 directories) were moved to `archive/skills/` during the Stage 5 rebuild. Upstream skills are installed globally via `npx skills` from entries in `skills.sources.yaml`, not vendored here.
+The old vendored plugin mirrors (52 directories) were moved to `temp/archive/skills/` (outside this repo) during the Stage 5 rebuild. Upstream skills are installed globally via `npx skills` from entries in `skills.sources.yaml`, not vendored here.
 
 ## Adding a personal skill
 

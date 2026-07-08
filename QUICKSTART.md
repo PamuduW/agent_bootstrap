@@ -121,4 +121,4 @@ python3 -m unittest tests.test_bootstrap_engine
 - **Stage 7** — memory vault content in [`memory-vault/`](memory-vault/) (design stub only)
 - **Dotfiles** — boot-menu option 4 clones this repo and runs `./install.sh` automatically
 
-See [`README.md`](README.md) for the full config-plane model and [`archive/README.md`](archive/README.md) for legacy artifacts.
+See [`README.md`](README.md) for the full config-plane model and [`temp/archive/README.md`](../temp/archive/README.md) for legacy artifacts (outside this repo).

@@ -63,7 +63,7 @@ Canonical `AGENTS.md` changes are hash-tracked in `state/audit.log` when the con
 
 [`skills/`](skills/) holds **your authored skills** only — one folder per skill, each with a `SKILL.md`. Do not re-vendor upstream repos here.
 
-The old 52+ vendored skill directories live in [`archive/skills/`](archive/skills/) for history only.
+The old 52+ vendored skill directories live in [`temp/archive/skills/`](../temp/archive/skills/) (outside this repo) for history only.
 
 ### Curated upstreams
 
@@ -110,6 +110,23 @@ Legacy flags `--status`, `--global`, `--workspace`, and `--all` still map to the
 
 Package management commands (`import-local`, `remove-managed`, `delete-local`) remain available for Cursor-cache imports during the transition.
 
+## agentboot — per-repo scaffold
+
+[`bin/agentboot`](bin/agentboot) scaffolds base agent files in any git repo from templates in [`base/`](base/):
+
+```bash
+agentboot              # AGENTS.md + CLAUDE.md in CWD (idempotent; no overwrite without --force)
+agentboot --minimal    # same as default — AGENTS.md + CLAUDE.md only
+agentboot --full       # + .github/copilot-instructions.md + .cursor/rules pointers
+agentboot --force      # overwrite existing files
+```
+
+**PATH setup:** `./install.sh` (bootstrap) and `./install.sh link-agentboot` symlink `bin/agentboot` → `~/bin/agentboot`. Ensure `~/bin` is on your PATH (dotfiles stow usually handles this).
+
+From the dotfiles boot menu, option **Agents → Run agentboot in a repo** prompts for a target directory and optionally `--full`.
+
+Templates live in `base/AGENTS.md` and `base/CLAUDE.md`. Machine-level baseline remains at `global/AGENTS.md`; per-repo overlays use the control plane in `src/`.
+
 ## AGENT_BOOTSTRAP_HOME
 
 `AGENT_BOOTSTRAP_HOME` is **not** a secret and **not** set via `.env`. It is derived from wherever you clone this repo:
@@ -143,7 +160,7 @@ agent_bootstrap/
 ├── skills/                 # personal authored skills pack
 ├── global/AGENTS.md        # machine-level baseline (authored)
 ├── templates/              # per-repo AGENTS.md overlay template
-├── base/                   # Stage 6 stub — agentboot templates
+├── base/                   # agentboot templates (AGENTS.md, CLAUDE.md)
 ├── memory-vault/           # Stage 7 stub — Obsidian memory store
 ├── future/                 # deferred AgentOS features
 ├── catalog/packages.json   # managed package catalog + MCP provenance
@@ -151,25 +168,23 @@ agent_bootstrap/
 ├── src/agent_bootstrap/    # Python control-plane engine
 ├── exports/                # generated outputs (gitignored)
 ├── state/                  # local operator state (gitignored)
-├── archive/                # legacy v1 artifacts (read-only)
 ├── docs/openclaw-plan.md   # future OpenClaw adapter plan
 └── tests/
 ```
 
-## archive/
+## Legacy archive (external)
 
-[`archive/`](archive/) holds **superseded v1 artifacts** moved during the Stage 5 rebuild — vendored skills, imported rules/agents/commands/hooks, deprecated `sync.sh`, and stale docs. Nothing here is live code. See [`archive/README.md`](archive/README.md) for the full inventory.
+Superseded v1 artifacts from the Stage 5 rebuild — vendored skills, imported rules/agents/commands/hooks, deprecated `sync.sh`, and stale docs — live at [`../temp/archive/`](../temp/archive/) **outside this repo**. Nothing there is live code. See [`temp/archive/README.md`](../temp/archive/README.md) for the full inventory.
 
-Do not add new skills or sync scripts under `archive/`.
+Do not add new skills or sync scripts under the legacy archive.
 
-## Stage 6 and Stage 7 (stubs)
+## Stage 7 (stub)
 
 | Directory | Stage | Purpose |
 |-----------|-------|---------|
-| [`base/`](base/) | **Stage 6** | Canonical `AGENTS.md` + `CLAUDE.md` templates for the **`agentboot`** command — scaffold base agent files in any repo with one command |
 | [`memory-vault/`](memory-vault/) | **Stage 7** | Obsidian-compatible memory store (`active-context.md`, `preferences.md`, `decisions/`, `lessons/`) — design-only for now; Hermes/home-server rollout is out of scope |
 
-Stage 5 delivers the config plane, skills installer, and exports. Stage 6 adds per-repo bootstrapping; Stage 7 adds memory vault content and optional central harness integration.
+Stage 5 delivers the config plane, skills installer, and exports. Stage 6 adds per-repo bootstrapping via `agentboot`; Stage 7 adds memory vault content and optional central harness integration.
 
 ## Configuration
 

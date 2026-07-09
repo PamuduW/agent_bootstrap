@@ -16,7 +16,7 @@ On a fresh machine (or after `git pull`):
 2. **Curate** — you edit canonical instruction files and `skills.sources.yaml`; the installer materializes skills and compatibility surfaces.
 3. **Validate** — `./install.sh doctor` checks catalog, workspaces, and instruction-file hygiene.
 
-v0.1 scope: skills install/update, AGENTS.md exports, and doctor. Hermes, opencode, and full AgentOS features are deferred — see [`future/README.md`](future/README.md).
+v0.1 scope: skills install/update, AGENTS.md exports, and doctor. Hermes, opencode, and full AgentOS features are deferred — see [`archive/README.md`](archive/README.md) (includes [`archive/future/README.md`](archive/future/README.md)).
 
 ## Config-plane model
 
@@ -28,7 +28,7 @@ The architecture separates concerns into layers:
 | **Discovery** | Read-only detection of repo and Cursor cache packages | Python `discovery.py` |
 | **Selection** | Operator enablement state | `state/` (gitignored) |
 | **Render** | Generated compatibility outputs per agent surface | Python `render.py` |
-| **Skills sources** | Curated upstream repos + personal pack | [`skills.sources.yaml`](skills.sources.yaml), [`skills/`](skills/) |
+| **Skills sources** | Curated upstream repos | [`skills.sources.yaml`](skills.sources.yaml) — personal pack pointer: [`archive/skills-README.md`](archive/skills-README.md) |
 
 Keep these concepts distinct:
 
@@ -61,7 +61,7 @@ Canonical `AGENTS.md` changes are hash-tracked in `state/audit.log` when the con
 
 ### Personal pack
 
-[`skills/`](skills/) holds **your authored skills** only — one folder per skill, each with a `SKILL.md`. Do not re-vendor upstream repos here.
+Optional in-repo personal skills are documented in [`archive/skills-README.md`](archive/skills-README.md) (Tier 1 archive). Upstream skills stay in `skills.sources.yaml`; do not re-vendor repos at repo root.
 
 The old 52+ vendored skill directories live in [`temp/archive/skills/`](../temp/archive/skills/) (outside this repo) for history only.
 
@@ -136,7 +136,7 @@ Templates live in `base/AGENTS.md` and `base/CLAUDE.md`. Machine-level baseline 
 export AGENT_BOOTSTRAP_HOME="/path/to/agent_bootstrap"  # set by install.sh from repo root
 ```
 
-`install.sh` exports it for the current session. For persistent shells, add the export to your dotfiles (e.g. `~/.bashrc`) pointing at your clone path — typically `~/Dev/agent_bootstrap`. See [`agentos.yaml`](agentos.yaml) for the config-plane contract.
+`install.sh` exports it for the current session. For persistent shells, add the export to your dotfiles (e.g. `~/.bashrc`) pointing at your clone path — typically `~/Dev/agent_bootstrap`. See [`archive/agentos.yaml`](archive/agentos.yaml) and [`archive/README.md`](archive/README.md) for deferred config-plane profiles.
 
 Dotfiles boot-menu option 4 clones/pulls this repo and runs `./install.sh`.
 
@@ -155,21 +155,15 @@ Exit code `1` when issues are found; `0` when clean.
 ```text
 agent_bootstrap/
 ├── install.sh              # bootstrap entrypoint
-├── agentos.yaml            # v4 Lite profiles and export targets
+├── archive/                # Tier 1 deferred assets (see archive/README.md)
 ├── skills.sources.yaml     # curated upstream skill sources
 ├── skills-lock.json        # Vercel lockfile (committed)
-├── skills/                 # personal authored skills pack
 ├── global/AGENTS.md        # machine-level baseline (authored)
-├── templates/              # per-repo AGENTS.md overlay template
 ├── base/                   # agentboot templates (AGENTS.md, CLAUDE.md)
-├── memory-vault/           # Obsidian memory store (Phase 7.1)
-├── future/                 # deferred AgentOS features
 ├── catalog/packages.json   # managed package catalog + MCP provenance
 ├── mcp/mcp.json            # MCP server definitions
 ├── src/agent_bootstrap/    # Python control-plane engine
-├── exports/                # generated outputs (gitignored)
 ├── state/                  # local operator state (gitignored)
-├── docs/openclaw-plan.md   # future OpenClaw adapter plan
 └── tests/
 ```
 
@@ -181,7 +175,7 @@ Do not add new skills or sync scripts under the legacy archive.
 
 ## Memory vault (Stage 7 — Phase 7.1)
 
-Human-owned Obsidian-compatible memory in [`memory-vault/`](memory-vault/):
+Human-owned Obsidian-compatible memory (archived) in [`archive/memory-vault/`](archive/memory-vault/) — see [`archive/README.md`](archive/README.md):
 
 | Path | Purpose |
 |------|---------|
@@ -190,9 +184,9 @@ Human-owned Obsidian-compatible memory in [`memory-vault/`](memory-vault/):
 | `decisions/` | ADR-style decision log |
 | `lessons/` | Durable lessons learned |
 
-Agents may draft entries; you approve before they become canonical. See [`docs/harness-architecture.md`](docs/harness-architecture.md) for the three-plane model (config / work / control) and how the vault fits the config plane.
+Agents may draft entries; you approve before they become canonical. See [`archive/docs/harness-architecture.md`](archive/docs/harness-architecture.md) for the three-plane model (config / work / control) and how the vault fits the config plane.
 
-Phases 7.2–7.4 (opencode, Hermes/Proxmox, graph upgrades) are deferred — see [`future/README.md`](future/README.md).
+Phases 7.2–7.4 (opencode, Hermes/Proxmox, graph upgrades) are deferred — see [`archive/future/README.md`](archive/future/README.md) and [`archive/README.md`](archive/README.md).
 
 ## MCP servers
 
@@ -200,7 +194,7 @@ Phases 7.2–7.4 (opencode, Hermes/Proxmox, graph upgrades) are deferred — see
 
 ## Configuration
 
-- **[`agentos.yaml`](agentos.yaml)** — active profile, export targets, bootstrap home derivation
+- **[`archive/agentos.yaml`](archive/agentos.yaml)** — deferred v4 Lite profiles (see [`archive/README.md`](archive/README.md))
 - **[`.env.example`](.env.example)** — optional MCP-related environment variables (copy to `.env` for local overrides)
 - **[`QUICKSTART.md`](QUICKSTART.md)** — step-by-step first-run guide
 
@@ -212,4 +206,4 @@ python3 -m unittest tests.test_bootstrap_engine
 
 ## OpenClaw
 
-OpenClaw is planned as a future adapter, not the current foundation. See [`docs/openclaw-plan.md`](docs/openclaw-plan.md).
+OpenClaw is planned as a future adapter, not the current foundation. See [`archive/docs/openclaw-plan.md`](archive/docs/openclaw-plan.md).

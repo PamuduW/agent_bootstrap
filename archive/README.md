@@ -8,22 +8,24 @@ Restore from this folder if you need a deferred capability (catalog, workspace r
 
 See [MANIFEST.md](./MANIFEST.md) for the top-level repo layout **before** Tier 1/2 moves (captured 2026-07-09).
 
+## Tier 1 moves (Phase 2 — 2026-07-09)
+
+These paths were moved from the repo root with `git mv` (except `exports/`, which was gitignored and relocated with `mv`):
+
+| Original path | Archive path |
+|---------------|--------------|
+| `memory-vault/` | `archive/memory-vault/` |
+| `future/` | `archive/future/` |
+| `agentos.yaml` | `archive/agentos.yaml` |
+| `templates/` | `archive/templates/` |
+| `exports/` | `archive/exports/` |
+| `docs/openclaw-plan.md` | `archive/docs/openclaw-plan.md` |
+| `docs/harness-architecture.md` | `archive/docs/harness-architecture.md` |
+| `skills/README.md` | `archive/skills-README.md` |
+
+Top-level `docs/` and `skills/` were removed after the moves (empty). Restore from this directory or from git history.
+
 ## Planned archive contents (rework plan)
-
-Items below are slated to move here in later phases. Nothing has been moved yet except this README and MANIFEST.
-
-### Tier 1 — safe moves (Phase 2)
-
-| Path | Reason |
-|------|--------|
-| `memory-vault/` | Manual Obsidian store; not part of slim install |
-| `future/` | Deferred AgentOS features |
-| `docs/openclaw-plan.md` | Planning doc |
-| `docs/harness-architecture.md` | Heavy architecture doc |
-| `agentos.yaml` | v4 Lite profiles — unused in slim path |
-| `templates/` | Per-repo overlay template for workspace render |
-| `exports/` | Generated outputs (gitignored) |
-| `skills/README.md` | Optional pointer if strict "no skills in repo" |
 
 ### Tier 2 — after code surgery (Phase 3)
 

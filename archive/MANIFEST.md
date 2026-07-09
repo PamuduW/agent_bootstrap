@@ -63,3 +63,19 @@ tests/
   test_agentboot.sh, test_bootstrap_engine.py, test_claude_bridge.py
   test_skills_installer.py, test_skills_sources.py
 ```
+
+## Tier 1 archive moves (2026-07-09)
+
+| Original | Archive location | Notes |
+|----------|------------------|-------|
+| `memory-vault/` | `archive/memory-vault/` | Obsidian-style store |
+| `future/` | `archive/future/` | Deferred AgentOS features |
+| `agentos.yaml` | `archive/agentos.yaml` | v4 Lite profiles |
+| `templates/` | `archive/templates/` | Workspace render overlays |
+| `exports/` | `archive/exports/` | Gitignored; moved on disk only |
+| `docs/openclaw-plan.md` | `archive/docs/openclaw-plan.md` | Planning doc |
+| `docs/harness-architecture.md` | `archive/docs/harness-architecture.md` | Architecture doc |
+| `skills/README.md` | `archive/skills-README.md` | Personal skills pointer |
+
+Removed empty directories: `docs/`, `skills/`.
+

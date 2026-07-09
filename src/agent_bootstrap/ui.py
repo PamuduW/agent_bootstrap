@@ -13,7 +13,7 @@ RED = "\033[31m"
 CYAN = "\033[36m"
 
 LABEL_W = 22
-DETAIL_W = 28
+DETAIL_W = 40
 RESULT_W = 10
 
 ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
@@ -126,6 +126,13 @@ def print_rollup(*, ok: int, check: int, miss: int) -> None:
     print()
 
 
+def print_section_block(label: str) -> None:
+    print()
+    print_section(label)
+    print()
+    print_table_columns()
+
+
 def print_status_summary(
     *,
     installed_skills: int,
@@ -137,7 +144,6 @@ def print_status_summary(
     claude_bridge_links: int = 0,
     doctor_issue_count: int = 0,
 ) -> None:
-    print_header("Status", "agent_bootstrap")
     manifest_detail = "skills.sources.yaml"
     if enabled_sources >= 0 and skills_sources_exists:
         manifest_detail = f"{enabled_sources} enabled source(s)"
@@ -150,27 +156,31 @@ def print_status_summary(
     elif global_lock_exists:
         lock_detail = "~/.agents/.skill-lock.json (unreadable)"
 
-    rows: list[tuple[str, str, str]] = [
-        ("Installed skills", str(installed_skills), "ok" if installed_skills else "check"),
-        ("Global AGENTS.md", "global/AGENTS.md", "ok" if global_agents_exists else "missing"),
-        ("Skills manifest", manifest_detail, "ok" if skills_sources_exists else "missing"),
-        (
-            "Global skill lock",
-            lock_detail,
-            "ok" if global_lock_exists and global_lock_skills != 0 else "check",
-        ),
-        (
-            "Claude bridge",
-            f"{claude_bridge_links} symlink(s)" if claude_bridge_links else "none",
-            "ok" if claude_bridge_links else "check",
-        ),
-        (
-            "Doctor",
-            "no issues" if doctor_issue_count == 0 else f"{doctor_issue_count} issue(s)",
-            "ok" if doctor_issue_count == 0 else "check",
-        ),
-    ]
-    ok, check, miss = print_table(rows)
+    print_header("Status", "agent_bootstrap")
+    print_section_block("── Skills & baseline ──")
+    ok, check, miss = print_table(
+        [
+            ("Installed skills", str(installed_skills), "ok" if installed_skills else "check"),
+            ("Global AGENTS.md", "global/AGENTS.md", "ok" if global_agents_exists else "missing"),
+            ("Skills manifest", manifest_detail, "ok" if skills_sources_exists else "missing"),
+            (
+                "Global skill lock",
+                lock_detail,
+                "ok" if global_lock_exists and global_lock_skills != 0 else "check",
+            ),
+            (
+                "Claude bridge",
+                f"{claude_bridge_links} symlink(s)" if claude_bridge_links else "none",
+                "ok" if claude_bridge_links else "check",
+            ),
+            (
+                "Doctor",
+                "no issues" if doctor_issue_count == 0 else f"{doctor_issue_count} issue(s)",
+                "ok" if doctor_issue_count == 0 else "check",
+            ),
+        ],
+        show_header=False,
+    )
     print_rollup(ok=ok, check=check, miss=miss)
 
 
@@ -199,7 +209,7 @@ def print_skills_report(results: list, *, title: str) -> int:
 
     summary = summarize_install_results(results)
     print_header(title, "agent_bootstrap › skills")
-
+    print_section_block("── Sources ──")
     rows: list[tuple[str, str, str]] = []
     for result in results:
         if not isinstance(result, InstallResult):
@@ -215,7 +225,7 @@ def print_skills_report(results: list, *, title: str) -> int:
         rows.append((result.source_id, detail, "failed"))
 
     if rows:
-        ok, check, miss = print_table(rows)
+        ok, check, miss = print_table(rows, show_header=False)
     else:
         print(f"  {_c('No active skill sources configured.', DIM)}")
         ok = check = miss = 0

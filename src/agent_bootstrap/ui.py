@@ -12,6 +12,10 @@ YELLOW = "\033[33m"
 RED = "\033[31m"
 CYAN = "\033[36m"
 
+LABEL_W = 22
+DETAIL_W = 28
+RESULT_W = 10
+
 ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
 
@@ -31,7 +35,7 @@ def strip_ansi(text: str) -> str:
     return ANSI_ESCAPE.sub("", text)
 
 
-def shorten_detail(text: str, *, max_len: int = 72) -> str:
+def shorten_detail(text: str, *, max_len: int = DETAIL_W) -> str:
     cleaned = strip_ansi(text).replace("\r", "")
     for line in cleaned.splitlines():
         line = line.strip()
@@ -54,32 +58,72 @@ def print_header(title: str, breadcrumb: str = "") -> None:
     print()
 
 
+def print_section(label: str) -> None:
+    print(f"  {_c(label, DIM)}")
+
+
 def color_result(result: str) -> str:
     key = result.strip().lower()
-    if key in {"ok", "installed", "configured", "linked", "up to date"}:
+    if key in {"ok", "installed", "configured", "linked", "up to date", "current"}:
         return _c(result, GREEN)
     if key in {"missing", "failed", "error"}:
         return _c(result, RED)
-    if key.startswith("skipped") or key in {"check", "warn", "warning", "partial"}:
+    if key.startswith("skipped") or key in {"check", "warn", "warning", "partial", "drift", "extra"}:
         return _c(result, YELLOW)
     if key in {"info", "dry-run"}:
         return _c(result, CYAN)
     return result
 
 
+def print_table_columns(*, headers: tuple[str, str, str] = ("component", "detail", "result")) -> None:
+    h0, h1, h2 = headers
+    print(f"  {_c(f'{h0:<{LABEL_W}} | {h1:<{DETAIL_W}} | {h2}', BOLD)}")
+    print(
+        f"  {'-' * LABEL_W}-+-{'-' * DETAIL_W}-+-{'-' * RESULT_W}"
+    )
+
+
 def print_table(
     rows: list[tuple[str, str, str]],
     *,
-    headers: tuple[str, str, str],
-) -> None:
-    label_w, detail_w, result_w = 22, 28, 10
-    h0, h1, h2 = headers
-    print(f"{h0:<{label_w}} | {h1:<{detail_w}} | {h2}")
-    print(f"{'-' * label_w}-+-{'-' * detail_w}-+-{'-' * result_w}")
+    headers: tuple[str, str, str] = ("component", "detail", "result"),
+    show_header: bool = True,
+) -> tuple[int, int, int]:
+    ok_count = check_count = miss_count = 0
+    if show_header:
+        print_table_columns(headers=headers)
     for label, detail, result in rows:
-        detail_fit = detail if len(detail) <= detail_w else f"{detail[: detail_w - 3]}..."
-        print(f"{label:<{label_w}} | {detail_fit:<{detail_w}} | ", end="")
+        detail_fit = detail if len(detail) <= DETAIL_W else f"{detail[: DETAIL_W - 3]}..."
+        print(f"  {label:<{LABEL_W}} | {detail_fit:<{DETAIL_W}} | ", end="")
         print(color_result(result))
+        key = result.strip().lower()
+        if key in {"ok", "installed", "configured", "linked", "up to date", "current"}:
+            ok_count += 1
+        elif key in {"missing", "failed", "error"}:
+            miss_count += 1
+        elif key.startswith("skipped"):
+            continue
+        else:
+            check_count += 1
+    return ok_count, check_count, miss_count
+
+
+def print_rollup(*, ok: int, check: int, miss: int) -> None:
+    print()
+    if miss == 0 and check == 0:
+        print(f"  {_c(f'All {ok} component(s) look good.', GREEN)}")
+    elif miss == 0:
+        print(
+            f"  {_c(f'{ok} ok', GREEN)}, "
+            f"{_c(f'{check} need attention', YELLOW)}."
+        )
+    else:
+        print(
+            f"  {_c(f'{ok} ok', GREEN)}, "
+            f"{_c(f'{miss} missing', RED)}, "
+            f"{_c(f'{check} need attention', YELLOW)}."
+        )
+    print()
 
 
 def print_status_summary(
@@ -126,21 +170,27 @@ def print_status_summary(
             "ok" if doctor_issue_count == 0 else "check",
         ),
     ]
-    print_table(rows, headers=("check", "detail", "result"))
+    ok, check, miss = print_table(rows)
+    print_rollup(ok=ok, check=check, miss=miss)
 
 
 def print_doctor_summary(issues: list) -> int:
     print_header("Doctor", "agent_bootstrap")
     if not issues:
-        print(f"  {_c('No issues found.', GREEN)}")
-        print()
+        print_table(
+            [("Health check", "skills + global baseline", "ok")],
+            show_header=True,
+        )
+        print_rollup(ok=1, check=0, miss=0)
         return 0
-    print(f"  {_c(f'Found {len(issues)} issue(s):', YELLOW)}")
-    print()
+
+    rows: list[tuple[str, str, str]] = []
     for issue in issues:
-        level = issue.level.upper()
-        print(f"  [{level}] {issue.scope}: {issue.message}")
-    print()
+        level = issue.level.lower()
+        result = "error" if level == "error" else "check"
+        rows.append((issue.scope, shorten_detail(issue.message, max_len=DETAIL_W), result))
+    _ok, check, miss = print_table(rows)
+    print_rollup(ok=0, check=check, miss=miss)
     return 1
 
 
@@ -165,9 +215,10 @@ def print_skills_report(results: list, *, title: str) -> int:
         rows.append((result.source_id, detail, "failed"))
 
     if rows:
-        print_table(rows, headers=("source", "detail", "result"))
+        ok, check, miss = print_table(rows)
     else:
         print(f"  {_c('No active skill sources configured.', DIM)}")
+        ok = check = miss = 0
 
     print()
     if summary.failed:
@@ -178,6 +229,8 @@ def print_skills_report(results: list, *, title: str) -> int:
         )
         return 1 if summary.ok == 0 else 0
     print(f"  {_c(f'{summary.ok} source(s) installed successfully.', GREEN)}")
+    if rows:
+        print_rollup(ok=ok, check=check, miss=miss)
     return 0
 
 

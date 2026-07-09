@@ -24,6 +24,25 @@ class InstallResult:
     skipped: bool = False
 
 
+@dataclass(frozen=True)
+class InstallSummary:
+    ok: int
+    failed: int
+    skipped: int
+
+
+def summarize_install_results(results: list[InstallResult]) -> InstallSummary:
+    ok = failed = skipped = 0
+    for result in results:
+        if result.skipped:
+            skipped += 1
+        elif result.returncode == 0:
+            ok += 1
+        else:
+            failed += 1
+    return InstallSummary(ok=ok, failed=failed, skipped=skipped)
+
+
 DEFAULT_NPX = "npx"
 
 

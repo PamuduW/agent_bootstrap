@@ -84,7 +84,7 @@ install_source() {
   done
 
   info "installing skills from ${repo}"
-  npx skills add "$repo" "${skill_flags[@]}" "${AGENT_FLAGS[@]}" "${GLOBAL_FLAGS[@]}"
+  npx skills add "$repo" "${skill_flags[@]}" "${AGENT_FLAGS[@]}" "${GLOBAL_FLAGS[@]}" </dev/null
 }
 
 install_local_pack() {
@@ -98,13 +98,13 @@ install_local_pack() {
   fi
 
   info "installing personal skills pack from ${SKILLS_DIR}"
-  npx skills add "$SKILLS_DIR" "${AGENT_FLAGS[@]}" "${GLOBAL_FLAGS[@]}"
+  npx skills add "$SKILLS_DIR" "${AGENT_FLAGS[@]}" "${GLOBAL_FLAGS[@]}" </dev/null
 }
 
 install_all() {
   require_npx
 
-  local line repo rest
+  local line repo rest old_ifs
   local -a skills=()
 
   while IFS= read -r line || [[ -n "$line" ]]; do
@@ -113,7 +113,9 @@ install_all() {
     rest="${line#*$'\t'}"
     skills=()
     if [[ -n "$rest" ]]; then
+      old_ifs="$IFS"
       IFS=$'\t' read -ra skills <<<"$rest"
+      IFS="$old_ifs"
     fi
     install_source "$repo" "${skills[@]}"
   done < <(parse_sources)
@@ -126,7 +128,7 @@ update_all() {
 
   if npx skills update --help >/dev/null 2>&1; then
     info "running npx skills update"
-    npx skills update -y
+    npx skills update -y </dev/null
     install_local_pack
     return 0
   fi

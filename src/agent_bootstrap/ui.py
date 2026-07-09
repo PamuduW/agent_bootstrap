@@ -22,7 +22,10 @@ ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 def use_color() -> bool:
     if os.environ.get("NO_COLOR"):
         return False
-    return sys.stdout.isatty()
+    if os.environ.get("FORCE_COLOR") or os.environ.get("AGENT_BOOTSTRAP_TUI"):
+        return True
+    # Match dotfiles report_table: stdin may still be a TTY when stdout is piped (e.g. tee).
+    return sys.stdout.isatty() or sys.stdin.isatty()
 
 
 def _c(text: str, code: str) -> str:

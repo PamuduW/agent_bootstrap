@@ -19,7 +19,6 @@ class SkillsInstallerTests(unittest.TestCase):
 
         return BootstrapPaths(
             root=self.root,
-            cursor_plugin_cache=self.root / "cursor-cache",
             codex_home=self.root / "home" / ".codex",
             claude_home=self.root / "home" / ".claude",
             cursor_home=self.root / "home" / ".cursor",
@@ -90,31 +89,6 @@ sources:
         self.assertIn("claude-code", command)
         self.assertEqual(1, len(results))
         self.assertEqual("superpowers", results[0].source_id)
-
-    @patch("src.agent_bootstrap.skills_installer.run_install_command")
-    def test_install_skills_includes_local_pack_when_present(self, mock_run) -> None:
-        from src.agent_bootstrap.skills_installer import install_skills
-
-        local_skill = self.root / "skills" / "my-skill"
-        local_skill.mkdir(parents=True)
-        (local_skill / "SKILL.md").write_text("# My Skill\n", encoding="utf-8")
-
-        mock_run.side_effect = [
-            self._success_result("superpowers", ["npx", "skills", "add", "obra/superpowers"]),
-            self._success_result(
-                "local-pack",
-                ["npx", "skills", "add", str((self.root / "skills").resolve())],
-            ),
-        ]
-
-        results = install_skills(self._paths())
-
-        self.assertEqual(2, mock_run.call_count)
-        local_command = mock_run.call_args_list[1].args[0]
-        self.assertEqual(str((self.root / "skills").resolve()), local_command[3])
-        self.assertNotIn("--skill", local_command)
-        self.assertEqual(2, len(results))
-        self.assertEqual("local-pack", results[1].source_id)
 
     @patch("src.agent_bootstrap.skills_installer.run_install_command")
     def test_update_skills_runs_npx_update(self, mock_run) -> None:

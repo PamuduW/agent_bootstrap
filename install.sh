@@ -7,10 +7,6 @@ export AGENT_BOOTSTRAP_HOME="$BOOTSTRAP_DIR"
 SKILLS_INSTALL_SH="${BOOTSTRAP_DIR}/bin/skills-install.sh"
 CLAUDE_BRIDGE_SH="${BOOTSTRAP_DIR}/bin/claude-skills-bridge.sh"
 
-# Installer path: prefer Python CLI when it supports skills/bootstrap; use bash
-# scripts (bin/skills-install.sh, bin/claude-skills-bridge.sh) only as fallbacks
-# when the CLI is missing or lacks those commands.
-
 die() {
   printf '[err] %s\n' "$*" >&2
   exit 1
@@ -114,8 +110,6 @@ run_bootstrap() {
   if cli_supports_bootstrap; then
     run_cli bootstrap || rc=$?
   else
-    # CLI bootstrap unavailable: skills via run_skills (CLI if supported, else bash),
-    # then bash Claude bridge and global render via CLI.
     run_skills install || rc=$?
     run_claude_bridge
     run_cli global || rc=$?
@@ -135,8 +129,9 @@ map_legacy_flags() {
   case "$1" in
     --status) set -- status "${@:2}" ;;
     --global) set -- global "${@:2}" ;;
-    --workspace) set -- workspace "${@:2}" ;;
-    --all) set -- all "${@:2}" ;;
+    --workspace|--all)
+      die "workspace/all render is archived — see archive/README.md"
+      ;;
   esac
 }
 
@@ -149,21 +144,21 @@ Commands:
   bootstrap              Same as default
   skills install         Install curated upstream skills
   skills update          Refresh skills from upstreams
-  skills list            List configured skill sources
+  skills list            List installed skills
   skills doctor          Validate skills installer prerequisites
-  doctor                 Run control-plane doctor
-  status                 Show control-plane status
+  doctor                 Run slim doctor (skills + global baseline)
+  status                 Show skills and global render status
   global                 Render global agent outputs
-  workspace <path>       Track and render a workspace
-  all <parent-dir>       Render all git repos under a parent directory
-  interactive            Launch interactive control-plane menu
   link-agentboot         Symlink bin/agentboot -> ~/bin/agentboot (idempotent)
 
 After bootstrap, run agentboot in any repo to scaffold AGENTS.md + CLAUDE.md.
 Ensure ~/bin is on PATH (install.sh creates ~/bin/agentboot when bin/agentboot exists).
 
+Archived commands (see archive/README.md): workspace, all, interactive,
+import-local, remove-managed, delete-local.
+
 Legacy flags (backward compatible):
-  --status, --global, --workspace <path>, --all <parent-dir>
+  --status, --global
 EOF
 }
 
@@ -187,20 +182,17 @@ main() {
       fi
       run_skills "${2}" "${@:3}"
       ;;
-    doctor)
-      run_cli doctor
-      ;;
-    status)
-      run_cli status
-      ;;
-    global|workspace|all|import-local|remove-managed|delete-local|interactive)
-      if [[ "$cmd" == "global" || "$cmd" == "workspace" || "$cmd" == "all" ]]; then
+    doctor|status|global)
+      if [[ "$cmd" == "global" ]]; then
         check_deps
       fi
-      run_cli "$@"
+      run_cli "$cmd" "${@:2}"
       ;;
     link-agentboot)
       link_agentboot
+      ;;
+    workspace|all|interactive|import-local|remove-managed|delete-local)
+      die "${cmd} is archived — see archive/README.md"
       ;;
     -h|--help|help)
       usage

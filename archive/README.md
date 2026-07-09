@@ -25,9 +25,26 @@ These paths were moved from the repo root with `git mv` (except `exports/`, whic
 
 Top-level `docs/` and `skills/` were removed after the moves (empty). Restore from this directory or from git history.
 
+## Tier 2 moves (Phase 3 — 2026-07-09)
+
+| Original path | Archive path |
+|---------------|--------------|
+| `catalog/` | `archive/catalog/` |
+| `mcp/` | `archive/mcp/` |
+| `.env.example` | `archive/.env.example` |
+| `src/agent_bootstrap/discovery.py` | `archive/src/agent_bootstrap/discovery.py` |
+| `src/agent_bootstrap/catalog.py` | `archive/src/agent_bootstrap/catalog.py` |
+| `src/agent_bootstrap/state.py` | `archive/src/agent_bootstrap/state.py` |
+| `src/agent_bootstrap/ui.py` (pre-slim) | `archive/src/agent_bootstrap/ui.py` |
+| `src/agent_bootstrap/render.py` (full) | `archive/src/agent_bootstrap/render.py` |
+| `tests/test_bootstrap_engine.py` (full) | `archive/tests/test_bootstrap_engine.py` |
+
+Slim `src/agent_bootstrap/render.py` keeps `render_global_outputs` only (no MCP write from catalog).
+Slim `src/agent_bootstrap/ui.py` keeps print helpers only (no interactive menus).
+
 ## Planned archive contents (rework plan)
 
-### Tier 2 — after code surgery (Phase 3)
+### Tier 2 — completed
 
 | Path | Reason |
 |------|--------|
@@ -36,8 +53,8 @@ Top-level `docs/` and `skills/` were removed after the moves (empty). Restore fr
 | `src/agent_bootstrap/discovery.py` | Workspace/package discovery |
 | `src/agent_bootstrap/catalog.py` | Catalog load/filter |
 | `src/agent_bootstrap/state.py` | Tracked workspaces |
-| `src/agent_bootstrap/ui.py` | Interactive Apply menus |
-| Workspace render | `render_workspace_outputs` in `render.py` |
+| `src/agent_bootstrap/ui.py` | Interactive Apply menus (archived copy) |
+| Workspace render | `render_workspace_outputs` in archived `render.py` |
 
 ## Deferred use cases (restore from archive)
 

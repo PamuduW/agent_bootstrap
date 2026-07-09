@@ -84,16 +84,18 @@ def print_table(
 
 def print_status_summary(
     *,
-    installed_skills: int,
-    global_agents_exists: bool,
-    skills_sources_exists: bool,
+    managed: int,
+    detected: int,
+    enabled: int,
+    tracked_workspaces: int,
 ) -> None:
     print_header("Status", "agent_bootstrap")
     print_table(
         [
-            ("Installed skills", str(installed_skills), "ok" if installed_skills else "check"),
-            ("Global AGENTS.md", "global/AGENTS.md", "ok" if global_agents_exists else "missing"),
-            ("Skills manifest", "skills.sources.yaml", "ok" if skills_sources_exists else "missing"),
+            ("Managed packages", str(managed), "ok"),
+            ("Detected packages", str(detected), "ok"),
+            ("Enabled packages", str(enabled), "ok"),
+            ("Tracked workspaces", str(tracked_workspaces), "ok"),
         ],
         headers=("check", "detail", "result"),
     )

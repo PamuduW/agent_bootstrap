@@ -31,7 +31,7 @@ Scaffold AGENTS.md and CLAUDE.md in the current directory.
 
 Options:
   --minimal   Copy AGENTS.md + CLAUDE.md only (default)
-  --full      Also render Copilot/Cursor/MCP workspace outputs
+  --full      Deprecated: workspace render is archived (runs minimal scaffold only)
   --force     Overwrite existing target files
   -h, --help  Show this help
 
@@ -67,20 +67,6 @@ Next steps:
 EOF
 }
 
-run_workspace_render() {
-  if ! command -v python3 >/dev/null 2>&1; then
-    warn "python3 not found; skipping workspace render"
-    return 0
-  fi
-
-  if ! (
-    cd "$AGENT_BOOTSTRAP_HOME"
-    python3 -m src.agent_bootstrap.cli --root "$AGENT_BOOTSTRAP_HOME" workspace "$(pwd)"
-  ); then
-    warn "workspace render failed (minimal files were written)"
-  fi
-}
-
 main() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -106,6 +92,11 @@ main() {
     esac
   done
 
+  if [[ "$MODE" == "full" ]]; then
+    warn "--full workspace render is archived; copying minimal templates only."
+    warn "See ${AGENT_BOOTSTRAP_HOME}/archive/README.md to restore Copilot/Cursor/MCP outputs."
+  fi
+
   local agents_src="${AGENT_BOOTSTRAP_HOME}/base/AGENTS.md"
   local claude_src="${AGENT_BOOTSTRAP_HOME}/base/CLAUDE.md"
   local agents_dest="./AGENTS.md"
@@ -113,10 +104,6 @@ main() {
 
   copy_template "$agents_src" "$agents_dest"
   copy_template "$claude_src" "$claude_dest"
-
-  if [[ "$MODE" == "full" ]]; then
-    run_workspace_render
-  fi
 
   print_next_steps
 }

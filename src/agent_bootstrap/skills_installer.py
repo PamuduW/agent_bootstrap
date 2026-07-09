@@ -151,35 +151,9 @@ def update_all(
     return result
 
 
-def _install_local_pack(
-    paths: BootstrapPaths,
-    config: SkillsSourcesConfig,
-    *,
-    dry_run: bool = False,
-) -> InstallResult | None:
-    local_dir = paths.skills_dir
-    if not local_dir.is_dir() or not any(local_dir.glob("*/SKILL.md")):
-        return None
-
-    argv = build_add_argv(
-        SkillSourceEntry(id="local-pack", repo=str(local_dir.resolve()), skills=[]),
-        agents=config.agents,
-        global_scope=config.scope == "global",
-    )
-    result = run_install_command(argv, source_id="local-pack", dry_run=dry_run, cwd=paths.root)
-    if not dry_run and result.returncode != 0:
-        detail = result.stderr.strip() or result.stdout.strip() or f"exit code {result.returncode}"
-        raise SkillsInstallError(f"failed to install local skills pack: {detail}")
-    return result
-
-
 def install_skills(paths: BootstrapPaths, *, dry_run: bool = False) -> list[InstallResult]:
     config = load_skills_sources(paths.skills_sources_file)
-    results = install_all(config, dry_run=dry_run, cwd=paths.root)
-    local_result = _install_local_pack(paths, config, dry_run=dry_run)
-    if local_result is not None:
-        results.append(local_result)
-    return results
+    return install_all(config, dry_run=dry_run, cwd=paths.root)
 
 
 def update_skills(paths: BootstrapPaths, *, dry_run: bool = False) -> InstallResult:

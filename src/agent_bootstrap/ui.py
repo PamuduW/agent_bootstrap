@@ -244,6 +244,24 @@ def print_skills_report(results: list, *, title: str) -> int:
     return 0
 
 
+def print_skills_update_report(*, linked: int, skipped: int = 0, updated: int = 0) -> int:
+    print_section_block("── Refresh ──")
+    bridge_detail = f"{linked} linked"
+    if updated:
+        bridge_detail += f", {updated} updated"
+    if skipped:
+        bridge_detail += f", {skipped} skipped"
+    rows = [
+        ("global lock", "~/.agents/.skill-lock.json", "ok"),
+        ("claude bridge", bridge_detail, "ok"),
+        ("codex sync", "~/.codex/AGENTS.md + skills", "ok"),
+    ]
+    ok, check, miss = print_table(rows)
+    print()
+    print_rollup(ok=ok, check=check, miss=miss)
+    return 0
+
+
 def print_bridge_summary(*, linked: int, skipped: int, updated: int = 0) -> None:
     parts = [f"{linked} linked"]
     if updated:

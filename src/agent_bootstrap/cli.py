@@ -7,7 +7,13 @@ from pathlib import Path
 
 from .paths import BootstrapPaths, default_paths
 from .service import BootstrapService
-from .ui import print_doctor_summary, print_header, print_skills_report, print_status_summary
+from .ui import (
+    print_doctor_summary,
+    print_header,
+    print_skills_report,
+    print_skills_update_report,
+    print_status_summary,
+)
 
 ARCHIVED_COMMANDS = frozenset(
     {
@@ -98,16 +104,14 @@ def handle_skills_command(service: BootstrapService, skills_command: str) -> int
             return 1
         return skills_rc
     if skills_command == "update":
+        print_header("Skills update", "agent_bootstrap › skills")
         try:
             service.update_skills()
+            linked, skipped, updated = service.refresh_agent_outputs()
         except Exception as error:  # noqa: BLE001
-            print_header("Skills update", "agent_bootstrap › skills")
             print(f"  Error: {error}")
             return 1
-        print_header("Skills update", "agent_bootstrap › skills")
-        print("  Refreshed global skills from ~/.agents/.skill-lock.json.")
-        print("  Claude bridge and Codex symlinks updated.")
-        return 0
+        return print_skills_update_report(linked=linked, skipped=skipped, updated=updated)
     if skills_command == "list":
         skills = service.list_skills()
         if not skills:

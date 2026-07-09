@@ -27,7 +27,7 @@ class BootstrapService:
     def install_skills(self) -> list:
         return run_skills_install(self.paths)
 
-    def apply_claude_bridge(self) -> None:
+    def apply_claude_bridge(self, *, print_summary: bool = True) -> tuple[int, int, int]:
         bridge = link_claude_skills(
             agents_home=self.paths.agents_skills_home,
             claude_home=self.paths.claude_skills_home,
@@ -36,7 +36,10 @@ class BootstrapService:
         updated = sum(1 for action in bridge.actions if action.action == "updated")
         linked = sum(1 for action in bridge.actions if action.action == "linked")
         skipped = sum(1 for action in bridge.actions if action.action == "skip_existing")
-        print_bridge_summary(linked=already + linked, skipped=skipped, updated=updated)
+        linked_total = already + linked
+        if print_summary:
+            print_bridge_summary(linked=linked_total, skipped=skipped, updated=updated)
+        return linked_total, skipped, updated
 
     def run_bootstrap(self) -> int:
         print_header("Bootstrap", str(self.paths.root))
@@ -52,8 +55,11 @@ class BootstrapService:
 
     def update_skills(self) -> None:
         run_skills_update(self.paths)
-        self.apply_claude_bridge()
+
+    def refresh_agent_outputs(self) -> tuple[int, int, int]:
+        linked, skipped, updated = self.apply_claude_bridge(print_summary=False)
         self.render_global()
+        return linked, skipped, updated
 
     def list_skills(self) -> list[str]:
         return list_installed_skills(self.paths)

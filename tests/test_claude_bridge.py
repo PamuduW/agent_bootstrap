@@ -49,7 +49,8 @@ class ClaudeBridgeTests(unittest.TestCase):
         self.assertEqual(1, first.linked)
         self.assertEqual(0, first.skipped)
         self.assertEqual(0, second.linked)
-        self.assertEqual(1, second.skipped)
+        self.assertEqual(0, second.updated)
+        self.assertEqual(0, second.skipped)
         self.assertEqual("already_linked", second.actions[0].action)
         self.assertEqual(source.resolve(), (self.claude_home / "alpha").resolve())
 
@@ -83,9 +84,13 @@ class ClaudeBridgeTests(unittest.TestCase):
         result = bridge_claude_skills(self.agents_home, self.claude_home)
 
         self.assertEqual(0, result.linked)
-        self.assertEqual(1, result.skipped)
-        self.assertEqual("skip_existing", result.actions[0].action)
-        self.assertEqual(other_source.resolve(), (self.claude_home / "alpha").resolve())
+        self.assertEqual(1, result.updated)
+        self.assertEqual(0, result.skipped)
+        self.assertEqual("updated", result.actions[0].action)
+        self.assertEqual(
+            (self.agents_home / "alpha").resolve(),
+            (self.claude_home / "alpha").resolve(),
+        )
 
     def test_bridge_dry_run_reports_without_writing(self) -> None:
         from src.agent_bootstrap.claude_bridge import bridge_claude_skills

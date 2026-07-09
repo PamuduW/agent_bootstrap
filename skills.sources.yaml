@@ -53,18 +53,16 @@ sources:
     skills:
       - literature-review
 
+  # TODO: add Akindu23/my-agent-skills source when skill folder names are verified
+  # (council, grilling, recursive-decomposition, yagni, document, find-skills, etc.)
+
   - id: graphify
     repo: safishamsi/graphify
     skills:
       - graphify
-    enabled: false  # upstream has no Agent Skills SKILL.md layout yet
+    enabled: false  # not advertised in base templates; upstream has no Agent Skills SKILL.md layout yet
 
   - id: obsidian-memory
     repo: AdamTylerLynch/obsidian-agent-memory-skills
     skills: []
-    enabled: false
-
-  - id: personal-pack
-    repo: null  # set to <user>/my-agent-skills fork after format verification
-    skills: []  # populate from fork's skills.json after Akindu format check
-    enabled: false  # enable after verification
+    enabled: false  # not advertised in base templates

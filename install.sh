@@ -7,6 +7,10 @@ export AGENT_BOOTSTRAP_HOME="$BOOTSTRAP_DIR"
 SKILLS_INSTALL_SH="${BOOTSTRAP_DIR}/bin/skills-install.sh"
 CLAUDE_BRIDGE_SH="${BOOTSTRAP_DIR}/bin/claude-skills-bridge.sh"
 
+# Installer path: prefer Python CLI when it supports skills/bootstrap; use bash
+# scripts (bin/skills-install.sh, bin/claude-skills-bridge.sh) only as fallbacks
+# when the CLI is missing or lacks those commands.
+
 die() {
   printf '[err] %s\n' "$*" >&2
   exit 1
@@ -110,6 +114,8 @@ run_bootstrap() {
   if cli_supports_bootstrap; then
     run_cli bootstrap || rc=$?
   else
+    # CLI bootstrap unavailable: skills via run_skills (CLI if supported, else bash),
+    # then bash Claude bridge and global render via CLI.
     run_skills install || rc=$?
     run_claude_bridge
     run_cli global || rc=$?

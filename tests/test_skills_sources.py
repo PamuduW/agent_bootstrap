@@ -32,8 +32,8 @@ class SkillsSourcesTests(unittest.TestCase):
         self.assertEqual("obra/superpowers", superpowers.repo)
         self.assertIn("brainstorming", superpowers.skills)
 
-        personal = next(source for source in config.sources if source.id == "personal-pack")
-        self.assertFalse(personal.enabled)
+        graphify = next(source for source in config.sources if source.id == "graphify")
+        self.assertFalse(graphify.enabled)
 
     def test_active_sources_skips_disabled_empty_or_missing_repo(self) -> None:
         from src.agent_bootstrap.skills_sources import load_skills_sources

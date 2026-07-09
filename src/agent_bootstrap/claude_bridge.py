@@ -20,6 +20,7 @@ class BridgeAction:
 class BridgeResult:
     actions: list[BridgeAction]
     linked: int
+    updated: int
     skipped: int
 
 
@@ -42,10 +43,11 @@ def bridge_claude_skills(
 
     actions: list[BridgeAction] = []
     linked = 0
+    updated = 0
     skipped = 0
 
     if not agents_dir.is_dir():
-        return BridgeResult(actions=actions, linked=linked, skipped=skipped)
+        return BridgeResult(actions=actions, linked=linked, updated=updated, skipped=skipped)
 
     if not dry_run:
         claude_dir.mkdir(parents=True, exist_ok=True)
@@ -56,17 +58,22 @@ def bridge_claude_skills(
         actions.append(action)
         if action.action == "linked":
             linked += 1
-        else:
+        elif action.action == "updated":
+            updated += 1
+        elif action.action == "skip_existing":
             skipped += 1
 
-    return BridgeResult(actions=actions, linked=linked, skipped=skipped)
+    return BridgeResult(actions=actions, linked=linked, updated=updated, skipped=skipped)
 
 
 def _bridge_entry(source: Path, target: Path, *, dry_run: bool) -> BridgeAction:
     if target.is_symlink():
         if target.resolve() == source.resolve():
             return BridgeAction(skill_name=source.name, target=target, action="already_linked")
-        return BridgeAction(skill_name=source.name, target=target, action="skip_existing")
+        if not dry_run:
+            target.unlink()
+            os.symlink(source, target)
+        return BridgeAction(skill_name=source.name, target=target, action="updated")
 
     if target.exists():
         return BridgeAction(skill_name=source.name, target=target, action="skip_existing")

@@ -11,23 +11,20 @@ Invoke skills in Agent chat by typing `/<skill-name>`.
 
 **Pick 2–4 skills per session by phase — do not load all at once.**
 
+Skills below match `skills.sources.yaml` (enabled upstreams installed via `./install.sh skills install`).
+
 ### Research / feasibility
 
 | Skill | Description |
 |---|---|
 | `brainstorming` | Explore options and trade-offs before committing to a direction. |
-| `council` | Orchestration: explore an area, spawn parallel subagents for deep dives, synthesize. |
-| `grilling` | Stress-test ideas; matches Interaction Rules below. |
 | `literature-review` | Structured review of papers, docs, and prior art with citations. |
-| `recursive-decomposition` | Synthesize across many docs; partition large inputs via subagents. |
 
 ### Design / architecture
 
 | Skill | Description |
 |---|---|
 | `writing-plans` | Turn requirements into phased, actionable implementation plans. |
-| `graphify` | Generate diagrams and visual models from structured input. |
-| `yagni` | Resist premature complexity; simplest solution that works. |
 
 ### Implementation (load on demand)
 
@@ -43,20 +40,9 @@ Invoke skills in Agent chat by typing `/<skill-name>`.
 | `devops-engineer` | Cross-cutting infra, observability, and delivery practices. |
 | `owasp` | Security review against OWASP guidance. |
 
-### Docs / handoff
-
-| Skill | Description |
-|---|---|
-| `document` | Create/update durable documentation committed in the repo. |
-| `find-skills` | Discover and install skills from the open agent-skills ecosystem (`npx skills`). |
-
 ### Interaction Rules (how AI must behave in this project)
 
 Never agree with me by default. Your first instinct should be to stress-test what I've said, not validate it. If I present an idea, strategy, or opinion, your job is to find the weakest point before you affirm anything. No glazing. Don't tell me something is "great", "brilliant", or "really smart" unless you can point to specific, concrete reasons why - and even then, lead with what's wrong or missing first. Compliments without substance are noise. Don't echo my framing back to me. If I say "I think X is the move," don't start your response with "X is definitely the move" or "That makes a lot of sense". Instead, start by asking yourself: what am I not seeing? What's the counter-argument? What would someone who disagrees say, and are they right? When you do agree, earn it. Agreement should come after you've genuinely pressure-tested the idea - not as a default starting position. If you agree, say why in a way that adds something I didn't already say. Be direct and concise. Skip the warm-up sentences. Don't pad responses with filler affirmations. Get to the point. If the answer is "no" or "this won't work", say that in the first sentence. Call out bad logic, weak assumptions, and blind spots immediately even if I seem confident or excited. Especially then. The more certain I sound, the more I need pushback. If you catch yourself about to start a response with "That's a great point" or "You're absolutely right" - stop and rewrite. Start with the most useful thing you can say instead.
-
-### Orchestration convention
-
-Delegate **all grunt work** (reading, writing, searching web, extraction, multi-file edits) to low level subagents via the `council` skill (skill is mainly used for cursor). The main agent acts as the orchestrating brain: high-level decisions, reconciling subagent outputs, managing the plan — it does **not** do the grunt work itself. Prefer this over doing large multi-file work directly.
 
 ## Project overlay
 

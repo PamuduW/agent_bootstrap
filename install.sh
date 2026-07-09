@@ -33,6 +33,9 @@ check_deps() {
   if ! command -v python3 >/dev/null 2>&1; then
     die "python3 is required"
   fi
+  if ! python3 -c "import yaml" >/dev/null 2>&1; then
+    die "PyYAML is required (run: python3 -m pip install -r requirements.txt)"
+  fi
   if ! command -v node >/dev/null 2>&1; then
     die "node is required (install Node.js for npx skills)"
   fi
@@ -81,29 +84,61 @@ sys.exit(print_doctor_summary(service.doctor_issues() + service.skills_doctor_is
 PY
 }
 
+run_slim_status() {
+  if cli_ready; then
+    run_cli status "$@"
+    return $?
+  fi
+  python3 - <<'PY'
+import sys
+from pathlib import Path
+from src.agent_bootstrap.paths import default_paths
+from src.agent_bootstrap.service import BootstrapService
+from src.agent_bootstrap.ui import print_status_summary
+
+paths = default_paths(Path(".").resolve())
+service = BootstrapService(paths)
+summary = service.status_summary()
+print_status_summary(
+    installed_skills=int(summary["installed_skills"]),
+    global_agents_exists=bool(summary["global_agents_exists"]),
+    skills_sources_exists=bool(summary["skills_sources_exists"]),
+    enabled_sources=int(summary["enabled_sources"]),
+    global_lock_exists=bool(summary["global_lock_exists"]),
+    global_lock_skills=int(summary["global_lock_skills"]),
+    claude_bridge_links=int(summary["claude_bridge_links"]),
+    doctor_issue_count=int(summary["doctor_issue_count"]),
+)
+PY
+}
+
 cli_supports_skills() {
-  if ! cli_ready; then
-    return 1
-  fi
-  if ! grep -q '"skills"' "${BOOTSTRAP_DIR}/src/agent_bootstrap/cli.py" 2>/dev/null; then
-    return 1
-  fi
-
-  local output=""
-  if output="$(python3 -m src.agent_bootstrap.cli --root "$BOOTSTRAP_DIR" skills list 2>&1)"; then
-    return 0
-  fi
-
-  if [[ "$output" == *"unknown command"* ]]; then
-    return 1
-  fi
-
-  printf '%s\n' "$output" >&2
-  return 1
+  cli_ready
 }
 
 cli_supports_bootstrap() {
-  cli_ready && grep -q '"bootstrap"' "${BOOTSTRAP_DIR}/src/agent_bootstrap/cli.py" 2>/dev/null
+  cli_ready
+}
+
+list_installed_skills_fallback() {
+  python3 - <<'PY'
+from pathlib import Path
+from src.agent_bootstrap.paths import default_paths
+from src.agent_bootstrap.service import BootstrapService
+
+skills = BootstrapService(default_paths(Path(".").resolve())).list_skills()
+if not skills:
+    print("No installed skills found.")
+else:
+    print("\n=== Installed Skills ===")
+    for skill in skills:
+        print(skill)
+PY
+}
+
+refresh_agent_outputs_fallback() {
+  run_claude_bridge
+  run_global_render
 }
 
 run_skills() {
@@ -118,12 +153,14 @@ run_skills() {
   case "$subcmd" in
     install)
       "$SKILLS_INSTALL_SH" install
+      refresh_agent_outputs_fallback
       ;;
     update)
       "$SKILLS_INSTALL_SH" update
+      refresh_agent_outputs_fallback
       ;;
     list)
-      "$SKILLS_INSTALL_SH" list
+      list_installed_skills_fallback
       ;;
     doctor)
       "$SKILLS_INSTALL_SH" doctor
@@ -238,7 +275,7 @@ main() {
       case "$cmd" in
       global) run_global_render "${@:2}" ;;
       doctor) run_slim_doctor "${@:2}" ;;
-      status) run_cli status "${@:2}" ;;
+      status) run_slim_status "${@:2}" ;;
       esac
       ;;
     link-agentboot)

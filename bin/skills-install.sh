@@ -132,49 +132,30 @@ update_all() {
   install_all
 }
 
-list_sources() {
-  if [[ ! -f "$SOURCES_FILE" ]]; then
-    die "missing skills sources file: $SOURCES_FILE"
+list_installed() {
+  local skills_home="${HOME}/.agents/skills"
+
+  if [[ ! -d "$skills_home" ]]; then
+    printf 'No installed skills found.\n'
+    return 0
   fi
 
-  python3 - "$SOURCES_FILE" <<'PY'
-import re
-import sys
-from pathlib import Path
+  local -a skills=()
+  local entry name
+  shopt -s nullglob
+  for entry in "$skills_home"/*/; do
+    name="$(basename "$entry")"
+    [[ -n "$name" ]] && skills+=("$name")
+  done
+  shopt -u nullglob
 
-path = Path(sys.argv[1])
-current = None
+  if [[ "${#skills[@]}" -eq 0 ]]; then
+    printf 'No installed skills found.\n'
+    return 0
+  fi
 
-def flush():
-    global current
-    if not current:
-        return
-    repo = current.get("repo") or "(unset)"
-    enabled = "enabled" if current.get("enabled", True) else "disabled"
-    skills = ", ".join(current.get("skills", [])) or "(none)"
-    print(f"{current['id']}: {repo} [{enabled}] -> {skills}")
-    current = None
-
-for raw in path.read_text(encoding="utf-8").splitlines():
-    line = raw.split("#", 1)[0].rstrip()
-    if not line.strip():
-        continue
-    if m := re.match(r"^\s*-\s+id:\s+(.+)$", line):
-        flush()
-        current = {"id": m.group(1).strip(), "repo": None, "skills": [], "enabled": True}
-        continue
-    if not current:
-        continue
-    if m := re.match(r"^\s+repo:\s+(.+)$", line):
-        value = m.group(1).strip()
-        current["repo"] = None if value == "null" else value
-    elif re.match(r"^\s+enabled:\s+false\s*$", line):
-        current["enabled"] = False
-    elif m := re.match(r"^\s+-\s+(.+)$", line):
-        current["skills"].append(m.group(1).strip())
-
-flush()
-PY
+  printf '\n=== Installed Skills ===\n'
+  printf '%s\n' "${skills[@]}" | LC_ALL=C sort
 }
 
 doctor() {
@@ -213,7 +194,7 @@ Usage: $(basename "$0") <command>
 Commands:
   install   Install curated upstream skills from skills.sources.yaml
   update    Refresh globally installed skills from ~/.agents/.skill-lock.json
-  list      Show configured skill sources
+  list      List installed skills under ~/.agents/skills
   doctor    Validate installer prerequisites
 EOF
 }
@@ -230,7 +211,7 @@ main() {
       update_all
       ;;
     list)
-      list_sources
+      list_installed
       ;;
     doctor)
       doctor

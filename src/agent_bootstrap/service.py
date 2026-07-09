@@ -103,7 +103,7 @@ class BootstrapService:
             except ValueError:
                 enabled_sources = -1
 
-        global_lock_skills = self._count_global_lock_skills()
+        global_lock_skills = self._count_global_lock_skills(self.paths)
         claude_bridge_links = 0
         if self.paths.claude_skills_home.is_dir():
             claude_bridge_links = sum(
@@ -124,8 +124,8 @@ class BootstrapService:
         }
 
     @staticmethod
-    def _count_global_lock_skills() -> int:
-        lock_path = Path.home() / ".agents" / ".skill-lock.json"
+    def _count_global_lock_skills(paths: BootstrapPaths) -> int:
+        lock_path = paths.global_skill_lock
         if not lock_path.exists():
             return 0
         try:

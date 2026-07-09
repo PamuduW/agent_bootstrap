@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 
 import yaml
 
@@ -17,16 +17,16 @@ class SkillsSourcesError(ValueError):
 class SkillSourceEntry:
     id: str
     repo: str | None
-    skills: List[str] = field(default_factory=list)
+    skills: list[str] = field(default_factory=list)
     enabled: bool = True
 
 
 @dataclass(frozen=True)
 class SkillsSourcesConfig:
     version: int
-    agents: List[str]
+    agents: list[str]
     scope: str
-    sources: List[SkillSourceEntry]
+    sources: list[SkillSourceEntry]
 
     def active_sources(self) -> list[SkillSourceEntry]:
         return [

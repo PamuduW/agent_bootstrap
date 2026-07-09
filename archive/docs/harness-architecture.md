@@ -26,7 +26,7 @@ Daily coding runs on **first-party CLI agents** in WSL (Codex, Claude Code, Copi
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  CONFIG PLANE — LIVE (agent_bootstrap)                                  │
 │  Skills catalog · base/ templates · install.sh · MCP/agents exports     │
-│  memory-vault/ (human-owned Obsidian) · global/AGENTS.md baseline       │
+│  archive/memory-vault/ (human Obsidian) · global/AGENTS.md baseline     │
 │  Single source of truth for every agent on every machine                │
 └───────────────────────────────┬─────────────────────────────────────────┘
                                 │ agentboot · npx skills · install.sh
@@ -63,7 +63,7 @@ From `docs/plan/index.md` §2.4. Add layers only when the previous one hurts.
 |------|-----------|--------|
 | **1** | Per-repo `AGENTS.md` + `CLAUDE.md` via `agentboot` | **LIVE** — Stage 6 complete |
 | **2** | Global skills via `npx skills` (`skills.sources.yaml`) | **LIVE** — Stage 5 complete |
-| **3** | Obsidian vault in repo (`memory-vault/`: active-context, preferences, decisions/, lessons/) | **STRUCTURE LIVE** — human-owned; agents draft, you approve |
+| **3** | Obsidian vault (`archive/memory-vault/`: active-context, preferences, decisions/, lessons/) | **ARCHIVED** — human-owned; agents draft, you approve; restore from `archive/` |
 | **4** | Hermes `MEMORY.md` + SQLite FTS on server (`write_approval: true`) | **DEFERRED** — needs Phase 7.3 + Proxmox |
 | **5** | Graphify on-demand for large infra/K8s/TF repos | **DEFERRED** — trigger: codebase too large for grep + AGENTS.md |
 | **6** | Mem0 / Graphiti / GraphRAG cross-machine semantic recall | **DEFERRED** — trigger: markdown stops scaling (~50+ file graphs, cross-machine recall) |

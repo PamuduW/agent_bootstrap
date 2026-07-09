@@ -1,6 +1,6 @@
 # Memory vault
 
-Obsidian-compatible, **git-tracked** memory store in the config plane (`agent_bootstrap/memory-vault/`).
+Obsidian-compatible, **git-tracked** memory store in the archived config plane (`agent_bootstrap/archive/memory-vault/`).
 
 ## Policy — human-owned
 
@@ -15,7 +15,7 @@ Agents read the vault for durable context. Ephemeral chat state does not replace
 ## Layout
 
 ```
-memory-vault/
+archive/memory-vault/
 ├── active-context.md      # Current focus (refresh often)
 ├── preferences.md         # Stable personal defaults
 ├── decisions/             # ADRs — dated, immutable once accepted

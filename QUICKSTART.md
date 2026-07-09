@@ -4,9 +4,19 @@ See **[README.md](README.md)** for the full slim bootstrap guide.
 
 **TL;DR:**
 
+**Sibling of dotfiles (recommended):**
+
 ```bash
-git clone <your-remote>/agent_bootstrap ~/Dev/agent_bootstrap
+git clone <your-remote>/agent_bootstrap ~/Dev/agent_bootstrap   # next to ~/Dev/dotfiles
 cd ~/Dev/agent_bootstrap
+./install.sh
+```
+
+**Standalone anywhere:**
+
+```bash
+git clone <your-remote>/agent_bootstrap /any/path/agent_bootstrap
+cd /any/path/agent_bootstrap
 ./install.sh
 ```
 

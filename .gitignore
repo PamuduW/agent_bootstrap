@@ -12,4 +12,4 @@ exports/
 # Materialized upstream skill trees copied into repo (never commit)
 .materialized-skills/
 
-# skills-lock.json is tracked — records installed upstream versions
+# skills-lock.json is tracked as a stub; global pins live in ~/.agents/.skill-lock.json

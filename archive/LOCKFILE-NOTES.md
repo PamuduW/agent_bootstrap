@@ -1,8 +1,10 @@
 # Skills lockfile notes (2026-07-09)
 
-## `./install.sh skills install`
+> **Historical:** The `ImportError: cannot import name 'summarize_install_results'` issue described below is **fixed** in the slim bootstrap. `./install.sh skills install` now works via the Python CLI. This document is retained for lockfile strategy and install-history context.
 
-Failed immediately with:
+## `./install.sh skills install` (historical — fixed)
+
+Previously failed immediately with:
 
 `ImportError: cannot import name 'summarize_install_results' from 'src.agent_bootstrap.skills_installer'`
 
@@ -47,6 +49,6 @@ Do **not** copy this file into `skills-lock.json` by hand — schemas differ (pr
 
 ## Follow-up
 
-- Fix `summarize_install_results` (or remove broken import from `ui.py`) so `./install.sh skills install` works.
-- Fix `bin/skills-install.sh` loop (IFS + stdin).
-- Decide whether slim bootstrap should commit a **project** lock (drop `-g` for repo-pinned installs) or document global lock as source of truth for curated `-g` installs.
+- ~~Fix `summarize_install_results` (or remove broken import from `ui.py`) so `./install.sh skills install` works.~~ **Done** (slim bootstrap).
+- Fix `bin/skills-install.sh` loop (IFS + stdin) if still relevant.
+- **Decision (current):** global lock (`~/.agents/.skill-lock.json`) is source of truth for curated `-g` installs; project `skills-lock.json` remains a stub until CI needs a committed project lock.

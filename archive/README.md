@@ -47,6 +47,29 @@ Moved after CLI/service/render surgery:
 - `src/agent_bootstrap/ui.py` — print helpers only (no interactive menus)
 - `bin/agentboot --full` — deprecated; runs minimal scaffold only
 
+## Pack → bootstrap matrix
+
+Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 rework):
+
+| v4 pack concept | Slim status | Location |
+|-----------------|-------------|----------|
+| Upstream skills manifest (`npx skills`) | **Live** | `skills.sources.yaml` |
+| Global skill lockfile | **Live** (repo stub; global pins in `~/.agents/.skill-lock.json`) | `skills-lock.json` |
+| `install.sh` / Python CLI | **Live (trimmed)** | `install.sh`, `src/agent_bootstrap/` |
+| `agentboot` scaffold | **Live** | `bin/agentboot`, `base/` |
+| Global `AGENTS.md` render | **Live** | `global/AGENTS.md`, `src/agent_bootstrap/render.py` |
+| Claude skills bridge | **Live** | `bin/claude-skills-bridge.sh` |
+| Package catalog + MCP provenance | **Archived** | `archive/catalog/`, `archive/mcp/` |
+| Workspace render + templates | **Archived** | `archive/templates/`, `archive/src/agent_bootstrap/render.py` |
+| Interactive Apply / tracked workspaces | **Archived** | `archive/src/agent_bootstrap/ui.py`, `state.py`, `discovery.py` |
+| `agentos.yaml` profiles | **Archived** | `archive/agentos.yaml` |
+| Obsidian memory vault | **Archived** | `archive/memory-vault/` |
+| Personal in-repo skills pack | **Removed** | `archive/skills-README.md` (upstream-only via manifest) |
+| Generated exports | **Archived** | `archive/exports/` |
+| Deferred AgentOS / harness phases | **Archived** | `archive/future/`, `archive/docs/` |
+| `graphify` skill source | **Disabled** | `skills.sources.yaml` (`enabled: false`) |
+| `obsidian-memory` skill source | **Disabled** | `skills.sources.yaml` (`enabled: false`) |
+
 ## Deferred use cases
 
 | Use case | Archive dependency |
@@ -56,7 +79,7 @@ Moved after CLI/service/render surgery:
 | Render all tracked workspaces | `discovery.py`, `state.py` |
 | Package catalog / import-local | `catalog/` |
 | MCP filter / render into `.cursor/mcp.json` | `mcp/`, `catalog/packages.json` |
-| Memory vault workflows | `memory-vault/` |
+| Memory vault workflows | `archive/memory-vault/` |
 | agentboot `--full` (Copilot + Cursor rules) | catalog/render coupling in archived `render.py` |
 | `agentos.yaml` profiles | `archive/agentos.yaml` |
 

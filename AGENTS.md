@@ -53,9 +53,11 @@ Archived commands (`workspace`, `all`, `interactive`, `import-local`, catalog ma
 ## Skills model
 
 - **Upstream only** — `skills.sources.yaml` → `npx skills add … -a cursor -a codex -a claude-code -a github-copilot -g`
-- **Global lock** — `~/.agents/.skill-lock.json` is authoritative for `-g` installs (repo `skills-lock.json` stays a stub)
+- **Project lock (`skills-lock.json`)** — committed stub only (`sources: []`, v1); `-g` installs do not populate it
+- **Global lock** — `~/.agents/.skill-lock.json` (v3) is authoritative for `-g` installs; do not hand-copy into the repo
+- **Future** — populate project `skills-lock.json` for CI/reproducible project-scoped installs
 - **Bridge** — `~/.agents/skills/` → `~/.claude/skills/` symlinks after install/update
-- **Templates** — `base/AGENTS.md` skill table should match enabled manifest entries (no `graphify` until upstream ships SKILL.md layout)
+- **Templates** — `base/AGENTS.md` skill table should match enabled manifest entries only; keep `graphify` and `obsidian-memory` out (both `enabled: false` in `skills.sources.yaml`)
 
 Do not vendored upstream skills into this repo.
 

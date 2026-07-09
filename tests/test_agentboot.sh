@@ -83,7 +83,7 @@ echo "stale content" > "${WORKDIR1}/CLAUDE.md"
   cd "$WORKDIR1"
   run_agentboot --force >/dev/null
 )
-assert_contains "${WORKDIR1}/AGENTS.md" "# Project" "--force overwrites AGENTS.md with template"
+assert_contains "${WORKDIR1}/AGENTS.md" "## Project" "--force overwrites AGENTS.md with template"
 assert_contains "${WORKDIR1}/CLAUDE.md" "@AGENTS.md" "--force overwrites CLAUDE.md with template"
 
 printf '\nRan %s test(s); %s failure(s).\n' "$TESTS" "$FAILURES"

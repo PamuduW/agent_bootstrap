@@ -10,20 +10,44 @@ Deferred features (catalog, MCP bundles, workspace render, memory vault, interac
 
 ## Fresh machine
 
-**Prerequisites:** Git, Python 3, Node.js (for `npx`).
+**Prerequisites:** Git, Python 3, Node.js (for `npx`). Install Python deps:
 
 ```bash
-git clone <your-remote>/agent_bootstrap ~/Dev/agent_bootstrap
+python3 -m pip install -r requirements.txt
+```
+
+### Clone paths
+
+**With dotfiles (recommended):** clone as a **sibling** of the dotfiles repo so the Agents menu finds the canonical path:
+
+```text
+parent/
+├── dotfiles/
+└── agent_bootstrap/    # e.g. ~/Dev/agent_bootstrap next to ~/Dev/dotfiles
+```
+
+```bash
+git clone <your-remote>/agent_bootstrap ~/Dev/agent_bootstrap   # sibling of dotfiles
 cd ~/Dev/agent_bootstrap
 ./install.sh
 ```
 
-Default bootstrap runs: skills install → Claude bridge → global render → doctor, and symlinks `bin/agentboot` → `~/bin/agentboot`. Ensure `~/bin` is on your PATH.
-
-`AGENT_BOOTSTRAP_HOME` is exported from the clone path (not from `.env`). Add to your shell profile if you want it in every session:
+**Standalone:** clone anywhere; `AGENT_BOOTSTRAP_HOME` derives from the clone path:
 
 ```bash
-export AGENT_BOOTSTRAP_HOME="$HOME/Dev/agent_bootstrap"
+git clone <your-remote>/agent_bootstrap /any/path/agent_bootstrap
+cd /any/path/agent_bootstrap
+./install.sh
+```
+
+When dotfiles is also installed, set `AGENT_BOOTSTRAP_ALLOW_OVERRIDE=1` only if you intentionally use a non-sibling path.
+
+Default bootstrap runs: skills install → Claude bridge → global render → doctor, and symlinks `bin/agentboot` → `~/bin/agentboot`. Ensure `~/bin` is on your PATH.
+
+`AGENT_BOOTSTRAP_HOME` is exported from the clone path (not from `.env`). With a sibling clone next to dotfiles, dotfiles sets this automatically. For standalone installs, add to your shell profile:
+
+```bash
+export AGENT_BOOTSTRAP_HOME="/any/path/agent_bootstrap"
 ```
 
 ## Skills
@@ -37,7 +61,16 @@ Curated upstreams are listed in [`skills.sources.yaml`](skills.sources.yaml). In
 ./install.sh skills doctor
 ```
 
-Global skill pins live in **`~/.agents/.skill-lock.json`** (v3 format). The repo [`skills-lock.json`](skills-lock.json) is a stub for global-scope installs — see [`archive/LOCKFILE-NOTES.md`](archive/LOCKFILE-NOTES.md).
+### Lockfile strategy
+
+| File | Role |
+| ---- | ---- |
+| [`skills-lock.json`](skills-lock.json) | **Project stub** — committed placeholder (`sources: []`, v1). Not populated by `-g` installs. |
+| `~/.agents/.skill-lock.json` | **Authoritative for global installs** — v3 per-skill pins written by `npx skills add … -g`. |
+
+Do not copy the global lock into the repo by hand (schemas differ). **Future:** populate `skills-lock.json` from the manifest for CI/reproducible project-scoped installs.
+
+See [`archive/LOCKFILE-NOTES.md`](archive/LOCKFILE-NOTES.md) for historical notes.
 
 To add a skill: add an entry under `sources` in `skills.sources.yaml`, then run `./install.sh skills install` (not `update`).
 
@@ -86,6 +119,7 @@ agent_bootstrap/
 
 ```bash
 python3 -m unittest discover -s tests
+bash tests/test_agentboot.sh
 ```
 
 ## Deferred / archived

@@ -6,7 +6,7 @@
 
 ## Current focus
 
-- Phase 7.1: scaffold memory vault in `agent_bootstrap/memory-vault/`
+- Phase 7.1: scaffold memory vault in `agent_bootstrap/archive/memory-vault/`
 - Config plane solid: `agentboot`, skills via `npx skills`, `doctor` clean
 
 ## Active repos

@@ -1,29 +1,44 @@
 # Global Agent Baseline
 
-This is the canonical machine-level baseline for all agent surfaces managed by
-`agent_bootstrap`.
+Machine-level baseline for all agent surfaces managed by `agent_bootstrap`.
+Rendered to `~/.codex/AGENTS.md` and `~/.claude/*` — keep this file slim and
+durable.
 
 ## Working Agreement
 
-- Follow the repo-local `AGENTS.md` when present; it refines this baseline.
-- Prefer CLI-friendly workflows and idempotent commands.
-- Treat generated compatibility files as read-only outputs derived from
-  canonical `AGENTS.md` files.
+- Follow repo-local `AGENTS.md` when present; it refines this baseline.
+- Prefer CLI-friendly, idempotent commands (`./install.sh`, `agentboot`).
+- Treat rendered agent-home files as read-only outputs derived from canonical
+  `AGENTS.md` sources.
 - Never auto-commit or auto-push changes.
-- Record durable instruction changes in the audit log when updating canonical
-  `AGENTS.md` files through automation.
+
+## Skills Discipline
+
+- Curated upstreams live in `skills.sources.yaml`; install with
+  `./install.sh skills install` or `update`.
+- Global pins are authoritative in `~/.agents/.skill-lock.json`.
+- Pick 2–4 skills per session by phase — do not load every skill at once.
+- Repo skill tables in `base/AGENTS.md` should match enabled manifest entries.
 
 ## Surface Goals
 
-- Codex CLI: consume the shared baseline and repo overlays consistently.
-- Cursor IDE/CLI: receive generated rules and MCP configs from the same source
-  of truth.
-- Copilot: receive generated repo instructions from the same merged policy.
-- Claude Code: receive generated compatibility files from the same merged
-  policy.
+- **Codex CLI** — consume this baseline plus repo overlays.
+- **Claude Code** — read generated `~/.claude/AGENTS.md` / `CLAUDE.md` and
+  repo `CLAUDE.md` pointers.
+- **Cursor / Copilot** — use globally installed skills and repo `AGENTS.md`
+  overlays scaffolded by `agentboot`.
 
-## Plugin Policy
+## Project / Repo Conventions
 
-- Use curated canonical packages instead of raw mirrored plugin content.
-- Keep discovery, selection, and deployment state separate.
-- Resolve MCP ownership before rendering outputs.
+- `AGENT_BOOTSTRAP_HOME` points at the `agent_bootstrap` clone (set by
+  `install.sh`).
+- Per-repo policy: scaffold with `agentboot`, then edit the `## Project`
+  section in repo `AGENTS.md`.
+- Archived workspace render, catalog, and MCP control-plane features live under
+  `archive/` — do not assume they are active in the slim bootstrap path.
+
+## Guardrails
+
+- `install.sh` is the primary interface for bootstrap operations.
+- Do not restore archived modules without re-wiring imports.
+- Never run uninstall flows without explicit user request.

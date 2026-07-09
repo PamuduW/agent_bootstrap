@@ -53,8 +53,33 @@ sources:
     skills:
       - literature-review
 
-  # TODO: add Akindu23/my-agent-skills source when skill folder names are verified
-  # (council, grilling, recursive-decomposition, yagni, document, find-skills, etc.)
+  - id: akindu-agent-skills
+    repo: Akindu23/my-agent-skills
+    skills:
+      - council
+      - recursive-decomposition
+      - grilling
+      - yagni
+      - document
+      - karpathy-guidelines
+      - best-practices-research
+      - architecture-decision-records
+      - domain-modeling
+      - codebase-design
+      - codebase-onboarding
+      - improve-codebase-architecture
+      - decision-mapping
+      - implement-plan
+      - prototype
+      - to-prd
+      - to-issues
+      - triage
+      - setup-matt-pocock-skills
+      - tdd
+      - diagnosing-bugs
+      - explain-code
+      - handoff
+      - pitstop
 
   - id: graphify
     repo: safishamsi/graphify

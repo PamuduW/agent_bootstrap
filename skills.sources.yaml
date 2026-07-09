@@ -56,11 +56,13 @@ sources:
   - id: graphify
     repo: safishamsi/graphify
     skills:
-      - graphify  # verify name in repo before first install
+      - graphify
+    enabled: false  # upstream has no Agent Skills SKILL.md layout yet
 
   - id: obsidian-memory
     repo: AdamTylerLynch/obsidian-agent-memory-skills
-    skills: []  # populate after verifying skill folder names in upstream repo
+    skills: []
+    enabled: false
 
   - id: personal-pack
     repo: null  # set to <user>/my-agent-skills fork after format verification

@@ -16,6 +16,19 @@ info() {
   printf '[info] %s\n' "$*"
 }
 
+warn() {
+  printf '[warn] %s\n' "$*" >&2
+}
+
+bootstrap_quiet() {
+  [[ -n "${AGENT_BOOTSTRAP_TUI:-}${AGENT_BOOTSTRAP_QUIET:-}" ]]
+}
+
+log_info() {
+  bootstrap_quiet && return 0
+  info "$@"
+}
+
 check_deps() {
   if ! command -v python3 >/dev/null 2>&1; then
     die "python3 is required"
@@ -34,6 +47,38 @@ run_cli() {
 
 cli_ready() {
   python3 -m src.agent_bootstrap.cli --root "$BOOTSTRAP_DIR" status >/dev/null 2>&1
+}
+
+run_global_render() {
+  if cli_ready; then
+    run_cli global
+    return $?
+  fi
+  python3 - <<'PY'
+from pathlib import Path
+from src.agent_bootstrap.paths import default_paths
+from src.agent_bootstrap.service import BootstrapService
+
+BootstrapService(default_paths(Path(".").resolve())).render_global()
+PY
+}
+
+run_slim_doctor() {
+  if cli_ready; then
+    run_cli doctor
+    return $?
+  fi
+  python3 - <<'PY'
+import sys
+from pathlib import Path
+from src.agent_bootstrap.paths import default_paths
+from src.agent_bootstrap.service import BootstrapService
+from src.agent_bootstrap.ui import print_doctor_summary
+
+paths = default_paths(Path(".").resolve())
+service = BootstrapService(paths)
+sys.exit(print_doctor_summary(service.doctor_issues() + service.skills_doctor_issues()))
+PY
 }
 
 cli_supports_skills() {
@@ -99,25 +144,29 @@ link_agentboot() {
 
   mkdir -p "${HOME}/bin"
   ln -sf "$source" "$target"
-  info "linked ${target} -> ${source}"
+  log_info "linked ${target} -> ${source}"
 }
 
 run_bootstrap() {
   check_deps
-  info "bootstrapping agent_bootstrap from ${BOOTSTRAP_DIR}"
+  log_info "bootstrapping agent_bootstrap from ${BOOTSTRAP_DIR}"
 
   local rc=0
   if cli_supports_bootstrap; then
     run_cli bootstrap || rc=$?
   else
+    if ! cli_ready; then
+      warn "slim CLI unavailable — using bash fallback (run: git checkout -- src/agent_bootstrap/cli.py)"
+    fi
+    export AGENT_BOOTSTRAP_QUIET="${AGENT_BOOTSTRAP_QUIET:-${AGENT_BOOTSTRAP_TUI:-}}"
     run_skills install || rc=$?
     run_claude_bridge
-    run_cli global || rc=$?
-    run_cli doctor || true
+    run_global_render || rc=$?
+    run_slim_doctor || true
   fi
 
   link_agentboot
-  info "bootstrap complete"
+  log_info "bootstrap complete"
   return "$rc"
 }
 
@@ -186,7 +235,11 @@ main() {
       if [[ "$cmd" == "global" ]]; then
         check_deps
       fi
-      run_cli "$cmd" "${@:2}"
+      case "$cmd" in
+      global) run_global_render "${@:2}" ;;
+      doctor) run_slim_doctor "${@:2}" ;;
+      status) run_cli status "${@:2}" ;;
+      esac
       ;;
     link-agentboot)
       link_agentboot

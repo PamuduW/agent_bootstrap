@@ -76,4 +76,6 @@ fi
 if (( skipped > 0 )); then
   msg+=", ${skipped} skipped"
 fi
-info "Claude skills bridge complete (${msg})"
+if [[ -z "${AGENT_BOOTSTRAP_TUI:-}${AGENT_BOOTSTRAP_QUIET:-}" ]]; then
+  info "Claude skills bridge complete (${msg})"
+fi

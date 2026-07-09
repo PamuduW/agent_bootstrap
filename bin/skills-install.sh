@@ -82,6 +82,15 @@ install_source() {
     skill_flags+=(--skill "$skill")
   done
 
+  if [[ -n "${AGENT_BOOTSTRAP_QUIET:-}${AGENT_BOOTSTRAP_TUI:-}" ]]; then
+    if npx skills add "$repo" "${skill_flags[@]}" "${AGENT_FLAGS[@]}" "${GLOBAL_FLAGS[@]}" </dev/null >/dev/null 2>&1; then
+      info "installed skills from ${repo}"
+    else
+      die "failed installing skills from ${repo}"
+    fi
+    return 0
+  fi
+
   info "installing skills from ${repo}"
   npx skills add "$repo" "${skill_flags[@]}" "${AGENT_FLAGS[@]}" "${GLOBAL_FLAGS[@]}" </dev/null
 }
@@ -110,8 +119,12 @@ update_all() {
   require_npx
 
   if npx skills update --help >/dev/null 2>&1; then
-    info "running npx skills update -g"
-    npx skills update -g -y </dev/null
+    if [[ -n "${AGENT_BOOTSTRAP_QUIET:-}${AGENT_BOOTSTRAP_TUI:-}" ]]; then
+      npx skills update -g -y </dev/null >/dev/null 2>&1
+    else
+      info "running npx skills update -g"
+      npx skills update -g -y </dev/null
+    fi
     return 0
   fi
 

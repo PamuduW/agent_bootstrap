@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -32,7 +33,10 @@ def main() -> int:
         if command in ARCHIVED_COMMANDS:
             return _archived_command_error(command)
         if command == "status":
-            print_status(service)
+            if getattr(args, "status_json", False):
+                print_status_json(service)
+            else:
+                print_status(service)
             return 0
         if command == "global":
             service.render_global()
@@ -55,14 +59,18 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("bootstrap", help="Run fresh-machine bootstrap flow")
-    subparsers.add_parser("status", help="Show skills and global render status")
+    status_parser = subparsers.add_parser("status", help="Show skills and global render status")
+    status_parser.add_argument("--json", action="store_true", dest="status_json")
     subparsers.add_parser("global", help="Render global outputs")
     subparsers.add_parser("doctor", help="Validate skills and global baseline")
 
     skills = subparsers.add_parser("skills", help="Install and manage curated skills")
     skills_sub = skills.add_subparsers(dest="skills_command", required=True)
     skills_sub.add_parser("install", help="Install skills from skills.sources.yaml")
-    skills_sub.add_parser("update", help="Update skills from skills.sources.yaml")
+    skills_sub.add_parser(
+        "update",
+        help="Refresh globally installed skills from ~/.agents/.skill-lock.json",
+    )
     skills_sub.add_parser("list", help="List installed skills under ~/.agents/skills")
     skills_sub.add_parser("doctor", help="Validate skills sources and tooling")
 
@@ -97,7 +105,8 @@ def handle_skills_command(service: BootstrapService, skills_command: str) -> int
             print(f"  Error: {error}")
             return 1
         print_header("Skills update", "agent_bootstrap › skills")
-        print("  Skills refreshed from upstream lockfile.")
+        print("  Refreshed global skills from ~/.agents/.skill-lock.json.")
+        print("  Claude bridge and Codex symlinks updated.")
         return 0
     if skills_command == "list":
         skills = service.list_skills()
@@ -137,7 +146,16 @@ def print_status(service: BootstrapService) -> None:
         installed_skills=int(summary["installed_skills"]),
         global_agents_exists=bool(summary["global_agents_exists"]),
         skills_sources_exists=bool(summary["skills_sources_exists"]),
+        enabled_sources=int(summary["enabled_sources"]),
+        global_lock_exists=bool(summary["global_lock_exists"]),
+        global_lock_skills=int(summary["global_lock_skills"]),
+        claude_bridge_links=int(summary["claude_bridge_links"]),
+        doctor_issue_count=int(summary["doctor_issue_count"]),
     )
+
+
+def print_status_json(service: BootstrapService) -> None:
+    print(json.dumps(service.status_summary(), indent=2, sort_keys=True))
 
 
 def print_doctor(service: BootstrapService) -> int:

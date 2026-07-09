@@ -87,16 +87,46 @@ def print_status_summary(
     installed_skills: int,
     global_agents_exists: bool,
     skills_sources_exists: bool,
+    enabled_sources: int = 0,
+    global_lock_exists: bool = False,
+    global_lock_skills: int = 0,
+    claude_bridge_links: int = 0,
+    doctor_issue_count: int = 0,
 ) -> None:
     print_header("Status", "agent_bootstrap")
-    print_table(
-        [
-            ("Installed skills", str(installed_skills), "ok" if installed_skills else "check"),
-            ("Global AGENTS.md", "global/AGENTS.md", "ok" if global_agents_exists else "missing"),
-            ("Skills manifest", "skills.sources.yaml", "ok" if skills_sources_exists else "missing"),
-        ],
-        headers=("check", "detail", "result"),
-    )
+    manifest_detail = "skills.sources.yaml"
+    if enabled_sources >= 0 and skills_sources_exists:
+        manifest_detail = f"{enabled_sources} enabled source(s)"
+    elif enabled_sources < 0:
+        manifest_detail = "skills.sources.yaml (parse error)"
+
+    lock_detail = "~/.agents/.skill-lock.json"
+    if global_lock_exists and global_lock_skills >= 0:
+        lock_detail = f"~/.agents/.skill-lock.json ({global_lock_skills} pinned)"
+    elif global_lock_exists:
+        lock_detail = "~/.agents/.skill-lock.json (unreadable)"
+
+    rows: list[tuple[str, str, str]] = [
+        ("Installed skills", str(installed_skills), "ok" if installed_skills else "check"),
+        ("Global AGENTS.md", "global/AGENTS.md", "ok" if global_agents_exists else "missing"),
+        ("Skills manifest", manifest_detail, "ok" if skills_sources_exists else "missing"),
+        (
+            "Global skill lock",
+            lock_detail,
+            "ok" if global_lock_exists and global_lock_skills != 0 else "check",
+        ),
+        (
+            "Claude bridge",
+            f"{claude_bridge_links} symlink(s)" if claude_bridge_links else "none",
+            "ok" if claude_bridge_links else "check",
+        ),
+        (
+            "Doctor",
+            "no issues" if doctor_issue_count == 0 else f"{doctor_issue_count} issue(s)",
+            "ok" if doctor_issue_count == 0 else "check",
+        ),
+    ]
+    print_table(rows, headers=("check", "detail", "result"))
 
 
 def print_doctor_summary(issues: list) -> int:

@@ -7,7 +7,7 @@ This repo is the **slim agent bootstrap** — skills install via `npx`, `agentbo
 ```
 install.sh             Bootstrap entrypoint
 skills.sources.yaml    Curated upstream skill sources (no in-repo skill pack)
-skills-lock.json       Vercel skills lockfile (commit after first install)
+skills-lock.json       Stub; global pins live in ~/.agents/.skill-lock.json
 bin/                   agentboot, skills-install.sh, claude-skills-bridge.sh
 base/                  agentboot templates (AGENTS.md, CLAUDE.md)
 global/AGENTS.md       Machine-level baseline (authored)
@@ -53,7 +53,7 @@ Archived commands (`workspace`, `all`, `interactive`, `import-local`, catalog ma
 ## Skills model
 
 - **Upstream only** — `skills.sources.yaml` → `npx skills add … -a cursor -a codex -a claude-code -a github-copilot -g`
-- **Lockfile** — `skills-lock.json` (commit after install; stub until first successful `skills install`)
+- **Global lock** — `~/.agents/.skill-lock.json` is authoritative for `-g` installs (repo `skills-lock.json` stays a stub)
 - **Bridge** — `~/.agents/skills/` → `~/.claude/skills/` symlinks after install/update
 - **Templates** — `base/AGENTS.md` skill table should match enabled manifest entries (no `graphify` until upstream ships SKILL.md layout)
 

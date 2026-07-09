@@ -142,8 +142,8 @@ Usage: ./install.sh [command] [args]
 Commands:
   (default)              Full bootstrap: skills install, Claude bridge, render global, doctor
   bootstrap              Same as default
-  skills install         Install curated upstream skills
-  skills update          Refresh skills from upstreams
+  skills install         Install curated upstream skills from skills.sources.yaml
+  skills update          Refresh global skills from ~/.agents/.skill-lock.json
   skills list            List installed skills
   skills doctor          Validate skills installer prerequisites
   doctor                 Run slim doctor (skills + global baseline)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from .claude_bridge import bridge_claude_skills as link_claude_skills
@@ -12,6 +13,7 @@ from .skills_installer import (
     list_installed_skills,
     update_skills as run_skills_update,
 )
+from .skills_sources import load_skills_sources
 from .ui import print_bridge_summary, print_doctor_summary, print_header, print_skills_report
 
 
@@ -51,6 +53,7 @@ class BootstrapService:
     def update_skills(self) -> None:
         run_skills_update(self.paths)
         self.apply_claude_bridge()
+        self.render_global()
 
     def list_skills(self) -> list[str]:
         return list_installed_skills(self.paths)
@@ -82,8 +85,50 @@ class BootstrapService:
         return issues
 
     def status_summary(self) -> dict[str, object]:
+        enabled_sources = 0
+        if self.paths.skills_sources_file.exists():
+            try:
+                config = load_skills_sources(self.paths.skills_sources_file)
+                enabled_sources = sum(
+                    1
+                    for source in config.sources
+                    if source.enabled and source.repo and source.skills
+                )
+            except ValueError:
+                enabled_sources = -1
+
+        global_lock_skills = self._count_global_lock_skills()
+        claude_bridge_links = 0
+        if self.paths.claude_skills_home.is_dir():
+            claude_bridge_links = sum(
+                1 for entry in self.paths.claude_skills_home.iterdir() if entry.is_symlink()
+            )
+
+        doctor_issues = self.doctor_issues() + self.skills_doctor_issues()
+
         return {
             "installed_skills": len(self.list_skills()),
+            "enabled_sources": enabled_sources,
             "global_agents_exists": self.paths.global_agents.exists(),
             "skills_sources_exists": self.paths.skills_sources_file.exists(),
+            "global_lock_exists": self.paths.global_skill_lock.exists(),
+            "global_lock_skills": global_lock_skills,
+            "claude_bridge_links": claude_bridge_links,
+            "doctor_issue_count": len(doctor_issues),
         }
+
+    @staticmethod
+    def _count_global_lock_skills() -> int:
+        lock_path = Path.home() / ".agents" / ".skill-lock.json"
+        if not lock_path.exists():
+            return 0
+        try:
+            data = json.loads(lock_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return -1
+        skills = data.get("skills")
+        if isinstance(skills, dict):
+            return len(skills)
+        if isinstance(skills, list):
+            return len(skills)
+        return 0

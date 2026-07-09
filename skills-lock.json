@@ -1,5 +1,5 @@
 {
-  "_comment": "Stub lockfile. Regenerated on first 'skills install' via npx skills. Commit the real lockfile after install.",
+  "_comment": "Stub only. Global installs (-g) pin versions in ~/.agents/.skill-lock.json instead. See archive/LOCKFILE-NOTES.md.",
   "version": 1,
   "sources": []
 }

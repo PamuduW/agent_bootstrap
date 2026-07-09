@@ -4,7 +4,6 @@ set -euo pipefail
 
 BOOTSTRAP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCES_FILE="${BOOTSTRAP_DIR}/skills.sources.yaml"
-SKILLS_DIR="${BOOTSTRAP_DIR}/skills"
 
 AGENT_FLAGS=(-a cursor -a codex -a claude-code -a github-copilot)
 GLOBAL_FLAGS=(-g -y)
@@ -87,20 +86,6 @@ install_source() {
   npx skills add "$repo" "${skill_flags[@]}" "${AGENT_FLAGS[@]}" "${GLOBAL_FLAGS[@]}" </dev/null
 }
 
-install_local_pack() {
-  if [[ ! -d "$SKILLS_DIR" ]]; then
-    return 0
-  fi
-
-  if ! find "$SKILLS_DIR" -mindepth 2 -maxdepth 2 -name 'SKILL.md' -print -quit | grep -q .; then
-    info "no personal skills in ${SKILLS_DIR}; skipping local pack"
-    return 0
-  fi
-
-  info "installing personal skills pack from ${SKILLS_DIR}"
-  npx skills add "$SKILLS_DIR" "${AGENT_FLAGS[@]}" "${GLOBAL_FLAGS[@]}" </dev/null
-}
-
 install_all() {
   require_npx
 
@@ -119,17 +104,14 @@ install_all() {
     fi
     install_source "$repo" "${skills[@]}"
   done < <(parse_sources)
-
-  install_local_pack
 }
 
 update_all() {
   require_npx
 
   if npx skills update --help >/dev/null 2>&1; then
-    info "running npx skills update"
-    npx skills update -y </dev/null
-    install_local_pack
+    info "running npx skills update -g"
+    npx skills update -g -y </dev/null
     return 0
   fi
 
@@ -216,8 +198,8 @@ usage() {
 Usage: $(basename "$0") <command>
 
 Commands:
-  install   Install curated upstream skills and local personal pack
-  update    Refresh installed skills from upstreams
+  install   Install curated upstream skills from skills.sources.yaml
+  update    Refresh globally installed skills from ~/.agents/.skill-lock.json
   list      Show configured skill sources
   doctor    Validate installer prerequisites
 EOF

@@ -3,9 +3,8 @@
 #   npx skills add <repo> --skill <name> ... \
 #     -a cursor -a codex -a claude-code -a github-copilot -g -y
 #
-# Lockfile: skills-lock.json is a stub until the first successful
-# `./install.sh skills install` (or `npx skills` run). Commit the regenerated
-# lockfile after install — do not hand-edit pins.
+# Lockfile: global installs (-g) pin versions in ~/.agents/.skill-lock.json.
+# This repo file stays a stub unless you switch to project-scoped installs.
 
 version: 1
 agents:

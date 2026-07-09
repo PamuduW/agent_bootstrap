@@ -87,6 +87,9 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         self.assertEqual(2, summary["installed_skills"])
         self.assertTrue(summary["global_agents_exists"])
         self.assertTrue(summary["skills_sources_exists"])
+        self.assertIn("enabled_sources", summary)
+        self.assertIn("global_lock_skills", summary)
+        self.assertIn("doctor_issue_count", summary)
 
 
 if __name__ == "__main__":

@@ -31,6 +31,10 @@ class BootstrapPaths:
     def claude_skills_home(self) -> Path:
         return self.claude_home / "skills"
 
+    @property
+    def global_skill_lock(self) -> Path:
+        return Path.home() / ".agents" / ".skill-lock.json"
+
 
 def default_paths(root: Path) -> BootstrapPaths:
     home = Path.home()

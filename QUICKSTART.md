@@ -42,13 +42,19 @@ Per-repo behavior belongs in each project's `AGENTS.md`, not in generated compat
 
 ## 4. Run the bootstrap installer
 
+Default (full bootstrap — skills install, Claude bridge, render global, doctor):
+
 ```bash
 ./install.sh
 ```
 
-The interactive menu covers package enablement, workspace tracking, apply/render, status, and doctor.
+For the interactive control-plane menu (package enablement, workspace tracking, apply/render, status, doctor):
 
-For a scripted first run:
+```bash
+./install.sh interactive
+```
+
+For a scripted first run without the menu:
 
 ```bash
 ./install.sh skills install   # install curated upstream + personal skills
@@ -63,7 +69,7 @@ For a scripted first run:
 |------|------|
 | [`skills.sources.yaml`](skills.sources.yaml) | Upstream repos and skill names to install |
 | [`skills/`](skills/) | Your personal authored skills (optional) |
-| [`skills-lock.json`](skills-lock.json) | Pinned versions — commit after install |
+| [`skills-lock.json`](skills-lock.json) | Stub until first `skills install`; commit regenerated lockfile after install |
 
 Each upstream entry installs globally to Cursor, Codex, Claude Code, and GitHub Copilot:
 

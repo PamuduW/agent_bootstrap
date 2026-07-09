@@ -78,7 +78,7 @@ npx skills add <repo> --skill <name> \
 
 ### Lockfile
 
-[`skills-lock.json`](skills-lock.json) is the Vercel skills lockfile — **commit it**. It records pinned upstream versions for reproducible installs. Materialized skill trees under agent home directories are gitignored.
+[`skills-lock.json`](skills-lock.json) is the Vercel skills lockfile — **commit it**. It records pinned upstream versions for reproducible installs. The checked-in file is a stub until the first successful `./install.sh skills install`; regenerate and commit the real lockfile after that run (do not invent pins by hand). Materialized skill trees under agent home directories are gitignored.
 
 Refresh all sources:
 
@@ -96,7 +96,8 @@ Refresh all sources:
 3. Dispatches to the Python control plane and skills installer
 
 ```bash
-./install.sh                  # interactive menu
+./install.sh                  # full bootstrap (default): skills install, Claude bridge, render global, doctor
+./install.sh interactive      # interactive control-plane menu
 ./install.sh status           # show managed/detected/enabled counts
 ./install.sh global           # render global Codex/Claude outputs
 ./install.sh workspace <path> # track a git repo and render workspace outputs
@@ -189,9 +190,13 @@ Human-owned Obsidian-compatible memory in [`memory-vault/`](memory-vault/):
 | `decisions/` | ADR-style decision log |
 | `lessons/` | Durable lessons learned |
 
-Agents may draft entries; you approve before they become canonical. See [`docs/harness-architecture.md`](../docs/harness-architecture.md) for the three-plane model (config / work / control) and how the vault fits the config plane.
+Agents may draft entries; you approve before they become canonical. See [`docs/harness-architecture.md`](docs/harness-architecture.md) for the three-plane model (config / work / control) and how the vault fits the config plane.
 
 Phases 7.2–7.4 (opencode, Hermes/Proxmox, graph upgrades) are deferred — see [`future/README.md`](future/README.md).
+
+## MCP servers
+
+[`mcp/mcp.json`](mcp/mcp.json) defines MCP server entries rendered into workspace outputs. AWS IaC and pricing servers use `uvx` with `@latest` package pins — intentional rolling updates; expect occasional breakage until versions are pinned explicitly.
 
 ## Configuration
 

@@ -11,6 +11,7 @@ from pathlib import Path
 from .paths import BootstrapPaths, default_paths
 from .models import PackageRow
 from .service import BootstrapService
+from .ui import print_doctor_summary, print_header, print_skills_report, print_status_summary
 
 BOLD = "\033[1m"
 DIM = "\033[2m"
@@ -104,10 +105,24 @@ def build_parser() -> argparse.ArgumentParser:
 
 def handle_skills_command(service: BootstrapService, skills_command: str) -> int:
     if skills_command == "install":
-        service.install_skills()
-        return 0
+        try:
+            results = service.install_skills()
+            skills_rc = print_skills_report(results, title="Skills install")
+            service.apply_claude_bridge()
+        except Exception as error:  # noqa: BLE001
+            print_header("Skills install", "agent_bootstrap › skills")
+            print(f"  Error: {error}")
+            return 1
+        return skills_rc
     if skills_command == "update":
-        service.update_skills()
+        try:
+            service.update_skills()
+        except Exception as error:  # noqa: BLE001
+            print_header("Skills update", "agent_bootstrap › skills")
+            print(f"  Error: {error}")
+            return 1
+        print_header("Skills update", "agent_bootstrap › skills")
+        print("  Skills refreshed from upstream lockfile.")
         return 0
     if skills_command == "list":
         skills = service.list_skills()
@@ -124,9 +139,9 @@ def handle_skills_command(service: BootstrapService, skills_command: str) -> int
 
 
 def run_bootstrap_command(service: BootstrapService, paths: BootstrapPaths) -> int:
-    exit_code = service.run_bootstrap()
+    rc = service.run_bootstrap()
     print(f"AGENT_BOOTSTRAP_HOME={paths.root.resolve()}")
-    return exit_code
+    return rc
 
 
 def print_skills_doctor(service: BootstrapService) -> int:
@@ -438,11 +453,12 @@ def print_status(service: BootstrapService) -> None:
     managed = sum(1 for row in overview.package_rows if row.managed)
     detected = sum(1 for row in overview.package_rows if row.detected_local or row.detected_repo)
     enabled = sum(1 for row in overview.package_rows if row.enabled)
-    print("\n=== Status ===")
-    print(f"Managed packages: {managed}")
-    print(f"Detected packages: {detected}")
-    print(f"Enabled packages: {enabled}")
-    print(f"Tracked workspaces: {len(service.state.tracked_workspaces)}")
+    print_status_summary(
+        managed=managed,
+        detected=detected,
+        enabled=enabled,
+        tracked_workspaces=len(service.state.tracked_workspaces),
+    )
 
 
 def run_doctor_screen(service: BootstrapService) -> None:
@@ -477,15 +493,7 @@ def run_doctor_screen(service: BootstrapService) -> None:
 
 
 def print_doctor(service: BootstrapService) -> int:
-    issues = service.doctor_issues()
-    print("\n=== Doctor ===")
-    if not issues:
-        print("No issues found.")
-        return 0
-    print(f"Found {len(issues)} issue(s):")
-    for issue in issues:
-        print(f"- [{issue.level.upper()}] {issue.scope}: {issue.message}")
-    return 1
+    return print_doctor_summary(service.doctor_issues())
 
 
 def apply_all_under(service: BootstrapService, parent: Path) -> None:

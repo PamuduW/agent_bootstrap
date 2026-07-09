@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 
 from .catalog import load_catalog, save_catalog
-from .claude_bridge import bridge_claude_skills
+from .claude_bridge import bridge_claude_skills as link_claude_skills
 from .discovery import cache_version_dir, merge_discovery, scan_cursor_cache, scan_managed_packages
 from .models import ArtifactSummary, DoctorIssue, Overview, PackageCatalogEntry, PackageRow
 from .paths import BootstrapPaths
@@ -169,20 +169,45 @@ class BootstrapService:
         for workspace in self.state.tracked_workspaces:
             self.render_workspace(Path(workspace))
 
-    def install_skills(self) -> None:
-        run_skills_install(self.paths)
-        bridge_claude_skills(
+    def install_skills(self) -> list:
+        results = run_skills_install(self.paths)
+        append_audit(self.paths.audit_log, "skills-install", str(self.paths.skills_sources_file))
+        return results
+
+    def apply_claude_bridge(self) -> None:
+        bridge = link_claude_skills(
             agents_home=self.paths.agents_skills_home,
             claude_home=self.paths.claude_skills_home,
         )
+        self._print_bridge_summary(bridge)
+
+    def _print_bridge_summary(self, bridge) -> None:
+        from .ui import print_bridge_summary
+
+        already = sum(1 for action in bridge.actions if action.action == "already_linked")
+        updated = sum(1 for action in bridge.actions if action.action == "updated")
+        linked = sum(1 for action in bridge.actions if action.action == "linked")
+        skipped = sum(1 for action in bridge.actions if action.action == "skip_existing")
+        print_bridge_summary(linked=already + linked, skipped=skipped, updated=updated)
+
+    def run_bootstrap(self) -> int:
+        from .ui import print_doctor_summary, print_header, print_skills_report
+
+        print_header("Bootstrap", str(self.paths.root))
+        results = run_skills_install(self.paths)
+        skills_rc = print_skills_report(results, title="Skills install")
+        self.apply_claude_bridge()
         append_audit(self.paths.audit_log, "skills-install", str(self.paths.skills_sources_file))
+        self.render_global()
+        issues = self.doctor_issues() + self.skills_doctor_issues()
+        doctor_rc = print_doctor_summary(issues)
+        if skills_rc != 0:
+            return skills_rc
+        return doctor_rc
 
     def update_skills(self) -> None:
         run_skills_update(self.paths)
-        bridge_claude_skills(
-            agents_home=self.paths.agents_skills_home,
-            claude_home=self.paths.claude_skills_home,
-        )
+        self.apply_claude_bridge()
         append_audit(self.paths.audit_log, "skills-update", str(self.paths.skills_sources_file))
 
     def list_skills(self) -> list[str]:
@@ -190,12 +215,6 @@ class BootstrapService:
 
     def skills_doctor_issues(self) -> list[DoctorIssue]:
         return doctor_skills(self.paths)
-
-    def run_bootstrap(self) -> int:
-        self.install_skills()
-        self.render_global()
-        issues = self.doctor_issues() + self.skills_doctor_issues()
-        return 0 if not issues else 1
 
     def doctor_issues(self) -> list[DoctorIssue]:
         issues: list[DoctorIssue] = []

@@ -106,19 +106,19 @@ run_bootstrap() {
   check_deps
   info "bootstrapping agent_bootstrap from ${BOOTSTRAP_DIR}"
 
-  run_skills install
-  run_claude_bridge
-
+  local rc=0
   if cli_supports_bootstrap; then
-    run_cli bootstrap
+    run_cli bootstrap || rc=$?
   else
-    run_cli global
+    run_skills install || rc=$?
+    run_claude_bridge
+    run_cli global || rc=$?
+    run_cli doctor || true
   fi
 
-  run_cli doctor || true
   link_agentboot
-  printf '\nAGENT_BOOTSTRAP_HOME=%s\n' "$AGENT_BOOTSTRAP_HOME"
   info "bootstrap complete"
+  return "$rc"
 }
 
 map_legacy_flags() {

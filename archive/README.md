@@ -2,7 +2,10 @@
 
 This directory holds **pre-slim `agent_bootstrap` assets** moved during the 2026-07-09 rework. It is **not part of the runtime install path** — `./install.sh`, `npx skills`, `bin/agentboot`, and slim bootstrap flows do not read from here.
 
-Restore from this folder if you need a deferred capability. Git history also preserves pre-move paths.
+**Canonical deferred map:** [stuff.md](./stuff.md)  
+**Docs-only policy (2026-07-10):** Python modules and tests were removed from `archive/`; recover them from **git history** when restoring. Config (JSON/YAML) and markdown stay here.
+
+Restore from this folder for **design and config**; restore **code** from git. See [stuff.md § If you restore](./stuff.md#if-you-restore-a-deferred-feature).
 
 ## Pre-slim snapshot
 
@@ -34,12 +37,13 @@ Moved after CLI/service/render surgery:
 | `catalog/` | `archive/catalog/` | Package catalog + MCP key provenance |
 | `mcp/` | `archive/mcp/` | `mcp.json` for rendered MCP bundles |
 | `.env.example` | `archive/.env.example` | Optional MCP-related env vars |
-| `src/agent_bootstrap/discovery.py` | `archive/src/agent_bootstrap/discovery.py` | Workspace/package discovery |
-| `src/agent_bootstrap/catalog.py` | `archive/src/agent_bootstrap/catalog.py` | Catalog load/filter |
-| `src/agent_bootstrap/state.py` | `archive/src/agent_bootstrap/state.py` | Tracked workspaces + audit log |
-| `src/agent_bootstrap/ui.py` (full) | `archive/src/agent_bootstrap/ui.py` | Interactive Apply menus |
-| `src/agent_bootstrap/render.py` (full) | `archive/src/agent_bootstrap/render.py` | Includes `render_workspace_outputs`, MCP filter |
-| `tests/test_bootstrap_engine.py` (full) | `archive/tests/test_bootstrap_engine.py` | Catalog/workspace render tests |
+| `src/agent_bootstrap/discovery.py` | *(removed 2026-07-10)* | Workspace/package discovery — **git history** |
+| `src/agent_bootstrap/catalog.py` | *(removed 2026-07-10)* | Catalog load/filter — **git history** |
+| `src/agent_bootstrap/state.py` | *(removed 2026-07-10)* | Tracked workspaces + audit log — **git history** |
+| `src/agent_bootstrap/ui.py` (full) | *(removed 2026-07-10)* | Interactive Apply menus — **git history** |
+| `src/agent_bootstrap/render.py` (full) | *(removed 2026-07-10)* | Workspace render + MCP filter — **git history** |
+| `tests/test_bootstrap_engine.py` (full) | *(removed 2026-07-10)* | Catalog/workspace tests — **git history** |
+| `exports/` | *(removed 2026-07-10)* | Was empty generated-output placeholder |
 
 **Slim replacements at repo root:**
 
@@ -60,27 +64,27 @@ Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 
 | Global `AGENTS.md` render | **Live** | `global/AGENTS.md`, `src/render.py` |
 | Claude skills bridge | **Live** | `bin/claude-skills-bridge.sh` |
 | Package catalog + MCP provenance | **Archived** | `archive/catalog/`, `archive/mcp/` |
-| Workspace render + templates | **Archived** | `archive/templates/`, `archive/src/agent_bootstrap/render.py` |
-| Interactive Apply / tracked workspaces | **Archived** | `archive/src/agent_bootstrap/ui.py`, `state.py`, `discovery.py` |
+| Workspace render + templates | **Archived** | `archive/templates/`; render code in **git** |
+| Interactive Apply / tracked workspaces | **Archived** | ui/state/discovery in **git** |
 | `agentos.yaml` profiles | **Archived** | `archive/agentos.yaml` |
 | Obsidian memory vault | **Archived** | `archive/memory-vault/` |
 | Personal in-repo skills pack | **Removed** | `archive/skills-README.md` (upstream-only via manifest) |
-| Generated exports | **Archived** | `archive/exports/` |
+| Generated exports | **Removed** | Was gitignored placeholder; not kept |
 | Deferred AgentOS / harness phases | **Archived** | `archive/future/`, `archive/docs/` |
 | `graphify` skill source | **Disabled** | `skills.sources.yaml` (`enabled: false`) |
 | `obsidian-memory` skill source | **Disabled** | `skills.sources.yaml` (`enabled: false`) |
 
 ## Deferred use cases
 
-| Use case | Archive dependency |
-|----------|-------------------|
-| Full bootstrap / interactive Apply | `ui.py`, `state.py`, restore CLI commands |
-| Workspace render | `render_workspace_outputs`, `templates/` |
-| Render all tracked workspaces | `discovery.py`, `state.py` |
-| Package catalog / import-local | `catalog/` |
-| MCP filter / render into `.cursor/mcp.json` | `mcp/`, `catalog/packages.json` |
+| Use case | Archive / git dependency |
+|----------|--------------------------|
+| Full bootstrap / interactive Apply | `ui.py`, `state.py` — **git**; restore CLI commands |
+| Workspace render | `templates/` + full `render.py` — **git** |
+| Render all tracked workspaces | `discovery.py`, `state.py` — **git** |
+| Package catalog / import-local | `archive/catalog/` |
+| MCP filter / render into `.cursor/mcp.json` | `archive/mcp/`, `catalog/packages.json` |
 | Memory vault workflows | `archive/memory-vault/` |
-| agentboot `--full` (Copilot + Cursor rules) | catalog/render coupling in archived `render.py` |
+| agentboot `--full` (Copilot + Cursor rules) | catalog + full render — **git** |
 | `agentos.yaml` profiles | `archive/agentos.yaml` |
 
 ## Slim core (stays at repo root)
@@ -89,11 +93,11 @@ Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 
 
 ## Restore notes
 
-1. **Pick scope** — restore only what you need; Tier 2 modules depend on each other (catalog + discovery + state + full render + ui).
-2. **Move files back** — `git mv archive/<path> <original-path>` or copy and adjust.
-3. **Re-wire code** — restore archived commands in `src/cli.py` and `install.sh` (`workspace`, `all`, `interactive`, `import-local`, `remove-managed`, `delete-local`). Re-import archived modules in `service.py`.
-4. **Restore tests** — merge or replace slim `tests/test_bootstrap_engine.py` with archived copy if testing catalog/workspace paths.
-5. **Env** — copy `archive/.env.example` to repo root if MCP servers need credentials.
-6. **Verify** — `python3 -m unittest discover -s tests` and `./install.sh skills doctor`.
+See [stuff.md](./stuff.md) for the full deferred map. Summary:
 
-Commit restore work on a branch; slim `main` / `slim-bootstrap` should stay the default install path unless you intentionally revert the rework.
+1. **Pick scope** — catalog, discovery, state, full render, and ui are coupled.
+2. **Config/docs** — copy from `archive/` (`catalog/`, `mcp/`, `templates/`, `agentos.yaml`, `memory-vault/`).
+3. **Code** — restore from git (pre-2026-07-10 archive layout or `git show <commit>:archive/src/...`).
+4. **Re-wire** — `src/cli.py`, `install.sh`, `service.py`; archived CLI subcommands.
+5. **Env** — copy `archive/.env.example` if MCP servers need credentials.
+6. **Verify** — unittest + `./install.sh doctor`.

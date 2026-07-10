@@ -12,7 +12,6 @@ Nothing here is read by `./install.sh`, `npx skills`, or `agentboot` at runtime.
 |------|----------|
 | **[stuff.md](./stuff.md)** | This file — deferred map and restore pointers |
 | **[README.md](./README.md)** | Move log (Tier 1/2) and pack → bootstrap matrix |
-| **[MANIFEST.md](./MANIFEST.md)** | Pre-slim repo tree snapshot |
 | **[LOCKFILE-NOTES.md](./LOCKFILE-NOTES.md)** | Global vs project lockfile history |
 | **[docs/](./docs/)** | Harness architecture, OpenClaw plan |
 | **[future/README.md](./future/README.md)** | AgentOS roadmap items still deferred |
@@ -22,7 +21,6 @@ Nothing here is read by `./install.sh`, `npx skills`, or `agentboot` at runtime.
 | **[mcp/mcp.json](./mcp/mcp.json)** | MCP server list for future workspace render |
 | **[templates/](./templates/)** | Workspace render overlay templates |
 | **[.env.example](./.env.example)** | MCP credential env var names |
-| **[skills-README.md](./skills-README.md)** | Historical note: in-repo skills pack (rejected; use manifest) |
 
 ---
 
@@ -66,7 +64,7 @@ Removed **2026-07-10** to keep archive lean. None of this was on the runtime pat
 | `agentboot --full` | Copilot + Cursor rules + MCP | Warn-only today; full logic in **git** |
 | `agentos.yaml` profiles | Export target map | `archive/agentos.yaml` |
 | Obsidian memory vault | Tier 3 memory | `memory-vault/` |
-| In-repo skills pack | Vendored skills in repo | `skills-README.md` only; use `skills.sources.yaml` |
+| In-repo skills pack | Vendored skills in repo | Removed — use `skills.sources.yaml` |
 | CLI commands | `workspace`, `all`, `interactive`, `import-local`, … | Hard-fail → pointer to this archive |
 
 ### Disabled in manifest (not in archive)

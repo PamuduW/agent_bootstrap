@@ -9,7 +9,7 @@ Restore from this folder for **design and config**; restore **code** from git. S
 
 ## Pre-slim snapshot
 
-See [MANIFEST.md](./MANIFEST.md) for the top-level repo layout **before** Tier 1/2 moves (captured 2026-07-09).
+Tier 1/2 move tables below record what left the repo root on 2026-07-09. See [stuff.md](./stuff.md) for the current deferred map.
 
 ## Tier 1 moves (Phase 2 — 2026-07-09)
 
@@ -24,7 +24,6 @@ Moved from repo root with `git mv` (except `exports/`, which was gitignored and 
 | `exports/` | `archive/exports/` | Generated outputs (was gitignored) |
 | `docs/openclaw-plan.md` | `archive/docs/openclaw-plan.md` | OpenClaw adapter planning |
 | `docs/harness-architecture.md` | `archive/docs/harness-architecture.md` | Three-plane harness architecture |
-| `skills/README.md` | `archive/skills-README.md` | In-repo personal skills pack docs (no fork workflow) |
 
 Top-level `docs/` and `skills/` were removed after the moves (empty). Restore from this directory or from git history.
 
@@ -68,7 +67,7 @@ Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 
 | Interactive Apply / tracked workspaces | **Archived** | ui/state/discovery in **git** |
 | `agentos.yaml` profiles | **Archived** | `archive/agentos.yaml` |
 | Obsidian memory vault | **Archived** | `archive/memory-vault/` |
-| Personal in-repo skills pack | **Removed** | `archive/skills-README.md` (upstream-only via manifest) |
+| Personal in-repo skills pack | **Removed** | Upstream-only via `skills.sources.yaml` |
 | Generated exports | **Removed** | Was gitignored placeholder; not kept |
 | Deferred AgentOS / harness phases | **Archived** | `archive/future/`, `archive/docs/` |
 | `graphify` skill source | **Disabled** | `skills.sources.yaml` (`enabled: false`) |

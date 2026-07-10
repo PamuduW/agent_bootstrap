@@ -67,8 +67,6 @@ Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 
 | Interactive Apply / tracked workspaces | **Archived** | ui/state/discovery in **git** |
 | `agentos.yaml` profiles | **Archived** | `archive/agentos.yaml` |
 | Obsidian memory vault | **Archived** | `archive/memory-vault/` |
-| Personal in-repo skills pack | **Removed** | Upstream-only via `skills.sources.yaml` |
-| Generated exports | **Removed** | Was gitignored placeholder; not kept |
 | Deferred AgentOS / harness phases | **Archived** | `archive/future/`, `archive/docs/` |
 | `graphify` skill source | **Disabled** | `skills.sources.yaml` (`enabled: false`) |
 | `obsidian-memory` skill source | **Disabled** | `skills.sources.yaml` (`enabled: false`) |

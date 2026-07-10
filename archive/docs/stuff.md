@@ -54,18 +54,19 @@ Removed **2026-07-10** to keep archive lean. None of this was on the runtime pat
 
 ## Deferred — archived artifacts (docs + config in tree)
 
-| Capability | What it was | What you still have locally |
-|------------|-------------|----------------------------|
-| Interactive control-plane TUI | Package/workspace menus, Apply | Code in **git**; design in `docs/harness-architecture.md` |
-| Workspace render | Per-repo Copilot/Cursor/MCP exports | `templates/`, `agentos.yaml`; code in **git** |
-| Tracked workspaces | Discovery + state + render-all | Code in **git** |
-| Package catalog | `import-local`, provenance | `catalog/packages.json` |
-| MCP bundle render | Filtered `.cursor/mcp.json` | `mcp/mcp.json`, `catalog/` |
-| `agentboot --full` | Copilot + Cursor rules + MCP | Warn-only today; full logic in **git** |
-| `agentos.yaml` profiles | Export target map | `archive/agentos.yaml` |
-| Obsidian memory vault | Tier 3 memory | `memory-vault/` |
-| In-repo skills pack | Vendored skills in repo | Removed — use `skills.sources.yaml` |
-| CLI commands | `workspace`, `all`, `interactive`, `import-local`, … | Hard-fail → pointer to this archive |
+| Capability | What it means | What you still have |
+|------------|---------------|---------------------|
+| **Interactive control-plane TUI** | Arrow-key menus inside `agent_bootstrap` to pick packages, track workspaces, and “Apply” exports — a full installer UI, not just `install.sh` one-shots. | Design in `docs/harness-architecture.md`; code in **git**. |
+| **Workspace render** | Generate per-repo agent files from the catalog: Copilot instructions, Cursor rules, repo `CLAUDE.md` merges — not just copying `base/`. | `templates/`, `agentos.yaml`; render code in **git**. |
+| **Tracked workspaces** | Remember which git repos you care about, scan them, and re-render all of them when the catalog or global baseline changes. | `discovery.py` + `state.py` in **git**. |
+| **Package catalog** | A curated JSON registry of skills, rules, MCP servers, and templates with provenance — “import from disk/cache into catalog” workflows. | `catalog/packages.json`. |
+| **MCP bundle render** | Filter the master MCP list per profile/workspace and write `.cursor/mcp.json` (and similar) automatically. | `mcp/mcp.json` + catalog; render code in **git**. |
+| **`agentboot --full`** | After minimal `AGENTS.md` + `CLAUDE.md`, also drop Copilot/Cursor/MCP files into the repo from the catalog. | Flag exists but warns; full behavior in **git**. |
+| **`agentos.yaml` profiles** | Declarative map of export targets (Codex, Claude, Cursor, Copilot, per-repo) and trust/skill policy per profile. | `archive/agentos.yaml`. |
+| **Obsidian memory vault** | Git-tracked markdown for durable context (decisions, lessons, preferences) — agents draft, you commit. | `memory-vault/`. |
+| **CLI commands** | Extra `install.sh` / CLI subcommands: `workspace`, `all`, `interactive`, `import-local`, `remove-managed`, `delete-local`. | Hard-fail today with pointer to this archive; restore with re-wired `src/cli.py`. |
+
+Upstream skills only — no in-repo vendored pack. Live path: `skills.sources.yaml` + `npx skills -g`.
 
 ### Disabled in manifest (not in archive)
 

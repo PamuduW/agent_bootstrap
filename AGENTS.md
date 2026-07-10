@@ -1,82 +1,126 @@
-# Agent Bootstrap
+# AGENTS.md
 
-This repo is the **slim agent bootstrap** — skills install via `npx`, `agentboot` scaffolding, and a global `AGENTS.md` baseline. Agents editing *this* repo should treat it as a small CLI + shell entrypoint, not a full config plane.
+## Environment
 
-## Repo structure
+- **OS:** WSL2 Ubuntu
+- **Shell:** bash
+- **Primary agents:** Cursor, Claude Code, Codex, GitHub Copilot
+- **Bootstrap home:** `$AGENT_BOOTSTRAP_HOME` (agent_bootstrap repo on PATH)
 
-```
-install.sh             Bootstrap entrypoint
-skills.sources.yaml    Curated upstream skill sources (no in-repo skill pack)
-skills-lock.json       Stub; global pins live in ~/.agents/.skill-lock.json
-bin/                   agentboot, skills-install.sh, claude-skills-bridge.sh
-base/                  agentboot templates (AGENTS.md, CLAUDE.md)
-global/AGENTS.md       Machine-level baseline (authored)
-src/                   Slim Python CLI (cli.py, service.py, …)
-tests/                 Foundation tests
-archive/               Deferred Tier 1+2 assets — see archive/README.md
-```
+Invoke skills in Agent chat by typing `/<skill-name>`.
 
-There is **no** `catalog/`, `mcp/`, `skills/` personal pack, `memory-vault/`, or workspace render in the slim path. Those live under [`archive/`](archive/README.md).
+**Pick 2–4 skills per session by phase — do not load all at once.**
 
-## Quick start
+Skills below match `skills.sources.yaml` (enabled upstreams installed via `./install.sh skills install`).
+
+### Methodology
+
+| Skill | Description |
+|---|---|
+| `brainstorming` | Explore options and trade-offs before committing to a direction. |
+| `council` | Parallel subagent exploration and synthesis for multi-area codebase review. |
+| `grilling` | Stress-test a plan or design before building; matches Interaction Rules below. |
+| `recursive-decomposition` | Partition large inputs (10+ files, 50k+ tokens) via subagents and aggregation. |
+| `yagni` | Simplest solution that works; resist premature complexity. |
+| `karpathy-guidelines` | Think before coding; surgical changes only; verifiable success criteria. |
+| `best-practices-research` | Live web recon on current practices before non-trivial implementation. |
+| `literature-review` | Structured review of papers, docs, and prior art with citations. |
+
+### Architecture
+
+| Skill | Description |
+|---|---|
+| `architecture-decision-records` | Capture architectural decisions as lightweight ADRs with rationale. |
+| `domain-modeling` | Build and sharpen domain terminology and ubiquitous language. |
+| `codebase-design` | Deep-module vocabulary for interfaces, seams, and testability. |
+| `codebase-onboarding` | Structured onboarding guide for an unfamiliar codebase. |
+| `improve-codebase-architecture` | Scan for deepening opportunities; visual report and review. |
+| `decision-mapping` | Turn a loose idea into sequenced investigation tickets. |
+
+### Planning
+
+| Skill | Description |
+|---|---|
+| `writing-plans` | Turn requirements into phased, actionable implementation plans. |
+| `implement-plan` | Router: council + best-practices research, implement, then yagni pass. |
+| `prototype` | Throwaway prototype to flesh out design (CLI or UI variations). |
+| `to-prd` | Synthesize conversation into a PRD; publish to issue tracker when configured. |
+| `to-issues` | Break a plan or PRD into independently grabbable tracker issues. |
+| `triage` | Move issues through triage roles on the project issue tracker. |
+| `setup-matt-pocock-skills` | Scaffold tracker, triage labels, and domain docs for planning skills. |
+| `executing-plans` | Work through a plan incrementally with checkpoints. |
+| `subagent-driven-development` | Delegate implementation slices to focused subagents. |
+
+### Quality
+
+| Skill | Description |
+|---|---|
+| `tdd` | Test-driven development via public interfaces; red-green-refactor. |
+| `test-driven-development` | Red-green-refactor cycle; tests before implementation. |
+| `diagnosing-bugs` | Diagnosis loop for hard bugs and performance regressions. |
+| `owasp` | Security review against OWASP guidance. |
+| `explain-code` | Scannable code explanation with TL;DR and small examples. |
+
+### Docs / handoff
+
+| Skill | Description |
+|---|---|
+| `document` | Create or update durable repo documentation verified against code. |
+| `handoff` | Compact session handoff to `docs/handoffs/CURRENT.md` for continuation. |
+| `pitstop` | Action-first, compressed replies with numbered steps and lap restatement. |
+
+### Implementation / DevOps (load on demand)
+
+| Skill | Description |
+|---|---|
+| `kubernetes` / `k8s` | Cluster manifests, deployments, and operational patterns. |
+| `kubernetes-specialist` | Deep K8s troubleshooting, networking, and production hardening. |
+| `terraform` | IaC modules, state, and environment provisioning. |
+| `github-actions` / `gitlab-ci` | CI/CD pipelines, workflows, and release automation. |
+| `devops-engineer` | Cross-cutting infra, observability, and delivery practices. |
+
+### Interaction Rules (how AI must behave in this project)
+
+Never agree with me by default. Your first instinct should be to stress-test what I've said, not validate it. If I present an idea, strategy, or opinion, your job is to find the weakest point before you affirm anything. No glazing. Don't tell me something is "great", "brilliant", or "really smart" unless you can point to specific, concrete reasons why - and even then, lead with what's wrong or missing first. Compliments without substance are noise. Don't echo my framing back to me. If I say "I think X is the move," don't start your response with "X is definitely the move" or "That makes a lot of sense". Instead, start by asking yourself: what am I not seeing? What's the counter-argument? What would someone who disagrees say, and are they right? When you do agree, earn it. Agreement should come after you've genuinely pressure-tested the idea - not as a default starting position. If you agree, say why in a way that adds something I didn't already say. Be direct and concise. Skip the warm-up sentences. Don't pad responses with filler affirmations. Get to the point. If the answer is "no" or "this won't work", say that in the first sentence. Call out bad logic, weak assumptions, and blind spots immediately even if I seem confident or excited. Especially then. The more certain I sound, the more I need pushback. If you catch yourself about to start a response with "That's a great point" or "You're absolutely right" - stop and rewrite. Start with the most useful thing you can say instead.
+
+## Project overlay
+
+Canonical scaffold templates live in `base/AGENTS.md` and `base/CLAUDE.md`. This root file is that template plus the project section below for **this** repo.
+
+## Project
+
+**Purpose:** Slim agent bootstrap — install curated upstream skills via `npx`, scaffold per-repo agent files with `agentboot`, and render a machine-level baseline from `global/AGENTS.md`. Treat this repo as a small CLI + shell entrypoint, not a full config plane.
+
+**Stack:** bash (`install.sh`, `bin/*`), Python 3 (`src/` — `python3 -m src.cli`), Node.js (`npx skills`).
+
+**Key paths:**
+
+| Path | Role |
+|------|------|
+| `install.sh` | Primary entrypoint (bootstrap, skills, global, doctor, link-agentboot) |
+| `skills.sources.yaml` | Curated upstream skill manifest (6 enabled sources, 38 skills) |
+| `skills-lock.json` | Project lock stub; global pins in `~/.agents/.skill-lock.json` |
+| `src/` | Slim Python CLI (`cli.py`, `service.py`, `skills_installer.py`, …) |
+| `bin/agentboot` | Copy `base/` templates into another repo |
+| `base/` | Canonical agentboot templates (keep skill tables in sync with manifest) |
+| `global/AGENTS.md` | Machine baseline (authored; rendered to `~/.codex/`, `~/.claude/`) |
+| `tests/` | `python3 -m unittest discover -s tests` + `bash tests/test_agentboot.sh` |
+| `archive/` | Deferred catalog/MCP/workspace render — see `archive/README.md` |
+
+**Commands:**
 
 ```bash
-./install.sh
+./install.sh                          # full bootstrap
+./install.sh skills install|update
+./install.sh global && ./install.sh doctor
+python3 -m unittest discover -s tests && bash tests/test_agentboot.sh
 ```
 
-Scripted:
+**Conventions:**
 
-```bash
-./install.sh skills install
-./install.sh global
-./install.sh doctor
-```
-
-## When asked to update skills
-
-```bash
-./install.sh skills update
-```
-
-Optionally re-run the Claude bridge explicitly: `bin/claude-skills-bridge.sh`.
-
-## When asked to install or set up
-
-```bash
-./install.sh                    # full bootstrap (default)
-./install.sh skills install
-./install.sh link-agentboot     # symlink ~/bin/agentboot
-```
-
-Archived commands (`workspace`, `all`, `interactive`, `import-local`, catalog management) error with a pointer to `archive/README.md`.
-
-## Skills model
-
-- **Upstream only** — `skills.sources.yaml` → `npx skills add … -a cursor -a codex -a claude-code -a github-copilot -g`
-- **Project lock (`skills-lock.json`)** — committed stub only (`sources: []`, v1); `-g` installs do not populate it
-- **Global lock** — `~/.agents/.skill-lock.json` (v3) is authoritative for `-g` installs; do not hand-copy into the repo
-- **Future** — populate project `skills-lock.json` for CI/reproducible project-scoped installs
-- **Bridge** — `~/.agents/skills/` → `~/.claude/skills/` symlinks after install/update
-- **Templates** — `base/AGENTS.md` skill table should match enabled manifest entries only; keep `graphify` and `obsidian-memory` out (both `enabled: false` in `skills.sources.yaml`)
-
-Do not vendored upstream skills into this repo.
-
-## AGENT_BOOTSTRAP_HOME
-
-Derived from clone location — **not** set in `.env`. `install.sh` exports it from the repo root.
-
-## Global vs per-repo agent files
-
-- **Authored:** `global/AGENTS.md` (machine baseline), `<repo>/AGENTS.md` (project overlay via agentboot)
-- **Generated:** `~/.codex/AGENTS.md`, `~/.claude/AGENTS.md`, `~/.claude/CLAUDE.md`, repo `CLAUDE.md` from agentboot — do not hand-edit as canonical policy
-
-## Legacy archive (external)
-
-Superseded v1 assets live at `../temp/archive/` (outside this repo). Do not add new work there.
-
-## Guardrails
-
-- `install.sh` is the primary interface
-- Don't restore archived modules without re-wiring imports (see `archive/README.md`)
-- Never run uninstall flows without explicit user request
-- Don't modify `temp/archive/` unless asked
+- `install.sh` is the only supported interface for bootstrap operations.
+- Do not vendor upstream skills into this repo; manifest + `npx skills -g` only.
+- Keep `base/AGENTS.md` skill tables aligned with enabled entries in `skills.sources.yaml` (`graphify` and `obsidian-memory` stay disabled).
+- Archived CLI commands (`workspace`, `all`, `interactive`, …) must error with a pointer to `archive/README.md` — do not restore without re-wiring imports.
+- Never run uninstall flows without explicit user request.
+- `AGENT_BOOTSTRAP_HOME` is exported from the clone path by `install.sh` (not from `.env`).

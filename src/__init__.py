@@ -1,1 +1,1 @@
-"""Source package root for agent_bootstrap."""
+"""Slim agent bootstrap — skills install, global render, and doctor CLI."""

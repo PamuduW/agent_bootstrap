@@ -17,7 +17,7 @@ class SkillsSourcesTests(unittest.TestCase):
         return path
 
     def test_load_skills_sources_parses_seed_file(self) -> None:
-        from src.agent_bootstrap.skills_sources import load_skills_sources
+        from src.skills_sources import load_skills_sources
 
         repo_root = Path(__file__).resolve().parents[1]
         config = load_skills_sources(repo_root / "skills.sources.yaml")
@@ -36,7 +36,7 @@ class SkillsSourcesTests(unittest.TestCase):
         self.assertFalse(graphify.enabled)
 
     def test_active_sources_skips_disabled_empty_or_missing_repo(self) -> None:
-        from src.agent_bootstrap.skills_sources import load_skills_sources
+        from src.skills_sources import load_skills_sources
 
         path = self._write_sources(
             """\
@@ -71,14 +71,14 @@ sources:
         self.assertEqual("enabled", active[0].id)
 
     def test_load_skills_sources_raises_for_missing_file(self) -> None:
-        from src.agent_bootstrap.skills_sources import SkillsSourcesError, load_skills_sources
+        from src.skills_sources import SkillsSourcesError, load_skills_sources
 
         with self.assertRaises(SkillsSourcesError):
             load_skills_sources(self.root / "missing.yaml")
 
     def test_build_add_argv_includes_repo_skills_and_agents(self) -> None:
-        from src.agent_bootstrap.skills_installer import build_add_argv
-        from src.agent_bootstrap.skills_sources import SkillSourceEntry
+        from src.skills_installer import build_add_argv
+        from src.skills_sources import SkillSourceEntry
 
         source = SkillSourceEntry(
             id="superpowers",

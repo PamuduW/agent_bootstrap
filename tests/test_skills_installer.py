@@ -15,7 +15,7 @@ class SkillsInstallerTests(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def _paths(self):
-        from src.agent_bootstrap.paths import BootstrapPaths
+        from src.paths import BootstrapPaths
 
         return BootstrapPaths(
             root=self.root,
@@ -49,7 +49,7 @@ sources:
         )
 
     def _success_result(self, source_id: str, command: list[str]):
-        from src.agent_bootstrap.skills_installer import InstallResult
+        from src.skills_installer import InstallResult
 
         return InstallResult(
             source_id=source_id,
@@ -59,10 +59,10 @@ sources:
             stderr="",
         )
 
-    @patch("src.agent_bootstrap.skills_installer.run_install_command")
+    @patch("src.skills_installer.run_install_command")
     def test_install_skills_runs_npx_for_active_sources(self, mock_run) -> None:
-        from src.agent_bootstrap.skills_installer import build_add_argv, install_skills
-        from src.agent_bootstrap.skills_sources import SkillSourceEntry
+        from src.skills_installer import build_add_argv, install_skills
+        from src.skills_sources import SkillSourceEntry
 
         source = SkillSourceEntry(
             id="superpowers",
@@ -90,9 +90,9 @@ sources:
         self.assertEqual(1, len(results))
         self.assertEqual("superpowers", results[0].source_id)
 
-    @patch("src.agent_bootstrap.skills_installer.run_install_command")
+    @patch("src.skills_installer.run_install_command")
     def test_update_skills_runs_npx_update(self, mock_run) -> None:
-        from src.agent_bootstrap.skills_installer import build_update_argv, update_skills
+        from src.skills_installer import build_update_argv, update_skills
 
         expected_argv = build_update_argv()
         mock_run.return_value = self._success_result("update", expected_argv)
@@ -105,7 +105,7 @@ sources:
         self.assertEqual("update", result.source_id)
 
     def test_list_installed_skills_reads_agents_home(self) -> None:
-        from src.agent_bootstrap.skills_installer import list_installed_skills
+        from src.skills_installer import list_installed_skills
 
         paths = self._paths()
         agents_home = self.root / "agents-home"
@@ -121,9 +121,9 @@ sources:
 
         self.assertEqual(["alpha", "beta"], installed)
 
-    @patch("src.agent_bootstrap.skills_installer.shutil.which", return_value="/usr/bin/npx")
+    @patch("src.skills_installer.shutil.which", return_value="/usr/bin/npx")
     def test_doctor_skills_reports_missing_sources_file(self, _mock_which) -> None:
-        from src.agent_bootstrap.skills_installer import doctor_skills
+        from src.skills_installer import doctor_skills
 
         paths = self._paths()
         (self.root / "skills.sources.yaml").unlink()
@@ -133,18 +133,18 @@ sources:
 
         self.assertTrue(any("Missing skills sources file" in message for message in messages))
 
-    @patch("src.agent_bootstrap.skills_installer.shutil.which", return_value=None)
+    @patch("src.skills_installer.shutil.which", return_value=None)
     def test_doctor_skills_reports_missing_npx(self, _mock_which) -> None:
-        from src.agent_bootstrap.skills_installer import doctor_skills
+        from src.skills_installer import doctor_skills
 
         issues = doctor_skills(self._paths())
         messages = [issue.message for issue in issues]
 
         self.assertTrue(any("npx is not available" in message for message in messages))
 
-    @patch("src.agent_bootstrap.skills_installer.shutil.which", return_value="/usr/bin/npx")
+    @patch("src.skills_installer.shutil.which", return_value="/usr/bin/npx")
     def test_doctor_skills_warns_on_unreadable_lockfile(self, _mock_which) -> None:
-        from src.agent_bootstrap.skills_installer import doctor_skills
+        from src.skills_installer import doctor_skills
 
         lock_file = self.root / "skills-lock.json"
         lock_file.write_text(json.dumps({"version": 1}), encoding="utf-8")
@@ -159,10 +159,10 @@ sources:
         self.assertTrue(any("Unable to read skills lock file" in message for message in messages))
 
     def test_run_install_command_uses_subprocess(self) -> None:
-        from src.agent_bootstrap.skills_installer import run_install_command
+        from src.skills_installer import run_install_command
 
         completed = MagicMock(returncode=0, stdout="ok", stderr="")
-        with patch("src.agent_bootstrap.skills_installer.subprocess.run", return_value=completed) as mock_run:
+        with patch("src.skills_installer.subprocess.run", return_value=completed) as mock_run:
             result = run_install_command(["npx", "skills", "update"], source_id="update")
 
         mock_run.assert_called_once()

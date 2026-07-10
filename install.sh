@@ -45,11 +45,11 @@ check_deps() {
 }
 
 run_cli() {
-  python3 -m src.agent_bootstrap.cli --root "$BOOTSTRAP_DIR" "$@"
+  python3 -m src.cli --root "$BOOTSTRAP_DIR" "$@"
 }
 
 cli_ready() {
-  python3 -m src.agent_bootstrap.cli --root "$BOOTSTRAP_DIR" status >/dev/null 2>&1
+  python3 -m src.cli --root "$BOOTSTRAP_DIR" status >/dev/null 2>&1
 }
 
 run_global_render() {
@@ -59,8 +59,8 @@ run_global_render() {
   fi
   python3 - <<'PY'
 from pathlib import Path
-from src.agent_bootstrap.paths import default_paths
-from src.agent_bootstrap.service import BootstrapService
+from src.paths import default_paths
+from src.service import BootstrapService
 
 BootstrapService(default_paths(Path(".").resolve())).render_global()
 PY
@@ -74,9 +74,9 @@ run_slim_doctor() {
   python3 - <<'PY'
 import sys
 from pathlib import Path
-from src.agent_bootstrap.paths import default_paths
-from src.agent_bootstrap.service import BootstrapService
-from src.agent_bootstrap.ui import print_doctor_summary
+from src.paths import default_paths
+from src.service import BootstrapService
+from src.ui import print_doctor_summary
 
 paths = default_paths(Path(".").resolve())
 service = BootstrapService(paths)
@@ -92,9 +92,9 @@ run_slim_status() {
   python3 - <<'PY'
 import sys
 from pathlib import Path
-from src.agent_bootstrap.paths import default_paths
-from src.agent_bootstrap.service import BootstrapService
-from src.agent_bootstrap.ui import print_status_summary
+from src.paths import default_paths
+from src.service import BootstrapService
+from src.ui import print_status_summary
 
 paths = default_paths(Path(".").resolve())
 service = BootstrapService(paths)
@@ -123,8 +123,8 @@ cli_supports_bootstrap() {
 list_installed_skills_fallback() {
   python3 - <<'PY'
 from pathlib import Path
-from src.agent_bootstrap.paths import default_paths
-from src.agent_bootstrap.service import BootstrapService
+from src.paths import default_paths
+from src.service import BootstrapService
 
 skills = BootstrapService(default_paths(Path(".").resolve())).list_skills()
 if not skills:
@@ -193,7 +193,7 @@ run_bootstrap() {
     run_cli bootstrap || rc=$?
   else
     if ! cli_ready; then
-      warn "slim CLI unavailable — using bash fallback (run: git checkout -- src/agent_bootstrap/cli.py)"
+      warn "slim CLI unavailable — using bash fallback (run: git checkout -- src/cli.py)"
     fi
     export AGENT_BOOTSTRAP_QUIET="${AGENT_BOOTSTRAP_QUIET:-${AGENT_BOOTSTRAP_TUI:-}}"
     run_skills install || rc=$?

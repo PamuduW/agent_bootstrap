@@ -38,7 +38,7 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def _paths(self):
-        from src.agent_bootstrap.paths import BootstrapPaths
+        from src.paths import BootstrapPaths
 
         return BootstrapPaths(
             root=self.root,
@@ -48,11 +48,11 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         )
 
     def test_render_global_outputs_syncs_codex_skill_links(self) -> None:
-        from src.agent_bootstrap.render import render_global_outputs
+        from src.render import render_global_outputs
 
         paths = self._paths()
         with mock.patch(
-            "src.agent_bootstrap.render._agents_skills_home",
+            "src.render._agents_skills_home",
             return_value=self.agents_home,
         ):
             render_global_outputs(paths)
@@ -66,7 +66,7 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         self.assertTrue((codex_skills / "beta-skill").is_symlink())
 
     def test_slim_doctor_reports_missing_global_agents(self) -> None:
-        from src.agent_bootstrap.service import BootstrapService
+        from src.service import BootstrapService
 
         paths = self._paths()
         (paths.global_agents).unlink()
@@ -76,7 +76,7 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         self.assertTrue(any("Missing global baseline" in message for message in messages))
 
     def test_slim_status_summary_counts_installed_skills(self) -> None:
-        from src.agent_bootstrap.service import BootstrapService
+        from src.service import BootstrapService
 
         paths = self._paths()
         service = BootstrapService(paths)

@@ -11,7 +11,7 @@ class ManifestAgentsSyncTests(unittest.TestCase):
         cls.agents_path = cls.repo_root / "base" / "AGENTS.md"
 
     def _enabled_manifest_skills(self) -> set[str]:
-        from src.agent_bootstrap.skills_sources import load_skills_sources
+        from src.skills_sources import load_skills_sources
 
         config = load_skills_sources(self.manifest_path)
         skills: set[str] = set()
@@ -37,7 +37,7 @@ class ManifestAgentsSyncTests(unittest.TestCase):
         )
 
     def test_disabled_manifest_skills_are_not_advertised(self) -> None:
-        from src.agent_bootstrap.skills_sources import load_skills_sources
+        from src.skills_sources import load_skills_sources
 
         config = load_skills_sources(self.manifest_path)
         advertised = self._advertised_skills()

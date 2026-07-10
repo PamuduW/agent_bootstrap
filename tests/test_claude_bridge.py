@@ -20,7 +20,7 @@ class ClaudeBridgeTests(unittest.TestCase):
         return skill_dir
 
     def test_bridge_creates_symlinks_for_each_skill(self) -> None:
-        from src.agent_bootstrap.claude_bridge import bridge_claude_skills
+        from src.claude_bridge import bridge_claude_skills
 
         self._write_skill("alpha")
         self._write_skill("beta")
@@ -39,7 +39,7 @@ class ClaudeBridgeTests(unittest.TestCase):
         )
 
     def test_bridge_is_idempotent_when_already_linked(self) -> None:
-        from src.agent_bootstrap.claude_bridge import bridge_claude_skills
+        from src.claude_bridge import bridge_claude_skills
 
         source = self._write_skill("alpha")
 
@@ -55,7 +55,7 @@ class ClaudeBridgeTests(unittest.TestCase):
         self.assertEqual(source.resolve(), (self.claude_home / "alpha").resolve())
 
     def test_bridge_skips_existing_non_symlink_target(self) -> None:
-        from src.agent_bootstrap.claude_bridge import bridge_claude_skills
+        from src.claude_bridge import bridge_claude_skills
 
         self._write_skill("alpha")
         existing = self.claude_home / "alpha"
@@ -71,7 +71,7 @@ class ClaudeBridgeTests(unittest.TestCase):
         self.assertFalse(existing.is_symlink())
 
     def test_bridge_skips_conflicting_symlink_target(self) -> None:
-        from src.agent_bootstrap.claude_bridge import bridge_claude_skills
+        from src.claude_bridge import bridge_claude_skills
 
         self._write_skill("alpha")
         other_source = self.root / "other" / "alpha"
@@ -93,7 +93,7 @@ class ClaudeBridgeTests(unittest.TestCase):
         )
 
     def test_bridge_dry_run_reports_without_writing(self) -> None:
-        from src.agent_bootstrap.claude_bridge import bridge_claude_skills
+        from src.claude_bridge import bridge_claude_skills
 
         self._write_skill("alpha")
 
@@ -104,7 +104,7 @@ class ClaudeBridgeTests(unittest.TestCase):
         self.assertEqual("linked", result.actions[0].action)
 
     def test_bridge_returns_empty_result_when_agents_home_missing(self) -> None:
-        from src.agent_bootstrap.claude_bridge import bridge_claude_skills
+        from src.claude_bridge import bridge_claude_skills
 
         missing = self.root / "missing" / "skills"
         result = bridge_claude_skills(missing, self.claude_home)

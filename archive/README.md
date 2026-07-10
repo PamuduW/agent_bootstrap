@@ -43,8 +43,8 @@ Moved after CLI/service/render surgery:
 
 **Slim replacements at repo root:**
 
-- `src/agent_bootstrap/render.py` — `render_global_outputs` only (no MCP write from catalog)
-- `src/agent_bootstrap/ui.py` — print helpers only (no interactive menus)
+- `src/render.py` — `render_global_outputs` only (no MCP write from catalog)
+- `src/ui.py` — print helpers only (no interactive menus)
 - `bin/agentboot --full` — deprecated; runs minimal scaffold only
 
 ## Pack → bootstrap matrix
@@ -55,9 +55,9 @@ Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 
 |-----------------|-------------|----------|
 | Upstream skills manifest (`npx skills`) | **Live** | `skills.sources.yaml` |
 | Global skill lockfile | **Live** (repo stub; global pins in `~/.agents/.skill-lock.json`) | `skills-lock.json` |
-| `install.sh` / Python CLI | **Live (trimmed)** | `install.sh`, `src/agent_bootstrap/` |
+| `install.sh` / Python CLI | **Live (trimmed)** | `install.sh`, `src/` (`cli.py`, `service.py`, …) |
 | `agentboot` scaffold | **Live** | `bin/agentboot`, `base/` |
-| Global `AGENTS.md` render | **Live** | `global/AGENTS.md`, `src/agent_bootstrap/render.py` |
+| Global `AGENTS.md` render | **Live** | `global/AGENTS.md`, `src/render.py` |
 | Claude skills bridge | **Live** | `bin/claude-skills-bridge.sh` |
 | Package catalog + MCP provenance | **Archived** | `archive/catalog/`, `archive/mcp/` |
 | Workspace render + templates | **Archived** | `archive/templates/`, `archive/src/agent_bootstrap/render.py` |
@@ -91,7 +91,7 @@ Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 
 
 1. **Pick scope** — restore only what you need; Tier 2 modules depend on each other (catalog + discovery + state + full render + ui).
 2. **Move files back** — `git mv archive/<path> <original-path>` or copy and adjust.
-3. **Re-wire code** — restore archived commands in `src/agent_bootstrap/cli.py` and `install.sh` (`workspace`, `all`, `interactive`, `import-local`, `remove-managed`, `delete-local`). Re-import archived modules in `service.py`.
+3. **Re-wire code** — restore archived commands in `src/cli.py` and `install.sh` (`workspace`, `all`, `interactive`, `import-local`, `remove-managed`, `delete-local`). Re-import archived modules in `service.py`.
 4. **Restore tests** — merge or replace slim `tests/test_bootstrap_engine.py` with archived copy if testing catalog/workspace paths.
 5. **Env** — copy `archive/.env.example` to repo root if MCP servers need credentials.
 6. **Verify** — `python3 -m unittest discover -s tests` and `./install.sh skills doctor`.

@@ -110,7 +110,7 @@ agent_bootstrap/
 ├── bin/                  # agentboot, skills-install, claude-skills-bridge
 ├── base/                 # agentboot templates
 ├── global/AGENTS.md      # machine-level baseline (authored)
-├── src/agent_bootstrap/  # slim Python CLI
+├── src/                  # slim Python CLI (cli.py, service.py, …)
 ├── tests/
 └── archive/              # deferred capabilities — see archive/README.md
 ```

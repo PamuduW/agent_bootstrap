@@ -11,7 +11,7 @@ skills-lock.json       Stub; global pins live in ~/.agents/.skill-lock.json
 bin/                   agentboot, skills-install.sh, claude-skills-bridge.sh
 base/                  agentboot templates (AGENTS.md, CLAUDE.md)
 global/AGENTS.md       Machine-level baseline (authored)
-src/agent_bootstrap/   Slim Python CLI (skills, global render, doctor)
+src/                   Slim Python CLI (cli.py, service.py, …)
 tests/                 Foundation tests
 archive/               Deferred Tier 1+2 assets — see archive/README.md
 ```

@@ -105,7 +105,7 @@ Canonical scaffold templates live in `base/AGENTS.md` and `base/CLAUDE.md`. This
 | `base/` | Canonical agentboot templates (keep skill tables in sync with manifest) |
 | `global/AGENTS.md` | Machine baseline (authored; rendered to `~/.codex/`, `~/.claude/`) |
 | `tests/` | `python3 -m unittest discover -s tests` + `bash tests/test_agentboot.sh` |
-| `archive/` | Deferred catalog/MCP/workspace render — see `archive/README.md` |
+| `archive/` | Deferred catalog/MCP/workspace render — `archive/docs/stuff.md`, phases in `archive/docs/stuff3.md` |
 
 **Commands:**
 

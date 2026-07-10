@@ -234,4 +234,4 @@ You can **defer indefinitely** if:
 
 The vault is the odd one out — it’s less about tooling automation and more about **how you remember things across months**. It doesn’t require the render pipeline; you could populate `archive/memory-vault/` and reference it manually long before restoring catalog/render.
 
-If you want, I can add a “day-to-day impact” subsection like this to `archive/stuff.md` so it’s documented beside the short table.
+**See also:** [stuff.md](./stuff.md) (deferred map) · [stuff3.md](./stuff3.md) (implementation phases).

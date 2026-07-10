@@ -24,4 +24,4 @@ Then in any project repo: `agentboot`.
 
 Update skills later: `./install.sh skills update`.
 
-Deferred features (catalog, MCP, workspace render, memory vault): [`archive/stuff.md`](archive/stuff.md).
+Deferred features: [`archive/docs/stuff.md`](archive/docs/stuff.md) (map) · [`archive/docs/stuff3.md`](archive/docs/stuff3.md) (phases).

@@ -2,14 +2,21 @@
 
 This directory holds **pre-slim `agent_bootstrap` assets** moved during the 2026-07-09 rework. It is **not part of the runtime install path** — `./install.sh`, `npx skills`, `bin/agentboot`, and slim bootstrap flows do not read from here.
 
-**Canonical deferred map:** [stuff.md](./stuff.md)  
+**Docs (archive/docs/):**
+
+| File | Role |
+|------|------|
+| [stuff.md](./docs/stuff.md) | Deferred capability map + restore pointers |
+| [stuff2.md](./docs/stuff2.md) | Day-to-day impact of deferred features |
+| [stuff3.md](./docs/stuff3.md) | **Implementation phases** (planned expansion) |
+
 **Docs-only policy (2026-07-10):** Python modules and tests were removed from `archive/`; recover them from **git history** when restoring. Config (JSON/YAML) and markdown stay here.
 
-Restore from this folder for **design and config**; restore **code** from git. See [stuff.md § If you restore](./stuff.md#if-you-restore-a-deferred-feature).
+Restore from this folder for **design and config**; restore **code** from git. See [stuff.md § If you restore](./docs/stuff.md#if-you-restore-a-deferred-feature).
 
 ## Pre-slim snapshot
 
-Tier 1/2 move tables below record what left the repo root on 2026-07-09. See [stuff.md](./stuff.md) for the current deferred map.
+Tier 1/2 move tables below record what left the repo root on 2026-07-09. See [stuff.md](./docs/stuff.md) for the deferred map and [stuff3.md](./docs/stuff3.md) for the build phases.
 
 ## Tier 1 moves (Phase 2 — 2026-07-09)
 
@@ -90,7 +97,7 @@ Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 
 
 ## Restore notes
 
-See [stuff.md](./stuff.md) for the full deferred map. Summary:
+See [stuff.md](./docs/stuff.md) and [stuff3.md](./docs/stuff3.md). Summary:
 
 1. **Pick scope** — catalog, discovery, state, full render, and ui are coupled.
 2. **Config/docs** — copy from `archive/` (`catalog/`, `mcp/`, `templates/`, `agentos.yaml`, `memory-vault/`).

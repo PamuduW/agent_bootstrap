@@ -6,7 +6,7 @@ Personal bootstrap for AI agent tooling on a fresh machine:
 - **agentboot** — scaffold `AGENTS.md` + `CLAUDE.md` in any git repo from [`base/`](base/)
 - **Global baseline** — machine-level policy in [`global/AGENTS.md`](global/AGENTS.md), rendered to agent home dirs
 
-Deferred features (catalog, MCP bundles, workspace render, memory vault, interactive menus) live in [`archive/`](archive/README.md).
+Deferred features and the phased expansion plan live in [`archive/`](archive/README.md) ([stuff3.md](archive/docs/stuff3.md)).
 
 ## Fresh machine
 
@@ -112,7 +112,7 @@ agent_bootstrap/
 ├── global/AGENTS.md      # machine-level baseline (authored)
 ├── src/                  # slim Python CLI (cli.py, service.py, …)
 ├── tests/
-└── archive/              # deferred capabilities — see archive/README.md
+└── archive/              # deferred capabilities — docs/stuff*.md, see archive/README.md
 ```
 
 ## Tests
@@ -124,6 +124,6 @@ bash tests/test_agentboot.sh
 
 ## Deferred / archived
 
-Workspace render, package catalog, MCP filtering, memory vault, interactive control-plane menus, and `agentboot --full` coupling were moved to [`archive/`](archive/README.md). Restore from there if you need those workflows.
+Deferred capabilities are documented in [`archive/docs/stuff.md`](archive/docs/stuff.md); the build roadmap is [`archive/docs/stuff3.md`](archive/docs/stuff3.md).
 
 Legacy v1 vendored assets (outside this repo) remain at [`../temp/archive/`](../temp/archive/) for history only.

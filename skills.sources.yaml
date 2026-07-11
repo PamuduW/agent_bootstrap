@@ -77,7 +77,6 @@ sources:
       - diagnosing-bugs
       - explain-code
       - handoff
-      - pitstop
 
   - id: graphify
     repo: safishamsi/graphify

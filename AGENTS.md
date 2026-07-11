@@ -67,7 +67,6 @@ Skills below match `skills.sources.yaml` (enabled upstreams installed via `./ins
 |---|---|
 | `document` | Create or update durable repo documentation verified against code. |
 | `handoff` | Compact session handoff to `docs/handoffs/CURRENT.md` for continuation. |
-| `pitstop` | Action-first, compressed replies with numbered steps and lap restatement. |
 
 ### Implementation / DevOps (load on demand)
 
@@ -98,7 +97,7 @@ Canonical scaffold templates live in `base/AGENTS.md` and `base/CLAUDE.md`. This
 | Path | Role |
 |------|------|
 | `install.sh` | Primary entrypoint (bootstrap, skills, global, doctor, link-agentboot) |
-| `skills.sources.yaml` | Curated upstream skill manifest (6 enabled sources, 38 skills) |
+| `skills.sources.yaml` | Curated upstream skill manifest (6 enabled sources, 37 skills) |
 | `skills-lock.json` | Project lock stub; global pins in `~/.agents/.skill-lock.json` |
 | `src/` | Slim Python CLI (`cli.py`, `service.py`, `skills_installer.py`, …) |
 | `bin/agentboot` | Copy `base/` templates into another repo |

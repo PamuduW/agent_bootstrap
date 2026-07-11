@@ -67,7 +67,6 @@ Skills below match `skills.sources.yaml` (enabled upstreams installed via `./ins
 |---|---|
 | `document` | Create or update durable repo documentation verified against code. |
 | `handoff` | Compact session handoff to `docs/handoffs/CURRENT.md` for continuation. |
-| `pitstop` | Action-first, compressed replies with numbered steps and lap restatement. |
 
 ### Implementation / DevOps (load on demand)
 

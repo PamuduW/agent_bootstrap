@@ -57,6 +57,8 @@ def _lock_skill_names(lock_file: Path) -> set[str] | None:
         data = json.loads(lock_file.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
+    if not isinstance(data, dict):
+        return None
     skills = data.get("skills")
     if isinstance(skills, dict):
         return set(skills)
@@ -249,7 +251,9 @@ def doctor_skills(paths: BootstrapPaths) -> list[DoctorIssue]:
         try:
             import json
 
-            json.loads(lock_file.read_text(encoding="utf-8"))
+            lock_root = json.loads(lock_file.read_text(encoding="utf-8"))
+            if not isinstance(lock_root, dict):
+                raise ValueError("lock root must be a JSON object")
         except (OSError, ValueError) as error:
             issues.append(
                 DoctorIssue(
@@ -273,6 +277,17 @@ def doctor_skills(paths: BootstrapPaths) -> list[DoctorIssue]:
                         level="warning",
                         scope="skills",
                         message=f"Manifest skill {skill!r} is absent from the global skill lock",
+                    )
+                )
+            for skill in sorted(locked - declared):
+                issues.append(
+                    DoctorIssue(
+                        level="warning",
+                        scope="skills",
+                        message=(
+                            f"Global lock skill {skill!r} is not declared by this manifest; "
+                            "it is installed on this machine but not reproducible from this repository"
+                        ),
                     )
                 )
 

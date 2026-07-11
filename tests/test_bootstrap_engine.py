@@ -70,6 +70,21 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         self.assertTrue((codex_skills / "alpha-skill").is_symlink())
         self.assertTrue((codex_skills / "beta-skill").is_symlink())
 
+    def test_render_global_outputs_syncs_claude_skill_links(self) -> None:
+        from src.render import render_global_outputs
+
+        paths = self._paths()
+        with mock.patch.object(
+            type(paths),
+            "agents_skills_home",
+            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / "skills"),
+        ):
+            render_global_outputs(paths)
+
+        claude_skills = paths.claude_home / "skills"
+        self.assertTrue((claude_skills / "alpha-skill").is_symlink())
+        self.assertTrue((claude_skills / "beta-skill").is_symlink())
+
     def test_render_preserves_unmanaged_codex_skill_links(self) -> None:
         from src.render import render_global_outputs
 
@@ -95,7 +110,7 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         self.assertTrue((codex_skills / "manual-skill").is_symlink())
         self.assertEqual(manual_source.resolve(), (codex_skills / "manual-skill").resolve())
 
-    def test_render_does_not_sync_manual_skills_when_global_lock_is_malformed(self) -> None:
+    def test_render_syncs_manual_skills_when_global_lock_is_malformed(self) -> None:
         from src.render import render_global_outputs
 
         paths = self._paths()
@@ -119,9 +134,37 @@ class SlimBootstrapEngineTests(unittest.TestCase):
             render_global_outputs(paths)
 
         self.assertTrue((paths.codex_home / "AGENTS.md").is_file())
-        self.assertFalse((paths.codex_home / "skills" / "manual-skill").exists())
+        self.assertTrue((paths.codex_home / "skills" / "manual-skill").is_symlink())
 
-    def test_doctor_reports_missing_managed_link_and_unlinked_manual_skill(self) -> None:
+    def test_non_object_lock_roots_do_not_crash_render_doctor_or_status(self) -> None:
+        from src.render import render_global_outputs
+        from src.service import BootstrapService
+
+        paths = self._paths()
+        global_lock = self.root / "home" / ".agents" / ".skill-lock.json"
+        global_lock.parent.mkdir(parents=True, exist_ok=True)
+
+        for lock_root in ("[]", "null", '"not an object"'):
+            with self.subTest(lock_root=lock_root):
+                (self.root / "skills-lock.json").write_text(lock_root, encoding="utf-8")
+                global_lock.write_text(lock_root, encoding="utf-8")
+                with mock.patch.object(
+                    type(paths),
+                    "agents_skills_home",
+                    new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / "skills"),
+                ), mock.patch.object(
+                    type(paths),
+                    "global_skill_lock",
+                    new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / ".skill-lock.json"),
+                ):
+                    render_global_outputs(paths)
+                    service = BootstrapService(paths)
+                    service.doctor_issues()
+                    summary = service.status_summary()
+
+                self.assertEqual(-1, summary["global_lock_skills"])
+
+    def test_doctor_reports_missing_managed_link_and_manual_provenance(self) -> None:
         from src.service import BootstrapService
 
         paths = self._paths()

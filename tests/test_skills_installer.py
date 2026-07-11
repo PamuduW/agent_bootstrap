@@ -189,6 +189,24 @@ sources:
 
         self.assertTrue(any("brainstorming" in message and "absent" in message for message in messages))
 
+    @patch("src.skills_installer.shutil.which", return_value="/usr/bin/npx")
+    def test_doctor_reports_global_lock_skills_not_declared_by_manifest(self, _mock_which) -> None:
+        from src.skills_installer import doctor_skills
+
+        paths = self._paths()
+        global_lock = self.root / "home" / ".agents" / ".skill-lock.json"
+        global_lock.parent.mkdir(parents=True)
+        global_lock.write_text(json.dumps({"skills": {"brainstorming": {}, "personal": {}}}), encoding="utf-8")
+
+        with patch.object(
+            type(paths),
+            "global_skill_lock",
+            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / ".skill-lock.json"),
+        ):
+            messages = [issue.message for issue in doctor_skills(paths)]
+
+        self.assertTrue(any("personal" in message and "not declared" in message for message in messages))
+
     def test_run_install_command_uses_a_timeout(self) -> None:
         from src.skills_installer import run_install_command
 

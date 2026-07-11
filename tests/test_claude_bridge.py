@@ -70,7 +70,7 @@ class ClaudeBridgeTests(unittest.TestCase):
         self.assertTrue(existing.is_dir())
         self.assertFalse(existing.is_symlink())
 
-    def test_bridge_skips_conflicting_symlink_target(self) -> None:
+    def test_bridge_preserves_conflicting_symlink_target(self) -> None:
         from src.claude_bridge import bridge_claude_skills
 
         self._write_skill("alpha")
@@ -84,13 +84,27 @@ class ClaudeBridgeTests(unittest.TestCase):
         result = bridge_claude_skills(self.agents_home, self.claude_home)
 
         self.assertEqual(0, result.linked)
-        self.assertEqual(1, result.updated)
-        self.assertEqual(0, result.skipped)
-        self.assertEqual("updated", result.actions[0].action)
+        self.assertEqual(0, result.updated)
+        self.assertEqual(1, result.skipped)
+        self.assertEqual("skip_existing", result.actions[0].action)
         self.assertEqual(
-            (self.agents_home / "alpha").resolve(),
+            other_source.resolve(),
             (self.claude_home / "alpha").resolve(),
         )
+
+    def test_bridge_repairs_a_broken_legacy_symlink(self) -> None:
+        from src.claude_bridge import bridge_claude_skills
+
+        source = self._write_skill("alpha")
+        self.claude_home.mkdir(parents=True, exist_ok=True)
+        target = self.claude_home / "alpha"
+        target.symlink_to(self.root / "missing" / "alpha")
+
+        result = bridge_claude_skills(self.agents_home, self.claude_home)
+
+        self.assertEqual(1, result.updated)
+        self.assertEqual("updated", result.actions[0].action)
+        self.assertEqual(source.resolve(), target.resolve())
 
     def test_bridge_dry_run_reports_without_writing(self) -> None:
         from src.claude_bridge import bridge_claude_skills
@@ -112,6 +126,17 @@ class ClaudeBridgeTests(unittest.TestCase):
         self.assertEqual([], result.actions)
         self.assertEqual(0, result.linked)
         self.assertEqual(0, result.skipped)
+
+    def test_bridge_ignores_directories_without_skill_definition(self) -> None:
+        from src.claude_bridge import bridge_claude_skills
+
+        self.agents_home.mkdir(parents=True)
+        (self.agents_home / "not-a-skill").mkdir()
+
+        result = bridge_claude_skills(self.agents_home, self.claude_home)
+
+        self.assertEqual([], result.actions)
+        self.assertFalse((self.claude_home / "not-a-skill").exists())
 
 
 if __name__ == "__main__":

@@ -145,6 +145,7 @@ def print_status_summary(
     global_lock_exists: bool = False,
     global_lock_skills: int = 0,
     claude_bridge_links: int = 0,
+    manual_skill_count: int = 0,
     doctor_issue_count: int = 0,
 ) -> None:
     manifest_detail = "skills.sources.yaml"
@@ -175,6 +176,11 @@ def print_status_summary(
                 "Claude bridge",
                 f"{claude_bridge_links} symlink(s)" if claude_bridge_links else "none",
                 "ok" if claude_bridge_links else "check",
+            ),
+            (
+                "Manual skills",
+                f"{manual_skill_count} outside global lock" if manual_skill_count else "none",
+                "info" if manual_skill_count else "ok",
             ),
             (
                 "Doctor",

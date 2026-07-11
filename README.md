@@ -53,7 +53,7 @@ export AGENT_BOOTSTRAP_HOME="/any/path/agent_bootstrap"
 Curated upstreams are listed in [`skills.sources.yaml`](skills.sources.yaml). Install or refresh:
 
 ```bash
-./install.sh skills install   # idempotent install from manifest
+./install.sh skills install   # idempotent install from manifest, then refresh Claude/Codex outputs
 ./install.sh skills update    # npx skills update -g + Claude bridge + Codex symlinks
 ./install.sh skills list
 ./install.sh skills doctor
@@ -76,7 +76,7 @@ To add a skill: add an entry under `sources` in `skills.sources.yaml`, then run 
 
 ### Manual skill folders
 
-A folder copied into `~/.agents/skills/` is not a managed install. Bootstrap preserves existing Codex links and `./install.sh doctor` warns if such a folder is not explicitly linked into `~/.codex/skills/`. For durable, reproducible installation, add the skill's repository and selected skill names to `skills.sources.yaml` and install it through `npx skills`; the global lock then records it.
+A folder copied into `~/.agents/skills/` is a valid **manual local skill**. `./install.sh global` (and both skill install/update commands) links every valid local skill into Codex and Claude without replacing conflicting user-owned links. Manual skills remain distinct from managed installs: `doctor` and `status` report them as available-but-not-reproducible until their repository and selected skill names are added to `skills.sources.yaml` and installed through `npx skills`, which records them in the global lock.
 
 ## agentboot
 

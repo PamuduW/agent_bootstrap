@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .paths import BootstrapPaths, default_paths
 from .service import BootstrapService
+from .skills_installer import SkillsInstallError
 from .ui import (
     print_doctor_summary,
     print_header,
@@ -54,7 +55,7 @@ def main() -> int:
         if command == "skills":
             return handle_skills_command(service, args.skills_command)
         raise SystemExit(f"unknown command: {command}")
-    except (ValueError, OSError) as error:
+    except (SkillsInstallError, ValueError, OSError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
 
@@ -97,7 +98,7 @@ def handle_skills_command(service: BootstrapService, skills_command: str) -> int
         try:
             results = service.install_skills()
             skills_rc = print_skills_report(results, title="Skills install")
-            service.apply_claude_bridge()
+            service.refresh_agent_outputs()
         except Exception as error:  # noqa: BLE001
             print_header("Skills install", "agent_bootstrap › skills")
             print(f"  Error: {error}")
@@ -154,6 +155,7 @@ def print_status(service: BootstrapService) -> None:
         global_lock_exists=bool(summary["global_lock_exists"]),
         global_lock_skills=int(summary["global_lock_skills"]),
         claude_bridge_links=int(summary["claude_bridge_links"]),
+        manual_skill_count=int(summary["manual_skill_count"]),
         doctor_issue_count=int(summary["doctor_issue_count"]),
     )
 

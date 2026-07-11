@@ -107,6 +107,7 @@ print_status_summary(
     global_lock_exists=bool(summary["global_lock_exists"]),
     global_lock_skills=int(summary["global_lock_skills"]),
     claude_bridge_links=int(summary["claude_bridge_links"]),
+    manual_skill_count=int(summary["manual_skill_count"]),
     doctor_issue_count=int(summary["doctor_issue_count"]),
 )
 PY

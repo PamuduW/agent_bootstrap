@@ -45,8 +45,7 @@ class BootstrapService:
         print_header("Bootstrap", str(self.paths.root))
         results = run_skills_install(self.paths)
         skills_rc = print_skills_report(results, title="Skills install")
-        self.apply_claude_bridge()
-        self.render_global()
+        self.refresh_agent_outputs()
         issues = self.doctor_issues() + self.skills_doctor_issues()
         doctor_rc = print_doctor_summary(issues)
         if skills_rc != 0:
@@ -131,10 +130,21 @@ class BootstrapService:
                     issues.append(
                         DoctorIssue(
                             level="warning",
-                            scope="codex",
+                            scope="reproducibility",
                             message=(
-                                f"Manual skill {source.name!r} is not linked into Codex; a copied folder is not a managed "
-                                "install. Add it through a skill source or create and maintain an explicit link."
+                                f"Manual skill {source.name!r} is outside the global lock and has no Codex link yet; "
+                                "run './install.sh global' to make the local skill available, then add a source to make it reproducible"
+                            ),
+                        )
+                    )
+                else:
+                    issues.append(
+                        DoctorIssue(
+                            level="warning",
+                            scope="reproducibility",
+                            message=(
+                                f"Manual skill {source.name!r} is available to Codex but outside the global lock; "
+                                "add a manifest source to make it reproducible"
                             ),
                         )
                     )
@@ -155,6 +165,8 @@ class BootstrapService:
                 enabled_sources = -1
 
         global_lock_skills = self._count_global_lock_skills(self.paths)
+        managed_names = set(managed_skill_names(self.paths))
+        local_names = {skill_dir.name for skill_dir in installed_skill_dirs(self.paths)}
         claude_bridge_links = 0
         if self.paths.claude_skills_home.is_dir():
             claude_bridge_links = sum(
@@ -170,6 +182,8 @@ class BootstrapService:
             "skills_sources_exists": self.paths.skills_sources_file.exists(),
             "global_lock_exists": self.paths.global_skill_lock.exists(),
             "global_lock_skills": global_lock_skills,
+            "managed_skill_count": len(managed_names),
+            "manual_skill_count": len(local_names - managed_names),
             "claude_bridge_links": claude_bridge_links,
             "doctor_issue_count": len(doctor_issues),
         }
@@ -182,6 +196,8 @@ class BootstrapService:
         try:
             data = json.loads(lock_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
+            return -1
+        if not isinstance(data, dict):
             return -1
         skills = data.get("skills")
         if isinstance(skills, dict):

@@ -52,7 +52,9 @@ def bridge_claude_skills(
     if not dry_run:
         claude_dir.mkdir(parents=True, exist_ok=True)
 
-    for source in sorted(path for path in agents_dir.iterdir() if path.is_dir()):
+    for source in sorted(
+        path for path in agents_dir.iterdir() if path.is_dir() and (path / "SKILL.md").is_file()
+    ):
         target = claude_dir / source.name
         action = _bridge_entry(source, target, dry_run=dry_run)
         actions.append(action)
@@ -70,10 +72,12 @@ def _bridge_entry(source: Path, target: Path, *, dry_run: bool) -> BridgeAction:
     if target.is_symlink():
         if target.resolve() == source.resolve():
             return BridgeAction(skill_name=source.name, target=target, action="already_linked")
-        if not dry_run:
-            target.unlink()
-            os.symlink(source, target)
-        return BridgeAction(skill_name=source.name, target=target, action="updated")
+        if not target.exists():
+            if not dry_run:
+                target.unlink()
+                os.symlink(source, target)
+            return BridgeAction(skill_name=source.name, target=target, action="updated")
+        return BridgeAction(skill_name=source.name, target=target, action="skip_existing")
 
     if target.exists():
         return BridgeAction(skill_name=source.name, target=target, action="skip_existing")

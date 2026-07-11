@@ -1,4 +1,5 @@
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -156,7 +157,7 @@ sources:
             lock_file.chmod(0o644)
 
         messages = [issue.message for issue in issues]
-        self.assertTrue(any("Unable to read skills lock file" in message for message in messages))
+        self.assertTrue(any("Unable to read project skills lock file" in message for message in messages))
 
     def test_run_install_command_uses_subprocess(self) -> None:
         from src.skills_installer import run_install_command
@@ -169,6 +170,43 @@ sources:
         self.assertEqual(0, result.returncode)
         self.assertEqual("ok", result.stdout)
         self.assertEqual("update", result.source_id)
+
+    @patch("src.skills_installer.shutil.which", return_value="/usr/bin/npx")
+    def test_doctor_reports_manifest_skills_missing_from_global_lock(self, _mock_which) -> None:
+        from src.skills_installer import doctor_skills
+
+        paths = self._paths()
+        global_lock = self.root / "home" / ".agents" / ".skill-lock.json"
+        global_lock.parent.mkdir(parents=True)
+        global_lock.write_text(json.dumps({"skills": {}}), encoding="utf-8")
+
+        with patch.object(
+            type(paths),
+            "global_skill_lock",
+            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / ".skill-lock.json"),
+        ):
+            messages = [issue.message for issue in doctor_skills(paths)]
+
+        self.assertTrue(any("brainstorming" in message and "absent" in message for message in messages))
+
+    def test_run_install_command_uses_a_timeout(self) -> None:
+        from src.skills_installer import run_install_command
+
+        completed = MagicMock(returncode=0, stdout="ok", stderr="")
+        with patch("src.skills_installer.subprocess.run", return_value=completed) as mock_run:
+            run_install_command(["npx", "skills", "update"], source_id="update")
+
+        self.assertIn("timeout", mock_run.call_args.kwargs)
+
+    def test_run_install_command_reports_timeouts_with_source_context(self) -> None:
+        from src.skills_installer import SkillsInstallError, run_install_command
+
+        with patch(
+            "src.skills_installer.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(["npx", "skills"], 1),
+        ):
+            with self.assertRaisesRegex(SkillsInstallError, "superpowers.*timed out"):
+                run_install_command(["npx", "skills", "add"], source_id="superpowers")
 
 
 if __name__ == "__main__":

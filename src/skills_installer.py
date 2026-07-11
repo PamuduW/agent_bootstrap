@@ -44,6 +44,25 @@ def summarize_install_results(results: list[InstallResult]) -> InstallSummary:
 
 
 DEFAULT_NPX = "npx"
+DEFAULT_NPX_TIMEOUT_SECONDS = 300
+
+
+def _lock_skill_names(lock_file: Path) -> set[str] | None:
+    """Return names from a readable lock; None means unreadable or malformed."""
+    if not lock_file.is_file():
+        return set()
+    try:
+        import json
+
+        data = json.loads(lock_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    skills = data.get("skills")
+    if isinstance(skills, dict):
+        return set(skills)
+    if isinstance(skills, list):
+        return {str(skill) for skill in skills}
+    return set()
 
 
 def build_add_argv(
@@ -81,6 +100,7 @@ def run_install_command(
     source_id: str = "",
     dry_run: bool = False,
     cwd: Path | None = None,
+    timeout_seconds: int = DEFAULT_NPX_TIMEOUT_SECONDS,
 ) -> InstallResult:
     if dry_run:
         return InstallResult(
@@ -91,13 +111,20 @@ def run_install_command(
             stderr="",
         )
 
-    completed = subprocess.run(
-        argv,
-        cwd=str(cwd) if cwd is not None else None,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        completed = subprocess.run(
+            argv,
+            cwd=str(cwd) if cwd is not None else None,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as error:
+        source = f" source {source_id!r}" if source_id else ""
+        raise SkillsInstallError(
+            f"npx skills{source} timed out after {timeout_seconds} seconds: {' '.join(argv)}"
+        ) from error
     return InstallResult(
         source_id=source_id,
         command=argv,
@@ -189,6 +216,7 @@ def list_installed_skills(paths: BootstrapPaths) -> list[str]:
 
 def doctor_skills(paths: BootstrapPaths) -> list[DoctorIssue]:
     issues: list[DoctorIssue] = []
+    config: SkillsSourcesConfig | None = None
 
     if not paths.skills_sources_file.is_file():
         issues.append(
@@ -198,6 +226,13 @@ def doctor_skills(paths: BootstrapPaths) -> list[DoctorIssue]:
                 message=f"Missing skills sources file: {paths.skills_sources_file}",
             )
         )
+    else:
+        try:
+            config = load_skills_sources(paths.skills_sources_file)
+        except ValueError as error:
+            issues.append(
+                DoctorIssue(level="error", scope="skills", message=f"Invalid skills sources file: {error}")
+            )
 
     if shutil.which("npx") is None:
         issues.append(
@@ -208,16 +243,37 @@ def doctor_skills(paths: BootstrapPaths) -> list[DoctorIssue]:
             )
         )
 
-    if paths.skills_lock_file.is_file():
+    for label, lock_file in (("project", paths.skills_lock_file), ("global", paths.global_skill_lock)):
+        if not lock_file.is_file():
+            continue
         try:
-            paths.skills_lock_file.read_text(encoding="utf-8")
-        except OSError as error:
+            import json
+
+            json.loads(lock_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as error:
             issues.append(
                 DoctorIssue(
                     level="warning",
                     scope="skills",
-                    message=f"Unable to read skills lock file: {error}",
+                    message=f"Unable to read {label} skills lock file: {error}",
                 )
             )
+
+    if config is not None and config.scope == "global":
+        locked = _lock_skill_names(paths.global_skill_lock)
+        if locked is not None and paths.global_skill_lock.is_file():
+            declared = {
+                skill
+                for source in config.active_sources()
+                for skill in source.skills
+            }
+            for skill in sorted(declared - locked):
+                issues.append(
+                    DoctorIssue(
+                        level="warning",
+                        scope="skills",
+                        message=f"Manifest skill {skill!r} is absent from the global skill lock",
+                    )
+                )
 
     return issues

@@ -207,20 +207,6 @@ run_bootstrap() {
   return "$rc"
 }
 
-map_legacy_flags() {
-  if [[ $# -eq 0 ]]; then
-    return 0
-  fi
-
-  case "$1" in
-    --status) set -- status "${@:2}" ;;
-    --global) set -- global "${@:2}" ;;
-    --workspace|--all)
-      die "workspace/all render is archived — see archive/README.md"
-      ;;
-  esac
-}
-
 usage() {
   cat <<EOF
 Usage: ./install.sh [command] [args]
@@ -251,9 +237,15 @@ EOF
 main() {
   cd "$BOOTSTRAP_DIR"
 
-  if [[ $# -gt 0 ]]; then
-    map_legacy_flags "$@"
-  fi
+  # This must happen in main: `set --` inside a helper only changes that
+  # helper's positional parameters, which broke the advertised legacy flags.
+  case "${1:-}" in
+    --status) set -- status "${@:2}" ;;
+    --global) set -- global "${@:2}" ;;
+    --workspace|--all)
+      die "workspace/all render is archived — see archive/README.md"
+      ;;
+  esac
 
   local cmd="${1:-bootstrap}"
 

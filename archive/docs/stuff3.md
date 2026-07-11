@@ -58,6 +58,10 @@ Phase 4 (memory + graphs)     →  optional; does not block Phases 1–3
 | Agents UX | `dotfiles/scripts/menus/agents.sh` (to move in Phase 1) |
 | Deferred reference | `archive/docs/stuff.md`, `archive/docs/stuff2.md` |
 
+### Phase 0 follow-up — personal custom skills source (planned, not implemented)
+
+Create a dedicated NPM/Skills-CLI-compatible repository for personal skills (including `co-council`). Once it exists and has a reviewed revision, add it as a normal source in `skills.sources.yaml` and install it with `npx skills -g` so its selected skills are represented in `~/.agents/.skill-lock.json` and validated as managed Codex links. Do not treat ad-hoc copies into `~/.agents/skills/` as equivalent; they remain user-managed until explicitly linked or moved into that source.
+
 **Exit criteria:** `./install.sh doctor` clean; tests pass; dotfiles Agents menu works.
 
 ---

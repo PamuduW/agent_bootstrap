@@ -51,9 +51,14 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         from src.render import render_global_outputs
 
         paths = self._paths()
-        with mock.patch(
-            "src.render._agents_skills_home",
-            return_value=self.agents_home,
+        with mock.patch.object(
+            type(paths),
+            "agents_skills_home",
+            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / "skills"),
+        ), mock.patch.object(
+            type(paths),
+            "global_skill_lock",
+            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / ".skill-lock.json"),
         ):
             render_global_outputs(paths)
 
@@ -64,6 +69,80 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         codex_skills = paths.codex_home / "skills"
         self.assertTrue((codex_skills / "alpha-skill").is_symlink())
         self.assertTrue((codex_skills / "beta-skill").is_symlink())
+
+    def test_render_preserves_unmanaged_codex_skill_links(self) -> None:
+        from src.render import render_global_outputs
+
+        paths = self._paths()
+        codex_skills = paths.codex_home / "skills"
+        codex_skills.mkdir(parents=True)
+        manual_source = self.root / "manual-skill"
+        manual_source.mkdir()
+        (manual_source / "SKILL.md").write_text("# manual\n", encoding="utf-8")
+        (codex_skills / "manual-skill").symlink_to(manual_source)
+
+        with mock.patch.object(
+            type(paths),
+            "agents_skills_home",
+            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / "skills"),
+        ), mock.patch.object(
+            type(paths),
+            "global_skill_lock",
+            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / ".skill-lock.json"),
+        ):
+            render_global_outputs(paths)
+
+        self.assertTrue((codex_skills / "manual-skill").is_symlink())
+        self.assertEqual(manual_source.resolve(), (codex_skills / "manual-skill").resolve())
+
+    def test_render_does_not_sync_manual_skills_when_global_lock_is_malformed(self) -> None:
+        from src.render import render_global_outputs
+
+        paths = self._paths()
+        (self.root / "skills-lock.json").write_text('{"sources": []}', encoding="utf-8")
+        global_lock = self.root / "home" / ".agents" / ".skill-lock.json"
+        global_lock.parent.mkdir(parents=True, exist_ok=True)
+        global_lock.write_text("not json", encoding="utf-8")
+        manual = self.agents_home / "manual-skill"
+        manual.mkdir()
+        (manual / "SKILL.md").write_text("# manual\n", encoding="utf-8")
+
+        with mock.patch.object(
+            type(paths),
+            "agents_skills_home",
+            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / "skills"),
+        ), mock.patch.object(
+            type(paths),
+            "global_skill_lock",
+            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / ".skill-lock.json"),
+        ):
+            render_global_outputs(paths)
+
+        self.assertTrue((paths.codex_home / "AGENTS.md").is_file())
+        self.assertFalse((paths.codex_home / "skills" / "manual-skill").exists())
+
+    def test_doctor_reports_missing_managed_link_and_unlinked_manual_skill(self) -> None:
+        from src.service import BootstrapService
+
+        paths = self._paths()
+        manual = self.agents_home / "manual-skill"
+        manual.mkdir()
+        (manual / "SKILL.md").write_text("# manual\n", encoding="utf-8")
+        service = BootstrapService(paths)
+
+        with mock.patch.object(
+            type(paths),
+            "agents_skills_home",
+            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / "skills"),
+        ), mock.patch.object(
+            type(paths),
+            "global_skill_lock",
+            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / ".skill-lock.json"),
+        ):
+            messages = [issue.message for issue in service.doctor_issues()]
+
+        self.assertTrue(any("alpha-skill" in message and "missing" in message for message in messages))
+        self.assertTrue(any("manual-skill" in message and "manual" in message for message in messages))
 
     def test_slim_doctor_reports_missing_global_agents(self) -> None:
         from src.service import BootstrapService

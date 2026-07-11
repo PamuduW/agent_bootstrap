@@ -31,7 +31,6 @@ sources:
     skills:
       - kubernetes
       - terraform
-      - github-actions
       - gitlab-ci
 
   - id: devops-anmol

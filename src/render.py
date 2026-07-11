@@ -33,23 +33,19 @@ def render_global_outputs(paths: BootstrapPaths) -> None:
     (paths.claude_home / "AGENTS.md").write_text(merged, encoding="utf-8")
 
 
-def _agents_skills_home() -> Path:
-    return Path.home() / ".agents" / "skills"
-
-
 def _project_skills_lock(paths: BootstrapPaths) -> Path:
     return paths.root / "skills-lock.json"
 
 
-def _global_skills_lock() -> Path:
-    return Path.home() / ".agents" / ".skill-lock.json"
-
-
-def _skill_names_from_lock(lock_file: Path) -> list[str]:
+def _skill_names_from_lock(lock_file: Path) -> list[str] | None:
+    """Return lock skill names, or None when an existing lock is malformed."""
     if not lock_file.exists():
         return []
 
-    data = json.loads(lock_file.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(lock_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
     skills = data.get("skills")
     if isinstance(skills, dict):
         return sorted(skills.keys())
@@ -67,11 +63,21 @@ def _skill_names_from_lock(lock_file: Path) -> list[str]:
     return []
 
 
-def _installed_skill_dirs(paths: BootstrapPaths) -> list[Path]:
-    agents_home = _agents_skills_home()
+def managed_skill_names(paths: BootstrapPaths) -> list[str]:
     lock_names = _skill_names_from_lock(_project_skills_lock(paths))
+    # The project lock is only a stub for global installs; a malformed stub
+    # must not prevent a valid authoritative global lock from being used.
+    if lock_names is None:
+        lock_names = []
     if not lock_names:
-        lock_names = _skill_names_from_lock(_global_skills_lock())
+        lock_names = _skill_names_from_lock(paths.global_skill_lock)
+    return lock_names or []
+
+
+def installed_skill_dirs(paths: BootstrapPaths) -> list[Path]:
+    """Return only skills declared by a lock, falling back when no lock exists."""
+    agents_home = paths.agents_skills_home
+    lock_names = managed_skill_names(paths)
 
     dirs: list[Path] = []
     if lock_names:
@@ -79,6 +85,11 @@ def _installed_skill_dirs(paths: BootstrapPaths) -> list[Path]:
             skill_dir = agents_home / name
             if (skill_dir / "SKILL.md").exists():
                 dirs.append(skill_dir.resolve())
+        return dirs
+
+    # An invalid or empty lock must not turn every manual folder into a managed
+    # Codex link. Only fall back to directory discovery when no lock exists.
+    if _project_skills_lock(paths).exists() or paths.global_skill_lock.exists():
         return dirs
 
     if not agents_home.exists():
@@ -94,8 +105,8 @@ def _sync_codex_skills(paths: BootstrapPaths) -> None:
     skills_home = paths.codex_home / "skills"
     skills_home.mkdir(parents=True, exist_ok=True)
 
-    wanted = {skill_dir.name for skill_dir in _installed_skill_dirs(paths)}
-    agents_home = _agents_skills_home()
+    wanted = {skill_dir.name for skill_dir in installed_skill_dirs(paths)}
+    agents_home = paths.agents_skills_home
 
     for skill_name in sorted(wanted):
         source = agents_home / skill_name
@@ -105,14 +116,10 @@ def _sync_codex_skills(paths: BootstrapPaths) -> None:
         if target.is_symlink() or target.exists():
             if target.resolve() == source.resolve():
                 continue
-            if target.is_dir() and not target.is_symlink():
-                continue
-            target.unlink()
+            # A different path belongs to the user or another installer. Never
+            # replace it merely because this source is currently lock-managed.
+            continue
         target.symlink_to(source.resolve())
-
-    for existing in skills_home.iterdir():
-        if existing.name not in wanted and existing.is_symlink():
-            existing.unlink()
 
 
 def _read_repo_overlay(repo_agents: Path | None) -> str | None:

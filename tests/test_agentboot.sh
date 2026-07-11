@@ -57,6 +57,16 @@ run_agentboot() {
   AGENT_BOOTSTRAP_HOME="$ROOT" "$AGENTBOOT" "$@"
 }
 
+# Legacy aliases are public compatibility commands. --status is read-only and
+# verifies its argument is remapped by install.sh's main scope.
+STATUS_OUTPUT="$(${ROOT}/install.sh --status 2>&1)"
+assert_output_contains "$STATUS_OUTPUT" "Status" "legacy --status maps to status"
+
+LEGACY_HOME="${TMPDIR}/legacy-home"
+mkdir -p "$LEGACY_HOME"
+HOME="$LEGACY_HOME" "${ROOT}/install.sh" --global >/dev/null
+assert_file_exists "${LEGACY_HOME}/.codex/AGENTS.md" "legacy --global maps to global"
+
 # Test 1: creates AGENTS.md + CLAUDE.md in empty dir
 WORKDIR1="${TMPDIR}/empty-repo"
 mkdir -p "$WORKDIR1"

@@ -40,8 +40,6 @@ cd /any/path/agent_bootstrap
 ./install.sh
 ```
 
-When dotfiles is also installed, set `AGENT_BOOTSTRAP_ALLOW_OVERRIDE=1` only if you intentionally use a non-sibling path.
-
 Default bootstrap runs: skills install → Claude bridge → global render → doctor, and symlinks `bin/agentboot` → `~/bin/agentboot`. Ensure `~/bin` is on your PATH.
 
 `AGENT_BOOTSTRAP_HOME` is exported from the clone path (not from `.env`). With a sibling clone next to dotfiles, dotfiles sets this automatically. For standalone installs, add to your shell profile:
@@ -74,6 +72,12 @@ See [`archive/LOCKFILE-NOTES.md`](archive/LOCKFILE-NOTES.md) for historical note
 
 To add a skill: add an entry under `sources` in `skills.sources.yaml`, then run `./install.sh skills install` (not `update`).
 
+`npx` operations time out after five minutes and report the source ID plus command on failure. If a source repeatedly fails, run its printed command directly to distinguish registry/network failures from an invalid source declaration.
+
+### Manual skill folders
+
+A folder copied into `~/.agents/skills/` is not a managed install. Bootstrap preserves existing Codex links and `./install.sh doctor` warns if such a folder is not explicitly linked into `~/.codex/skills/`. For durable, reproducible installation, add the skill's repository and selected skill names to `skills.sources.yaml` and install it through `npx skills`; the global lock then records it.
+
 ## agentboot
 
 Scaffold base agent files in any git repo:
@@ -97,7 +101,7 @@ Re-link after moving the clone:
 ```bash
 ./install.sh global     # re-render ~/.codex and ~/.claude outputs from global/AGENTS.md
 ./install.sh status     # skills count + global baseline status
-./install.sh doctor     # validate skills manifest and global baseline
+./install.sh doctor     # validate manifest, locks, and managed Codex skill links
 ```
 
 ## Repo layout

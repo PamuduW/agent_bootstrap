@@ -6,7 +6,7 @@ from pathlib import Path
 from .claude_bridge import bridge_claude_skills as link_claude_skills
 from .models import DoctorIssue
 from .paths import BootstrapPaths
-from .render import render_global_outputs
+from .render import installed_skill_dirs, managed_skill_names, render_global_outputs
 from .skills_installer import (
     doctor_skills,
     install_skills as run_skills_install,
@@ -87,6 +87,57 @@ class BootstrapService:
                     message=f"Missing skills manifest: {self.paths.skills_sources_file}",
                 )
             )
+
+        managed_names = managed_skill_names(self.paths)
+        managed_dirs = {skill_dir.name: skill_dir for skill_dir in installed_skill_dirs(self.paths)}
+        codex_skills = self.paths.codex_home / "skills"
+
+        for name in managed_names:
+            source = self.paths.agents_skills_home / name
+            if name not in managed_dirs:
+                issues.append(
+                    DoctorIssue(
+                        level="error",
+                        scope="skills",
+                        message=f"Managed skill {name!r} is missing from {source}",
+                    )
+                )
+                continue
+
+            target = codex_skills / name
+            if not target.is_symlink() or not target.exists():
+                issues.append(
+                    DoctorIssue(
+                        level="error",
+                        scope="codex",
+                        message=f"Managed Codex skill link for {name!r} is missing or broken: {target}",
+                    )
+                )
+            elif target.resolve() != source.resolve():
+                issues.append(
+                    DoctorIssue(
+                        level="warning",
+                        scope="codex",
+                        message=f"Managed Codex skill link for {name!r} points outside the managed source: {target}",
+                    )
+                )
+
+        if self.paths.agents_skills_home.is_dir():
+            for source in sorted(self.paths.agents_skills_home.iterdir()):
+                if not source.is_dir() or not (source / "SKILL.md").is_file() or source.name in managed_names:
+                    continue
+                target = codex_skills / source.name
+                if not target.is_symlink() or not target.exists() or target.resolve() != source.resolve():
+                    issues.append(
+                        DoctorIssue(
+                            level="warning",
+                            scope="codex",
+                            message=(
+                                f"Manual skill {source.name!r} is not linked into Codex; a copied folder is not a managed "
+                                "install. Add it through a skill source or create and maintain an explicit link."
+                            ),
+                        )
+                    )
 
         return issues
 

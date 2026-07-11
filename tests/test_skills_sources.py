@@ -70,6 +70,33 @@ sources:
         self.assertEqual(1, len(active))
         self.assertEqual("enabled", active[0].id)
 
+    def test_load_skills_sources_rejects_duplicate_active_skill_ownership(self) -> None:
+        from src.skills_sources import SkillsSourcesError, load_skills_sources
+
+        path = self._write_sources(
+            """\
+version: 1
+agents:
+  - codex
+scope: global
+sources:
+  - id: first
+    repo: owner/first
+    skills:
+      - shared-skill
+  - id: second
+    repo: owner/second
+    skills:
+      - shared-skill
+"""
+        )
+
+        with self.assertRaisesRegex(
+            SkillsSourcesError,
+            "skill 'shared-skill' is declared by both active sources 'first' and 'second'",
+        ):
+            load_skills_sources(path)
+
     def test_load_skills_sources_raises_for_missing_file(self) -> None:
         from src.skills_sources import SkillsSourcesError, load_skills_sources
 

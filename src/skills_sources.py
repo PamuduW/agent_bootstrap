@@ -97,7 +97,23 @@ def validate_skills_sources(raw: dict[str, Any], *, path: Path | None = None) ->
             )
         )
 
-    return SkillsSourcesConfig(version=version, agents=agents, scope=scope.strip(), sources=sources)
+    config = SkillsSourcesConfig(version=version, agents=agents, scope=scope.strip(), sources=sources)
+    _validate_active_skill_ownership(config, label=label)
+    return config
+
+
+def _validate_active_skill_ownership(config: SkillsSourcesConfig, *, label: str) -> None:
+    """Ensure each installed skill has one unambiguous upstream owner."""
+    owners: dict[str, str] = {}
+    for source in config.active_sources():
+        for skill in source.skills:
+            owner = owners.get(skill)
+            if owner is not None:
+                raise SkillsSourcesError(
+                    f"{label}: skill {skill!r} is declared by both active sources "
+                    f"{owner!r} and {source.id!r}"
+                )
+            owners[skill] = source.id
 
 
 def _require_string_list(

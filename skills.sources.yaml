@@ -2,6 +2,8 @@
 # Install template (every entry):
 #   npx skills add <repo> --skill <name> ... \
 #     -a cursor -a codex -a claude-code -a github-copilot -g -y
+# Use `skills: all` to install every skill supplied by a source; otherwise use
+# a YAML list of explicit skill names.
 #
 # Lockfile: global installs (-g) pin versions in ~/.agents/.skill-lock.json.
 # This repo file stays a stub unless you switch to project-scoped installs.
@@ -53,30 +55,7 @@ sources:
 
   - id: akindu-agent-skills
     repo: Akindu23/my-agent-skills
-    skills:
-      - council
-      - recursive-decomposition
-      - grilling
-      - yagni
-      - document
-      - karpathy-guidelines
-      - best-practices-research
-      - architecture-decision-records
-      - domain-modeling
-      - codebase-design
-      - codebase-onboarding
-      - improve-codebase-architecture
-      - decision-mapping
-      - implement-plan
-      - prototype
-      - to-prd
-      - to-issues
-      - triage
-      - setup-matt-pocock-skills
-      - tdd
-      - diagnosing-bugs
-      - explain-code
-      - handoff
+    skills: all
 
   - id: graphify
     repo: safishamsi/graphify

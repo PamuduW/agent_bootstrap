@@ -83,7 +83,7 @@ def validate_skills_sources(raw: dict[str, Any], *, path: Path | None = None) ->
         if repo is not None and not isinstance(repo, str):
             raise SkillsSourcesError(f"{label}: sources[{index}].repo must be a string or null")
 
-        skills = _require_string_list(item.get("skills", []), field_name="skills", label=label, index=index)
+        skills = _require_skills(item.get("skills", []), label=label, index=index)
         enabled = item.get("enabled", True)
         if not isinstance(enabled, bool):
             raise SkillsSourcesError(f"{label}: sources[{index}].enabled must be a boolean")
@@ -140,3 +140,14 @@ def _require_string_list(
             raise SkillsSourcesError(f"{label}: {location} must be a non-empty string")
         items.append(item.strip())
     return items
+
+
+def _require_skills(value: Any, *, label: str, index: int) -> list[str]:
+    """Normalize a selected skill list or the manifest shorthand ``all``."""
+    if isinstance(value, str):
+        if value.strip().lower() == "all":
+            return ["*"]
+        raise SkillsSourcesError(
+            f"{label}: sources[{index}].skills must be a list or the string 'all'"
+        )
+    return _require_string_list(value, field_name="skills", label=label, index=index)

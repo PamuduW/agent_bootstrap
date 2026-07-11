@@ -67,6 +67,32 @@ def _lock_skill_names(lock_file: Path) -> set[str] | None:
     return set()
 
 
+def _lock_skill_entries(lock_file: Path) -> dict[str, object] | None:
+    """Return lock entries when their per-skill provenance is available."""
+    if not lock_file.is_file():
+        return {}
+    try:
+        import json
+
+        data = json.loads(lock_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    skills = data.get("skills")
+    return skills if isinstance(skills, dict) else {}
+
+
+def _lock_entry_matches_source(entry: object, source: SkillSourceEntry) -> bool:
+    if not isinstance(entry, dict) or not source.repo:
+        return False
+
+    repo = source.repo.lower().removesuffix(".git")
+    recorded_source = str(entry.get("source", "")).lower().removesuffix(".git")
+    recorded_url = str(entry.get("sourceUrl", "")).lower().removesuffix(".git")
+    return recorded_source == repo or recorded_url.endswith(f"/{repo}")
+
+
 def build_add_argv(
     source: SkillSourceEntry,
     *,
@@ -266,10 +292,20 @@ def doctor_skills(paths: BootstrapPaths) -> list[DoctorIssue]:
     if config is not None and config.scope == "global":
         locked = _lock_skill_names(paths.global_skill_lock)
         if locked is not None and paths.global_skill_lock.is_file():
+            lock_entries = _lock_skill_entries(paths.global_skill_lock) or {}
             declared = {
                 skill
                 for source in config.active_sources()
                 for skill in source.skills
+            }
+            declared.discard("*")
+            wildcard_managed = {
+                skill
+                for skill, entry in lock_entries.items()
+                if any(
+                    source.skills == ["*"] and _lock_entry_matches_source(entry, source)
+                    for source in config.active_sources()
+                )
             }
             for skill in sorted(declared - locked):
                 issues.append(
@@ -279,7 +315,7 @@ def doctor_skills(paths: BootstrapPaths) -> list[DoctorIssue]:
                         message=f"Manifest skill {skill!r} is absent from the global skill lock",
                     )
                 )
-            for skill in sorted(locked - declared):
+            for skill in sorted(locked - declared - wildcard_managed):
                 issues.append(
                     DoctorIssue(
                         level="warning",

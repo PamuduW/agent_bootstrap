@@ -70,6 +70,42 @@ sources:
         self.assertEqual(1, len(active))
         self.assertEqual("enabled", active[0].id)
 
+    def test_load_skills_sources_expands_all_to_the_skills_cli_wildcard(self) -> None:
+        from src.skills_installer import build_add_argv
+        from src.skills_sources import load_skills_sources
+
+        path = self._write_sources(
+            """\
+version: 1
+agents:
+  - codex
+scope: global
+sources:
+  - id: personal
+    repo: owner/personal-skills
+    skills: all
+"""
+        )
+
+        source = load_skills_sources(path).active_sources()[0]
+
+        self.assertEqual(["*"], source.skills)
+        self.assertEqual(
+            [
+                "npx",
+                "skills",
+                "add",
+                "owner/personal-skills",
+                "--skill",
+                "*",
+                "-a",
+                "codex",
+                "-g",
+                "-y",
+            ],
+            build_add_argv(source, agents=["codex"]),
+        )
+
     def test_load_skills_sources_rejects_duplicate_active_skill_ownership(self) -> None:
         from src.skills_sources import SkillsSourcesError, load_skills_sources
 

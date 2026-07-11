@@ -16,7 +16,9 @@ class ManifestAgentsSyncTests(unittest.TestCase):
         config = load_skills_sources(self.manifest_path)
         skills: set[str] = set()
         for source in config.active_sources():
-            skills.update(source.skills)
+            # `skills: all` expands to the Skills CLI wildcard. Its evolving
+            # upstream inventory must not require a hand-maintained table row.
+            skills.update(skill for skill in source.skills if skill != "*")
         return skills
 
     def _advertised_skills(self) -> set[str]:

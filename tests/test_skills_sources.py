@@ -35,6 +35,23 @@ class SkillsSourcesTests(unittest.TestCase):
         graphify = next(source for source in config.sources if source.id == "graphify")
         self.assertFalse(graphify.enabled)
 
+    def test_load_skills_sources_allows_multiple_all_skill_sources(self) -> None:
+        from src.skills_sources import validate_skills_sources
+
+        config = validate_skills_sources(
+            {
+                "version": 1,
+                "agents": ["codex"],
+                "sources": [
+                    {"id": "first", "repo": "owner/first", "skills": "all"},
+                    {"id": "second", "repo": "owner/second", "skills": "all"},
+                ],
+            }
+        )
+
+        self.assertEqual(["*"], config.sources[0].skills)
+        self.assertEqual(["*"], config.sources[1].skills)
+
     def test_active_sources_skips_disabled_empty_or_missing_repo(self) -> None:
         from src.skills_sources import load_skills_sources
 

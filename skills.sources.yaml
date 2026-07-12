@@ -57,6 +57,10 @@ sources:
     repo: Akindu23/my-agent-skills
     skills: all
 
+  - id: pamudu-agent-bootstrap-skills
+    repo: PamuduW/agent_bootstrap_skills
+    skills: all
+
   - id: graphify
     repo: safishamsi/graphify
     skills:

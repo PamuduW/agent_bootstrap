@@ -19,6 +19,7 @@ Skills below match `skills.sources.yaml` (enabled upstreams installed via `./ins
 |---|---|
 | `brainstorming` | Explore options and trade-offs before committing to a direction. |
 | `council` | Parallel subagent exploration and synthesis for multi-area codebase review. |
+| `co-council` | Codex subagent council with evidence-based Luna-tier routing. |
 | `grilling` | Stress-test a plan or design before building; matches Interaction Rules below. |
 | `recursive-decomposition` | Partition large inputs (10+ files, 50k+ tokens) via subagents and aggregation. |
 | `yagni` | Simplest solution that works; resist premature complexity. |

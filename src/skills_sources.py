@@ -107,6 +107,11 @@ def _validate_active_skill_ownership(config: SkillsSourcesConfig, *, label: str)
     owners: dict[str, str] = {}
     for source in config.active_sources():
         for skill in source.skills:
+            # `skills: all` expands to the Skills CLI wildcard. Multiple
+            # repositories may legitimately publish their complete catalogs;
+            # only explicitly named skills have unambiguous local ownership.
+            if skill == "*":
+                continue
             owner = owners.get(skill)
             if owner is not None:
                 raise SkillsSourcesError(

@@ -19,6 +19,7 @@ Skills below match `skills.sources.yaml` (enabled upstreams installed via `./ins
 |---|---|
 | `brainstorming` | Explore options and trade-offs before committing to a direction. |
 | `council` | Parallel subagent exploration and synthesis for multi-area codebase review. |
+| `co-council` | Codex subagent council with evidence-based Luna-tier routing. |
 | `grilling` | Stress-test a plan or design before building; matches Interaction Rules below. |
 | `recursive-decomposition` | Partition large inputs (10+ files, 50k+ tokens) via subagents and aggregation. |
 | `yagni` | Simplest solution that works; resist premature complexity. |
@@ -97,7 +98,7 @@ Canonical scaffold templates live in `base/AGENTS.md` and `base/CLAUDE.md`. This
 | Path | Role |
 |------|------|
 | `install.sh` | Primary entrypoint (bootstrap, skills, global, doctor, link-agentboot) |
-| `skills.sources.yaml` | Curated upstream skill manifest (6 enabled sources, 37 skills) |
+| `skills.sources.yaml` | Curated upstream skill manifest, including all published personal skills |
 | `skills-lock.json` | Project lock stub; global pins in `~/.agents/.skill-lock.json` |
 | `src/` | Slim Python CLI (`cli.py`, `service.py`, `skills_installer.py`, …) |
 | `bin/agentboot` | Copy `base/` templates into another repo |

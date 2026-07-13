@@ -187,6 +187,32 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         self.assertTrue(any("alpha-skill" in message and "missing" in message for message in messages))
         self.assertTrue(any("manual-skill" in message and "manual" in message for message in messages))
 
+    def test_doctor_ignores_stale_global_lock_skills_outside_the_manifest(self) -> None:
+        from src.service import BootstrapService
+
+        paths = self._paths()
+        (self.root / "skills-lock.json").write_text(json.dumps({"sources": []}), encoding="utf-8")
+        global_lock = self.root / "home" / ".agents" / ".skill-lock.json"
+        global_lock.parent.mkdir(parents=True, exist_ok=True)
+        global_lock.write_text(
+            json.dumps({"version": 3, "skills": {"pitstop": {"source": "old/source"}}}),
+            encoding="utf-8",
+        )
+        service = BootstrapService(paths)
+
+        with mock.patch.object(
+            type(paths),
+            "agents_skills_home",
+            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / "skills"),
+        ), mock.patch.object(
+            type(paths),
+            "global_skill_lock",
+            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / ".skill-lock.json"),
+        ):
+            messages = [issue.message for issue in service.doctor_issues()]
+
+        self.assertFalse(any("pitstop" in message and "missing" in message for message in messages))
+
     def test_slim_doctor_reports_missing_global_agents(self) -> None:
         from src.service import BootstrapService
 

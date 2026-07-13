@@ -123,6 +123,31 @@ sources:
         self.assertNotEqual("obra/superpowers", install_command[3])
 
     @patch("src.skills_installer.run_install_command")
+    def test_install_source_records_remote_provenance_after_local_checkout(self, mock_install) -> None:
+        from src.skills_installer import install_source
+        from src.skills_sources import SkillSourceEntry
+
+        source = SkillSourceEntry(
+            id="superpowers",
+            repo="obra/superpowers",
+            skills=["brainstorming"],
+        )
+        mock_install.return_value = self._success_result("superpowers", ["npx", "skills", "add", "local"])
+        lock_file = self.root / "home" / ".agents" / ".skill-lock.json"
+
+        def clone_with_skill(_repo: str, destination: Path) -> None:
+            skill_dir = destination / "skills" / "brainstorming"
+            skill_dir.mkdir(parents=True)
+            (skill_dir / "SKILL.md").write_text("---\nname: brainstorming\n---\n", encoding="utf-8")
+
+        with patch("src.skills_installer._clone_github_source", side_effect=clone_with_skill):
+            install_source(source, agents=["codex"], global_lock_file=lock_file)
+
+        lock = json.loads(lock_file.read_text(encoding="utf-8"))
+        self.assertEqual("obra/superpowers", lock["skills"]["brainstorming"]["source"])
+        self.assertEqual("github", lock["skills"]["brainstorming"]["sourceType"])
+
+    @patch("src.skills_installer.run_install_command")
     def test_update_skills_runs_npx_update(self, mock_run) -> None:
         from src.skills_installer import build_update_argv, update_skills
 

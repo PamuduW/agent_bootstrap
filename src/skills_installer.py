@@ -4,8 +4,11 @@ import os
 import shutil
 import subprocess
 import tempfile
+from datetime import datetime, timezone
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
+import re
 
 from .models import DoctorIssue
 from .paths import BootstrapPaths
@@ -101,6 +104,63 @@ def _clone_github_source(repo: str, destination: Path) -> None:
     if completed.returncode != 0:
         detail = completed.stderr.strip() or completed.stdout.strip() or f"exit code {completed.returncode}"
         raise SkillsInstallError(f"failed to clone GitHub source {repo!r}: {detail}")
+
+
+def _checkout_skill_name(skill_file: Path) -> str:
+    content = skill_file.read_text(encoding="utf-8")
+    if content.startswith("---"):
+        closing = content.find("\n---", 3)
+        if closing != -1:
+            match = re.search(r"^name:\s*([^#\n]+)", content[3:closing], flags=re.MULTILINE)
+            if match:
+                return match.group(1).strip().strip("\"'")
+    return skill_file.parent.name
+
+
+def _skill_folder_hash(skill_dir: Path) -> str:
+    digest = sha256()
+    for path in sorted(
+        (path for path in skill_dir.rglob("*") if path.is_file() and ".git" not in path.parts),
+        key=lambda path: path.relative_to(skill_dir).as_posix(),
+    ):
+        digest.update(path.relative_to(skill_dir).as_posix().encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def _record_github_checkout_lock(source: SkillSourceEntry, checkout: Path, lock_file: Path) -> None:
+    try:
+        import json
+
+        lock = json.loads(lock_file.read_text(encoding="utf-8")) if lock_file.is_file() else {}
+    except (OSError, ValueError) as error:
+        raise SkillsInstallError(f"unable to read global skill lock {lock_file}: {error}") from error
+    if not isinstance(lock, dict):
+        raise SkillsInstallError(f"global skill lock {lock_file} must be a JSON object")
+    skills = lock.setdefault("skills", {})
+    if not isinstance(skills, dict):
+        raise SkillsInstallError(f"global skill lock {lock_file} has an invalid skills section")
+
+    wanted = None if source.skills == ["*"] else set(source.skills)
+    now = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    for skill_file in checkout.rglob("SKILL.md"):
+        name = _checkout_skill_name(skill_file)
+        if wanted is not None and name not in wanted:
+            continue
+        relative_path = skill_file.relative_to(checkout).as_posix()
+        existing = skills.get(name)
+        skills[name] = {
+            "source": source.repo,
+            "sourceType": "github",
+            "sourceUrl": _github_clone_url(source.repo),
+            "skillPath": relative_path,
+            "skillFolderHash": _skill_folder_hash(skill_file.parent),
+            "installedAt": existing.get("installedAt", now) if isinstance(existing, dict) else now,
+            "updatedAt": now,
+        }
+    lock["version"] = 3
+    lock_file.parent.mkdir(parents=True, exist_ok=True)
+    lock_file.write_text(json.dumps(lock, indent=2) + "\n", encoding="utf-8")
 
 
 def _lock_skill_names(lock_file: Path) -> set[str] | None:
@@ -203,6 +263,7 @@ def install_source(
     dry_run: bool = False,
     npx: str = DEFAULT_NPX,
     cwd: Path | None = None,
+    global_lock_file: Path | None = None,
 ) -> InstallResult:
     if not source.enabled or not source.repo or not source.skills:
         return InstallResult(
@@ -224,6 +285,20 @@ def install_source(
             _clone_github_source(source.repo, checkout)
             argv[3] = str(checkout)
             result = run_install_command(argv, source_id=source.id, cwd=cwd)
+            if result.returncode == 0 and global_scope:
+                _record_github_checkout_lock(
+                    source,
+                    checkout,
+                    global_lock_file or Path.home() / ".agents" / ".skill-lock.json",
+                )
+            result = InstallResult(
+                source_id=result.source_id,
+                command=build_add_argv(source, agents=agents, global_scope=global_scope, npx=npx),
+                returncode=result.returncode,
+                stdout=result.stdout,
+                stderr=result.stderr,
+                skipped=result.skipped,
+            )
     if not dry_run and result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip() or f"exit code {result.returncode}"
         raise SkillsInstallError(f"failed to install source {source.id!r}: {detail}")
@@ -236,6 +311,7 @@ def install_all(
     dry_run: bool = False,
     npx: str = DEFAULT_NPX,
     cwd: Path | None = None,
+    global_lock_file: Path | None = None,
 ) -> list[InstallResult]:
     global_scope = config.scope == "global"
     return [
@@ -246,6 +322,7 @@ def install_all(
             dry_run=dry_run,
             npx=npx,
             cwd=cwd,
+            global_lock_file=global_lock_file,
         )
         for source in config.active_sources()
     ]
@@ -268,7 +345,12 @@ def update_all(
 
 def install_skills(paths: BootstrapPaths, *, dry_run: bool = False) -> list[InstallResult]:
     config = load_skills_sources(paths.skills_sources_file)
-    return install_all(config, dry_run=dry_run, cwd=paths.root)
+    return install_all(
+        config,
+        dry_run=dry_run,
+        cwd=paths.root,
+        global_lock_file=paths.global_skill_lock,
+    )
 
 
 def update_skills(paths: BootstrapPaths, *, dry_run: bool = False) -> InstallResult:

@@ -190,7 +190,7 @@ sources:
         self.assertTrue(any("brainstorming" in message and "absent" in message for message in messages))
 
     @patch("src.skills_installer.shutil.which", return_value="/usr/bin/npx")
-    def test_doctor_reports_global_lock_skills_not_declared_by_manifest(self, _mock_which) -> None:
+    def test_doctor_ignores_global_lock_skills_not_declared_by_manifest(self, _mock_which) -> None:
         from src.skills_installer import doctor_skills
 
         paths = self._paths()
@@ -205,7 +205,7 @@ sources:
         ):
             messages = [issue.message for issue in doctor_skills(paths)]
 
-        self.assertTrue(any("personal" in message and "not declared" in message for message in messages))
+        self.assertFalse(any("personal" in message and "not declared" in message for message in messages))
 
     @patch("src.skills_installer.shutil.which", return_value="/usr/bin/npx")
     def test_doctor_treats_lock_entries_from_an_all_source_as_managed(self, _mock_which) -> None:

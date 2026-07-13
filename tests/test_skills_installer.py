@@ -61,8 +61,9 @@ sources:
             stderr="",
         )
 
+    @patch("src.skills_installer._clone_github_source")
     @patch("src.skills_installer.run_install_command")
-    def test_install_skills_runs_npx_for_active_sources(self, mock_run) -> None:
+    def test_install_skills_runs_npx_for_active_sources(self, mock_run, mock_clone) -> None:
         from src.skills_installer import build_add_argv, install_skills
         from src.skills_sources import SkillSourceEntry
 
@@ -84,13 +85,42 @@ sources:
         self.assertEqual("npx", command[0])
         self.assertEqual("skills", command[1])
         self.assertEqual("add", command[2])
-        self.assertEqual("obra/superpowers", command[3])
+        self.assertEqual("superpowers", Path(command[3]).name)
         self.assertIn("--skill", command)
         self.assertIn("brainstorming", command)
         self.assertIn("-a", command)
         self.assertIn("claude-code", command)
         self.assertEqual(1, len(results))
         self.assertEqual("superpowers", results[0].source_id)
+        mock_clone.assert_called_once()
+
+    @patch("src.skills_installer.subprocess.run")
+    def test_install_source_clones_github_sources_before_invoking_npx(self, mock_run) -> None:
+        from src.skills_installer import InstallResult, install_source
+        from src.skills_sources import SkillSourceEntry
+
+        source = SkillSourceEntry(
+            id="superpowers",
+            repo="obra/superpowers",
+            skills=["brainstorming"],
+        )
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout="", stderr=""),
+            MagicMock(returncode=0, stdout="ok", stderr=""),
+        ]
+
+        result = install_source(source, agents=["codex"])
+
+        self.assertIsInstance(result, InstallResult)
+        self.assertEqual(2, mock_run.call_count)
+        clone_command = mock_run.call_args_list[0].args[0]
+        install_command = mock_run.call_args_list[1].args[0]
+        self.assertEqual(
+            ["git", "clone", "--depth=1", "https://github.com/obra/superpowers.git"],
+            clone_command[:4],
+        )
+        self.assertEqual("npx", install_command[0])
+        self.assertNotEqual("obra/superpowers", install_command[3])
 
     @patch("src.skills_installer.run_install_command")
     def test_update_skills_runs_npx_update(self, mock_run) -> None:

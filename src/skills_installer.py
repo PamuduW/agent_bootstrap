@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -47,6 +48,7 @@ def summarize_install_results(results: list[InstallResult]) -> InstallSummary:
 DEFAULT_NPX = "npx"
 DEFAULT_NPX_TIMEOUT_SECONDS = 900
 NPX_TIMEOUT_ENV = "AGENT_BOOTSTRAP_NPX_TIMEOUT_SECONDS"
+GITHUB_CLONE_TIMEOUT_SECONDS = 120
 
 
 def _npx_timeout_seconds() -> int:
@@ -64,6 +66,41 @@ def _npx_timeout_seconds() -> int:
             f"{NPX_TIMEOUT_ENV} must be a positive integer, got {raw_timeout!r}"
         )
     return timeout_seconds
+
+
+def _github_clone_url(repo: str) -> str | None:
+    if repo.count("/") != 1 or any(char.isspace() for char in repo):
+        return None
+    owner, name = repo.split("/", maxsplit=1)
+    if not owner or not name:
+        return None
+    return f"https://github.com/{repo}.git"
+
+
+def _clone_github_source(repo: str, destination: Path) -> None:
+    clone_url = _github_clone_url(repo)
+    if clone_url is None:
+        raise ValueError(f"not a GitHub owner/repository source: {repo!r}")
+    if shutil.which("git") is None:
+        raise SkillsInstallError("git is required to install GitHub skill sources")
+
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    try:
+        completed = subprocess.run(
+            ["git", "clone", "--depth=1", clone_url, str(destination)],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=GITHUB_CLONE_TIMEOUT_SECONDS,
+            env=env,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise SkillsInstallError(
+            f"GitHub clone for source {repo!r} timed out after {GITHUB_CLONE_TIMEOUT_SECONDS} seconds"
+        ) from error
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip() or f"exit code {completed.returncode}"
+        raise SkillsInstallError(f"failed to clone GitHub source {repo!r}: {detail}")
 
 
 def _lock_skill_names(lock_file: Path) -> set[str] | None:
@@ -178,7 +215,15 @@ def install_source(
         )
 
     argv = build_add_argv(source, agents=agents, global_scope=global_scope, npx=npx)
-    result = run_install_command(argv, source_id=source.id, dry_run=dry_run, cwd=cwd)
+    clone_url = _github_clone_url(source.repo)
+    if dry_run or clone_url is None:
+        result = run_install_command(argv, source_id=source.id, dry_run=dry_run, cwd=cwd)
+    else:
+        with tempfile.TemporaryDirectory(prefix="agent-bootstrap-skill-") as temp_dir:
+            checkout = Path(temp_dir) / source.id
+            _clone_github_source(source.repo, checkout)
+            argv[3] = str(checkout)
+            result = run_install_command(argv, source_id=source.id, cwd=cwd)
     if not dry_run and result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip() or f"exit code {result.returncode}"
         raise SkillsInstallError(f"failed to install source {source.id!r}: {detail}")

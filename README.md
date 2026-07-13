@@ -72,7 +72,7 @@ See [`archive/LOCKFILE-NOTES.md`](archive/LOCKFILE-NOTES.md) for historical note
 
 To add a skill: add an entry under `sources` in `skills.sources.yaml`, then run `./install.sh skills install` (not `update`).
 
-`npx` operations time out after 15 minutes and report the source ID plus command on failure. Set `AGENT_BOOTSTRAP_NPX_TIMEOUT_SECONDS` to a positive number of seconds when a fresh-machine connection needs a longer allowance. If a source repeatedly fails, run its printed command directly to distinguish registry/network failures from an invalid source declaration.
+GitHub skill sources are shallow-cloned locally with a two-minute bound before `npx skills` installs from that checkout. This avoids the Skills CLI's unbounded GitHub API preflight on fresh machines. The subsequent `npx` operation has a 15-minute bound; set `AGENT_BOOTSTRAP_NPX_TIMEOUT_SECONDS` to a positive number of seconds when needed. Clone failures now report a Git error instead of silently waiting for the outer timeout.
 
 ### Manual skill folders
 

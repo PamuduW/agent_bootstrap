@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -250,6 +251,17 @@ sources:
             run_install_command(["npx", "skills", "update"], source_id="update")
 
         self.assertIn("timeout", mock_run.call_args.kwargs)
+
+    def test_run_install_command_allows_a_longer_timeout_for_fresh_machine_installs(self) -> None:
+        from src.skills_installer import run_install_command
+
+        completed = MagicMock(returncode=0, stdout="ok", stderr="")
+        with patch.dict(os.environ, {"AGENT_BOOTSTRAP_NPX_TIMEOUT_SECONDS": "1200"}), patch(
+            "src.skills_installer.subprocess.run", return_value=completed
+        ) as mock_run:
+            run_install_command(["npx", "skills", "add"], source_id="superpowers")
+
+        self.assertEqual(1200, mock_run.call_args.kwargs["timeout"])
 
     def test_run_install_command_reports_timeouts_with_source_context(self) -> None:
         from src.skills_installer import SkillsInstallError, run_install_command

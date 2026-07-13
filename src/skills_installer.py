@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -44,7 +45,25 @@ def summarize_install_results(results: list[InstallResult]) -> InstallSummary:
 
 
 DEFAULT_NPX = "npx"
-DEFAULT_NPX_TIMEOUT_SECONDS = 300
+DEFAULT_NPX_TIMEOUT_SECONDS = 900
+NPX_TIMEOUT_ENV = "AGENT_BOOTSTRAP_NPX_TIMEOUT_SECONDS"
+
+
+def _npx_timeout_seconds() -> int:
+    raw_timeout = os.environ.get(NPX_TIMEOUT_ENV)
+    if raw_timeout is None:
+        return DEFAULT_NPX_TIMEOUT_SECONDS
+    try:
+        timeout_seconds = int(raw_timeout)
+    except ValueError as error:
+        raise SkillsInstallError(
+            f"{NPX_TIMEOUT_ENV} must be a positive integer, got {raw_timeout!r}"
+        ) from error
+    if timeout_seconds <= 0:
+        raise SkillsInstallError(
+            f"{NPX_TIMEOUT_ENV} must be a positive integer, got {raw_timeout!r}"
+        )
+    return timeout_seconds
 
 
 def _lock_skill_names(lock_file: Path) -> set[str] | None:
@@ -102,7 +121,7 @@ def run_install_command(
     source_id: str = "",
     dry_run: bool = False,
     cwd: Path | None = None,
-    timeout_seconds: int = DEFAULT_NPX_TIMEOUT_SECONDS,
+    timeout_seconds: int | None = None,
 ) -> InstallResult:
     if dry_run:
         return InstallResult(
@@ -112,6 +131,9 @@ def run_install_command(
             stdout="",
             stderr="",
         )
+
+    if timeout_seconds is None:
+        timeout_seconds = _npx_timeout_seconds()
 
     try:
         completed = subprocess.run(

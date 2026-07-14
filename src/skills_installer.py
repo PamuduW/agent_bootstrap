@@ -142,11 +142,31 @@ def _record_github_checkout_lock(source: SkillSourceEntry, checkout: Path, lock_
         raise SkillsInstallError(f"global skill lock {lock_file} has an invalid skills section")
 
     wanted = None if source.skills == ["*"] else set(source.skills)
-    now = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
-    for skill_file in checkout.rglob("SKILL.md"):
+    installed_skills_home = lock_file.parent / "skills"
+    installed_names = {
+        entry.name
+        for entry in installed_skills_home.iterdir()
+        if entry.is_dir() and (entry / "SKILL.md").is_file()
+    } if installed_skills_home.is_dir() else set()
+
+    checkout_skills: dict[str, Path] = {}
+    for skill_file in sorted(
+        checkout.rglob("SKILL.md"),
+        key=lambda path: (len(path.relative_to(checkout).parts), path.relative_to(checkout).as_posix()),
+    ):
         name = _checkout_skill_name(skill_file)
-        if wanted is not None and name not in wanted:
-            continue
+        if (wanted is None or name in wanted) and name in installed_names:
+            checkout_skills.setdefault(name, skill_file)
+
+    # A wildcard checkout can contain SKILL.md fixtures that npx deliberately
+    # ignores. Only pin names that the successful command actually installed.
+    # Reconcile earlier fallback pins for this source at the same time.
+    for name, entry in list(skills.items()):
+        if isinstance(entry, dict) and entry.get("source") == source.repo and name not in checkout_skills:
+            del skills[name]
+
+    now = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    for name, skill_file in checkout_skills.items():
         relative_path = skill_file.relative_to(checkout).as_posix()
         existing = skills.get(name)
         skills[name] = {

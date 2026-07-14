@@ -134,6 +134,9 @@ sources:
         )
         mock_install.return_value = self._success_result("superpowers", ["npx", "skills", "add", "local"])
         lock_file = self.root / "home" / ".agents" / ".skill-lock.json"
+        installed_skill = lock_file.parent / "skills" / "brainstorming"
+        installed_skill.mkdir(parents=True)
+        (installed_skill / "SKILL.md").write_text("# brainstorming\n", encoding="utf-8")
 
         def clone_with_skill(_repo: str, destination: Path) -> None:
             skill_dir = destination / "skills" / "brainstorming"
@@ -146,6 +149,43 @@ sources:
         lock = json.loads(lock_file.read_text(encoding="utf-8"))
         self.assertEqual("obra/superpowers", lock["skills"]["brainstorming"]["source"])
         self.assertEqual("github", lock["skills"]["brainstorming"]["sourceType"])
+
+    @patch("src.skills_installer.run_install_command")
+    def test_install_source_wildcard_does_not_lock_checkout_test_fixtures(self, mock_install) -> None:
+        from src.skills_installer import install_source
+        from src.skills_sources import SkillSourceEntry
+
+        source = SkillSourceEntry(
+            id="wildcard-source",
+            repo="owner/skills",
+            skills=["*"],
+        )
+        mock_install.return_value = self._success_result("wildcard-source", ["npx", "skills", "add", "local"])
+        lock_file = self.root / "home" / ".agents" / ".skill-lock.json"
+        lock_file.parent.mkdir(parents=True)
+        lock_file.write_text(
+            json.dumps({"version": 3, "skills": {"stale": {"source": "owner/skills"}}}),
+            encoding="utf-8",
+        )
+        installed_skill = lock_file.parent / "skills" / "real-skill"
+        installed_skill.mkdir(parents=True)
+        (installed_skill / "SKILL.md").write_text("# real skill\n", encoding="utf-8")
+
+        def clone_with_skill_and_fixture(_repo: str, destination: Path) -> None:
+            real_skill = destination / "skills" / "real-skill"
+            real_skill.mkdir(parents=True)
+            (real_skill / "SKILL.md").write_text("---\nname: real-skill\n---\n", encoding="utf-8")
+            fixture_skill = destination / "tests" / "fixtures" / "skills" / "alpha"
+            fixture_skill.mkdir(parents=True)
+            (fixture_skill / "SKILL.md").write_text("---\nname: alpha\n---\n", encoding="utf-8")
+
+        with patch("src.skills_installer._clone_github_source", side_effect=clone_with_skill_and_fixture):
+            install_source(source, agents=["codex"], global_lock_file=lock_file)
+
+        lock = json.loads(lock_file.read_text(encoding="utf-8"))
+        self.assertIn("real-skill", lock["skills"])
+        self.assertNotIn("alpha", lock["skills"])
+        self.assertNotIn("stale", lock["skills"])
 
     @patch("src.skills_installer.run_install_command")
     def test_update_skills_runs_npx_update(self, mock_run) -> None:

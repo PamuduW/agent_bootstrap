@@ -12,6 +12,7 @@ from .skills_installer import SkillsInstallError
 from .ui import (
     print_doctor_summary,
     print_header,
+    print_reconciliation_report,
     print_skills_report,
     print_skills_update_report,
     print_status_summary,
@@ -60,6 +61,7 @@ def main() -> int:
             print(f"  {result.status}: {result.message or 'source-owned skills reconciled'}")
             for path in result.changed_paths:
                 print(f"  changed: {path}")
+            print_reconciliation_report(result)
             return 0 if result.status in {"applied", "applied-with-local-changes", "preview", "confirmation_required"} else 1
         if command == "bootstrap":
             return run_bootstrap_command(service, paths)

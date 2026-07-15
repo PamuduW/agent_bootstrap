@@ -279,6 +279,23 @@ def print_skills_update_report(*, linked: int, skipped: int = 0, updated: int = 
     return 0
 
 
+def print_reconciliation_report(result) -> None:
+    """Render the final source-owned reconciliation outcome as a compact table."""
+    changed = ", ".join(str(path) for path in result.changed_paths) or "none"
+    added = ", ".join(result.added_skills) or "none"
+    removed = ", ".join(result.removed_skills) or "none"
+    print_section_block("── Reconciliation report ──")
+    print_table(
+        [
+            ("status", "repository reconciliation", result.status),
+            ("changed files", changed, str(len(result.changed_paths))),
+            ("added skills", added, str(len(result.added_skills))),
+            ("removed skills", removed, str(len(result.removed_skills))),
+        ]
+    )
+    print()
+
+
 def print_bridge_summary(*, linked: int, skipped: int, updated: int = 0) -> None:
     parts = [f"{linked} linked"]
     if updated:

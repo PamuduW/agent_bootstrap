@@ -76,6 +76,7 @@ test_update_action_calls_real_backend_and_dotfiles_stays_guarded() (
 	cat >"$fake_home/install.sh" <<'FAKE'
 #!/usr/bin/env bash
 printf 'real-update-backend %s\n' "$*"
+[[ "${1:-}" == status ]] && exit 0
 exit 1
 FAKE
 	chmod +x "$fake_home/install.sh"
@@ -88,6 +89,29 @@ FAKE
 	export DOTFILES_HOME SIBLING_DOTFILES_CONFIRM
 	output="$(agentbot_menu_dotfiles 2>&1)"
 	[[ "$output" == *'Dotfiles is not cloned'* && "$output" == *'launch cancelled'* ]]
+)
+
+test_update_pull_restarts_fresh_install_menu() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local calls="$TEST_ROOT/update-relaunch.calls" fake_home="$TEST_ROOT/fake-agentbot-relaunch"
+	: >"$calls"
+	mkdir -p "$fake_home"
+	cat >"$fake_home/install.sh" <<'FAKE'
+#!/usr/bin/env bash
+printf 'install:%s\n' "$*" >>"${TEST_UPDATE_CALLS:?}"
+case "$1 ${2:-}" in
+  'status ') exit 0 ;;
+  'update --dry-run') exit 2 ;;
+esac
+exit 0
+FAKE
+	chmod +x "$fake_home/install.sh"
+	AGENTBOT_HOME="$fake_home" TEST_UPDATE_CALLS="$calls"
+	export AGENTBOT_HOME TEST_UPDATE_CALLS
+	ui_pause() { printf 'pause\n' >>"$calls"; }
+	agentbot_menu_relaunch() { printf 'relaunch\n' >>"$calls"; }
+	agentbot_menu_update || return 1
+	[[ "$(<"$calls")" == $'install:status\ninstall:update --dry-run\npause\nrelaunch' ]]
 )
 
 test_caller_guard_hides_dotfiles_entry() (
@@ -104,6 +128,7 @@ if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'Agentbot menu dispatches actions in order and returns on Quit' test_dispatch_order_and_return
 	check 'failed Agentbot action pauses once and returns' test_failed_action_pauses_once
 	check 'Update calls the real backend and Dotfiles remains guarded' test_update_action_calls_real_backend_and_dotfiles_stays_guarded
+	check 'Update restarts the fresh install menu after a repository pull' test_update_pull_restarts_fresh_install_menu
 	check 'SETUP_CALLER=dotfiles hides the reciprocal menu entry' test_caller_guard_hides_dotfiles_entry
 else
 	fail 'Agentbot menu snapshot has title, breadcrumb, spacing, and all actions'

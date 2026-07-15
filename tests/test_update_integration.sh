@@ -44,8 +44,19 @@ test_dirty_state_has_manual_resolution_guidance() (
   [[ "$rc" -ne 0 && "$output" == *'review, commit, discard'* ]]
 )
 
+test_interactive_repo_decision_uses_tty_prompt_contract() (
+  AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+  local prompted=''
+  run_update_prompt() { prompted="$1"; [[ "${TEST_UPDATE_ANSWER:-no}" == yes ]]; }
+  AGENTBOT_UPDATE_INTERACTIVE=1 TEST_UPDATE_ANSWER=yes
+  export AGENTBOT_UPDATE_INTERACTIVE TEST_UPDATE_ANSWER
+  run_update_decision pull-behind || return 1
+  [[ "$prompted" == pull-behind ]]
+)
+
 check 'repo gate short-circuits stopped and relaunch states' test_repo_gate_short_circuits_unsafe_states
 check 'dirty update stops with manual-resolution guidance' test_dirty_state_has_manual_resolution_guidance
+check 'interactive update decisions use the TTY prompt seam' test_interactive_repo_decision_uses_tty_prompt_contract
 test_harness_verify_safety || failed=$((failed + 1))
 printf '\nRan %d update-integration test(s); %d failure(s).\n' "$((passed + failed))" "$failed"
 test_harness_cleanup || failed=$((failed + 1))

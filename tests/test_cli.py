@@ -40,6 +40,28 @@ class CliTests(unittest.TestCase):
         self.assertEqual(1, rc)
         self.assertIn("Error: failed to install source 'test': offline", stderr)
 
+    @patch("src.cli.default_paths")
+    @patch("src.cli.AgentbotService")
+    def test_update_prints_reconciliation_result_report(self, service_type, _default_paths) -> None:
+        from pathlib import Path
+        from src.skill_reconcile import ReconcileResult
+
+        service = MagicMock()
+        service.run_reconciliation_update.return_value = ReconcileResult(
+            "applied",
+            (Path("AGENTS.md"),),
+            ("removed-skill",),
+            ("added-skill",),
+        )
+        service_type.return_value = service
+
+        rc, stdout, _stderr = self._run_main(["agentbot", "update", "--yes"])
+
+        self.assertEqual(0, rc)
+        self.assertIn("Reconciliation report", stdout)
+        self.assertIn("added-skill", stdout)
+        self.assertIn("removed-skill", stdout)
+
     def test_parser_and_paths_use_agentbot_product_contract(self) -> None:
         import os
         import tempfile

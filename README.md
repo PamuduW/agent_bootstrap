@@ -131,6 +131,13 @@ reconciliation never runs `git add`, `git commit`, or `git push`; tracked
 manifest/table changes are handed back as `applied-with-local-changes` for the
 user to review and commit or discard.
 
+From the TTY menu, **Update** first shows the Agentbot status table and then
+previews the reconciliation. If the repository is behind, it asks before a
+fast-forward pull; after a pull, press Enter to restart `install.sh` from the
+updated checkout. Once the repository is current, the menu asks whether to
+apply the reconciliation, prints its result report, and pauses back at the
+menu.
+
 ## Repo layout
 
 ```text

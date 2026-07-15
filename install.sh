@@ -249,8 +249,27 @@ run_install() {
 }
 
 run_update_decision() {
+  if [[ "${AGENTBOT_UPDATE_INTERACTIVE:-0}" == 1 ]]; then
+    run_update_prompt "$1"
+    return $?
+  fi
   case "${AGENTBOT_UPDATE_CONFIRM:-no}" in
     1|true|yes|y) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+run_update_prompt() {
+  local action="$1" prompt answer=''
+  case "$action" in
+    pull-behind) prompt='Pull the available repository commit(s) with --ff-only?' ;;
+    continue-ahead) prompt='The local repository is ahead. Continue with the Agentbot update?' ;;
+    *) return 1 ;;
+  esac
+  printf '%s [y/N]: ' "$prompt" >/dev/tty
+  IFS= read -r answer </dev/tty || true
+  case "$answer" in
+    y|Y|yes|YES) return 0 ;;
     *) return 1 ;;
   esac
 }

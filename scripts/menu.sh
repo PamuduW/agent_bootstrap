@@ -96,6 +96,7 @@ agentbot_menu_dispatch() {
 
 agentbot_menu_loop() {
 	local choice rc
+	export AGENTBOT_TUI=1
 	_agentbot_menu_setup
 	while true; do
 		if ! menu_simple_run; then

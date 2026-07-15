@@ -39,6 +39,26 @@ test_menu_uses_in_place_redraw_contract() (
 	[[ "$body" != *$'while true; do\n\t\tui_clear'* ]]
 )
 
+test_menu_exports_tui_render_mode_to_backend() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local calls=0
+	MENU_TEST_CHOICES=(status quit)
+	MENU_TEST_INDEX=0
+	menu_simple_run() {
+		local choice="${MENU_TEST_CHOICES[$MENU_TEST_INDEX]}"
+		MENU_TEST_INDEX=$((MENU_TEST_INDEX + 1))
+		MENU_SIMPLE_RESULT="$choice"
+	}
+	ui_clear() { :; }
+	ui_pause() { :; }
+	agentbot_menu_status() {
+		[[ "${AGENTBOT_TUI:-}" == 1 ]] || return 1
+		calls=$((calls + 1))
+	}
+	agentbot_menu_loop
+	[[ "$calls" -eq 1 ]]
+)
+
 test_dispatch_order_and_return() (
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
 	local calls="$TEST_ROOT/menu.calls"
@@ -139,6 +159,7 @@ check 'Agentbot menu source exists' test_menu_source_exists
 if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'Agentbot menu snapshot has title, breadcrumb, spacing, and all actions' test_menu_snapshot
 	check 'Agentbot menu redraws in place without clearing on cursor movement' test_menu_uses_in_place_redraw_contract
+	check 'Agentbot menu exports TUI render mode to backend reports' test_menu_exports_tui_render_mode_to_backend
 	check 'Agentbot menu dispatches actions in order and returns on Quit' test_dispatch_order_and_return
 	check 'failed Agentbot action pauses once and returns' test_failed_action_pauses_once
 	check 'Update calls the real backend and Dotfiles remains guarded' test_update_action_calls_real_backend_and_dotfiles_stays_guarded
@@ -147,6 +168,7 @@ if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 else
 	fail 'Agentbot menu snapshot has title, breadcrumb, spacing, and all actions'
 	fail 'Agentbot menu redraws in place without clearing on cursor movement'
+	fail 'Agentbot menu exports TUI render mode to backend reports'
 	fail 'Agentbot menu dispatches actions in order and returns on Quit'
 	fail 'failed Agentbot action pauses once and returns'
 	fail 'deferred Update and Dotfiles actions are explicitly unavailable'

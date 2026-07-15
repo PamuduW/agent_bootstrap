@@ -62,6 +62,62 @@ class CliTests(unittest.TestCase):
         self.assertIn("added-skill", stdout)
         self.assertIn("removed-skill", stdout)
 
+    @patch("src.cli.default_paths")
+    @patch("src.cli.AgentbotService")
+    def test_status_and_update_use_hierarchical_breadcrumbs(self, service_type, _default_paths) -> None:
+        from src.skill_reconcile import ReconcileResult
+
+        service = MagicMock()
+        service.status_summary.return_value = {
+            "installed_skills": 1,
+            "global_agents_exists": True,
+            "skills_sources_exists": True,
+            "enabled_sources": 1,
+            "global_lock_exists": True,
+            "global_lock_skills": 1,
+            "claude_bridge_links": 1,
+            "manual_skill_count": 0,
+            "doctor_issue_count": 0,
+        }
+        service.run_reconciliation_update.return_value = ReconcileResult(
+            "preview", (), (), ()
+        )
+        service_type.return_value = service
+
+        status_rc, status_stdout, _ = self._run_main(["agentbot", "status"])
+        update_rc, update_stdout, _ = self._run_main(["agentbot", "update", "--dry-run"])
+
+        self.assertEqual(0, status_rc)
+        self.assertEqual(0, update_rc)
+        self.assertIn("Agentbot › Status", status_stdout)
+        self.assertIn("Agentbot › Update", update_stdout)
+
+    @patch("src.cli.default_paths")
+    @patch("src.cli.AgentbotService")
+    def test_update_reconciliation_report_has_one_table_header(self, service_type, _default_paths) -> None:
+        from pathlib import Path
+        from src.skill_reconcile import ReconcileResult
+
+        service = MagicMock()
+        service.run_reconciliation_update.return_value = ReconcileResult(
+            "preview", (Path("AGENTS.md"),), ("added",), ("removed",)
+        )
+        service_type.return_value = service
+
+        rc, stdout, _ = self._run_main(["agentbot", "update", "--dry-run"])
+
+        self.assertEqual(0, rc)
+        self.assertEqual(1, stdout.count("  component              | detail"))
+
+    def test_preview_result_uses_informational_color(self) -> None:
+        import os
+
+        from src.ui import color_result
+
+        with patch.dict(os.environ, {"AGENTBOT_TUI": "1"}, clear=False):
+            os.environ.pop("NO_COLOR", None)
+            self.assertEqual("\033[36mpreview\033[0m", color_result("preview"))
+
     def test_parser_and_paths_use_agentbot_product_contract(self) -> None:
         import os
         import tempfile

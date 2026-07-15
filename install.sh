@@ -261,7 +261,7 @@ run_update_decision() {
 
 print_repo_update_table() {
   local branch local_rev available action bold='' reset='' yellow=''
-  if [[ -z "${NO_COLOR:-}" && ( -t 1 || -t 0 ) ]]; then
+  if [[ -z "${NO_COLOR:-}" && ( -t 1 || -t 0 || -n "${AGENTBOT_TUI:-}" || -n "${FORCE_COLOR:-}" ) ]]; then
     bold=$'\033[1m'; reset=$'\033[0m'; yellow=$'\033[33m'
   fi
   branch="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"

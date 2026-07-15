@@ -81,7 +81,7 @@ def color_result(result: str) -> str:
         "applied-with-local-changes",
     }:
         return _c(result, YELLOW)
-    if key in {"info", "dry-run"}:
+    if key in {"info", "dry-run", "preview"}:
         return _c(result, CYAN)
     return result
 
@@ -168,7 +168,7 @@ def print_status_summary(
     elif global_lock_exists:
         lock_detail = "~/.agents/.skill-lock.json (unreadable)"
 
-    print_header("Status", "Agentbot")
+    print_header("Status", "Agentbot › Status")
     print_section_block("── Skills & baseline ──")
     ok, check, miss = print_table(
         [
@@ -299,7 +299,8 @@ def print_reconciliation_report(result) -> None:
             ("changed files", changed, str(len(result.changed_paths))),
             ("added skills", added, str(len(result.added_skills))),
             ("removed skills", removed, str(len(result.removed_skills))),
-        ]
+        ],
+        show_header=False,
     )
     print()
 

@@ -57,7 +57,7 @@ def main() -> int:
                 dry_run=bool(getattr(args, "dry_run", False)),
                 confirm=bool(getattr(args, "confirm", False)),
             )
-            print_header("Agentbot update", "Agentbot")
+            print_header("Agentbot update", "Agentbot › Update")
             print(f"  {result.status}: {result.message or 'source-owned skills reconciled'}")
             for path in result.changed_paths:
                 print(f"  changed: {path}")

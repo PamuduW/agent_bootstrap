@@ -110,7 +110,7 @@ test_dispatch_order_and_return() (
 	agentbot_menu_doctor() { printf 'doctor\n' >>"$calls"; }
 	agentbot_menu_dotfiles() { printf 'dotfiles\n' >>"$calls"; }
 	agentbot_menu_loop
-	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\npause\nboot\npause\ncommand_lib\npause\ndoctor\npause\ndotfiles\npause' ]]
+	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\npause\nboot\npause\ncommand_lib\npause\ndoctor\npause\ndotfiles' ]]
 )
 
 test_failed_action_pauses_once() (

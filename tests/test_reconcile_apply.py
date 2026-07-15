@@ -123,6 +123,24 @@ class ReconcileApplyTests(unittest.TestCase):
         self.assertEqual("confirmation_required", result.status)
         self.assertTrue((self.agents / "gone").exists())
 
+    def test_dry_run_reports_global_lock_refresh(self) -> None:
+        from src.skill_reconcile import apply_reconcile_plan, build_reconcile_plan
+        from src.skills_sources import load_skills_sources
+
+        config = load_skills_sources(self.root / "skills.sources.yaml")
+        lock = json.loads(self.lock.read_text(encoding="utf-8"))
+        plan = build_reconcile_plan(
+            config,
+            discovered={"explicit": ("gone", "keep"), "wildcard": ("old",)},
+            lock=lock,
+        )
+        paths, patches = self._paths()
+        with patches[0], patches[1]:
+            result = apply_reconcile_plan(paths, config, plan, confirm=True, dry_run=True)
+
+        self.assertEqual("preview", result.status)
+        self.assertEqual((self.lock,), result.changed_paths)
+
     def test_failure_restores_files_and_keeps_backup(self) -> None:
         from src.skill_reconcile import apply_reconcile_plan, build_reconcile_plan
         from src.skills_sources import load_skills_sources

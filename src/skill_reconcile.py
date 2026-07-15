@@ -295,7 +295,7 @@ def apply_reconcile_plan(
     if dry_run:
         return ReconcileResult(
             "preview",
-            (),
+            (paths.global_skill_lock,),
             plan.wildcard_removals,
             plan.wildcard_additions,
             message="reconciliation preview only",

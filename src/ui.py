@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+import textwrap
 
 BOLD = "\033[1m"
 DIM = "\033[2m"
@@ -99,14 +100,33 @@ def print_table(
     *,
     headers: tuple[str, str, str] = ("component", "detail", "result"),
     show_header: bool = True,
+    wrap_details: bool = False,
 ) -> tuple[int, int, int]:
     ok_count = check_count = miss_count = 0
     if show_header:
         print_table_columns(headers=headers)
     for label, detail, result in rows:
-        detail_fit = detail if len(detail) <= DETAIL_W else f"{detail[: DETAIL_W - 3]}..."
-        print(f"  {label:<{LABEL_W}} | {detail_fit:<{DETAIL_W}} | ", end="")
-        print(color_result(result))
+        if wrap_details:
+            detail_lines: list[str] = []
+            for paragraph in strip_ansi(detail).replace("\r", "").splitlines() or [""]:
+                detail_lines.extend(
+                    textwrap.wrap(
+                        paragraph,
+                        width=DETAIL_W,
+                        break_long_words=False,
+                        break_on_hyphens=False,
+                    )
+                    or [""]
+                )
+        else:
+            detail_lines = [detail if len(detail) <= DETAIL_W else f"{detail[: DETAIL_W - 3]}..."]
+
+        for line_number, detail_fit in enumerate(detail_lines):
+            if line_number == 0:
+                print(f"  {label:<{LABEL_W}} | {detail_fit:<{DETAIL_W}} | ", end="")
+                print(color_result(result))
+            else:
+                print(f"  {'':<{LABEL_W}} | {detail_fit:<{DETAIL_W}} |")
         key = result.strip().lower()
         if key in {"ok", "installed", "configured", "linked", "up to date", "current"}:
             ok_count += 1
@@ -221,8 +241,8 @@ def print_doctor_summary(issues: list) -> int:
         else:
             warnings += 1
         result = "error" if level == "error" else "check"
-        rows.append((issue.scope, shorten_detail(issue.message, max_len=DETAIL_W), result))
-    _ok, check, miss = print_table(rows)
+        rows.append((issue.scope, issue.message, result))
+    _ok, check, miss = print_table(rows, wrap_details=True)
     print()
     print(f"  {errors} error(s), {warnings} warning(s).")
     print_rollup(ok=0, check=check, miss=miss)

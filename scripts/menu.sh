@@ -107,6 +107,8 @@ agentbot_menu_loop() {
 		ui_clear
 		rc=0
 		agentbot_menu_dispatch "$choice" || rc=$?
-		ui_pause
+		# Nested Dotfiles owns its own interaction and returns directly to this
+		# menu; do not add a stale parent "Press Enter" pause after it exits.
+		[[ "$choice" == dotfiles ]] || ui_pause
 	done
 }

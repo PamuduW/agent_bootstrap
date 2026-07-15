@@ -130,6 +130,25 @@ class CliTests(unittest.TestCase):
         self.assertIn("Agentbot › Doctor", rendered)
         self.assertIn("Agentbot › Skills install", rendered)
 
+    def test_doctor_report_wraps_full_issue_details(self) -> None:
+        from src.models import DoctorIssue
+        from src.ui import print_doctor_summary
+
+        message = (
+            "Manual skill 'brainstorming' is available but outside the global lock; "
+            "add a manifest source to make it reproducible"
+        )
+        output = io.StringIO()
+        with patch("sys.stdout", output):
+            print_doctor_summary([DoctorIssue("warning", "reproducibility", message)])
+
+        rendered = output.getvalue()
+        self.assertIn("Manual skill 'brainstorming' is", rendered)
+        self.assertIn("available but outside the global lock;", rendered)
+        self.assertIn("add a manifest source to make it", rendered)
+        self.assertIn("reproducible", rendered)
+        self.assertNotIn("...", output.getvalue())
+
     def test_parser_and_paths_use_agentbot_product_contract(self) -> None:
         import os
         import tempfile

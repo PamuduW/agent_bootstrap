@@ -3,7 +3,6 @@
 
 agentbot_menu_update() {
 	local answer='' rc=0
-	"$AGENTBOT_HOME/install.sh" status || return 1
 	if AGENTBOT_UPDATE_INTERACTIVE=1 "$AGENTBOT_HOME/install.sh" update --dry-run; then
 		:
 	else
@@ -19,7 +18,7 @@ agentbot_menu_update() {
 	printf 'Apply the Agentbot reconciliation update? [y/N] ' >/dev/tty
 	IFS= read -r answer </dev/tty || answer=n
 	case "$answer" in
-		y|Y|yes|YES) "$AGENTBOT_HOME/install.sh" update --yes ;;
+		y|Y|yes|YES) AGENTBOT_UPDATE_SHOW_STATUS=0 "$AGENTBOT_HOME/install.sh" update --yes ;;
 		*) printf 'Update cancelled.\n'; return 0 ;;
 	esac
 }

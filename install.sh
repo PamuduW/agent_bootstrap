@@ -259,6 +259,25 @@ run_update_decision() {
   esac
 }
 
+print_repo_update_table() {
+  local branch local_rev available action bold='' reset='' yellow=''
+  if [[ -z "${NO_COLOR:-}" && ( -t 1 || -t 0 ) ]]; then
+    bold=$'\033[1m'; reset=$'\033[0m'; yellow=$'\033[33m'
+  fi
+  branch="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+  local_rev="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  case "${REPO_UPDATE_STATE:-stopped}" in
+    behind) available="${REPO_UPDATE_BEHIND:-0} commit(s) behind"; action='pull --ff-only' ;;
+    ahead) available="${REPO_UPDATE_AHEAD:-0} local commit(s) ahead"; action='continue' ;;
+    *) available='repository state requires review'; action='check' ;;
+  esac
+  printf '\n  %sRepository update%s\n' "$bold" "$reset"
+  printf '  %s%-22s | %-40s | %s%s\n' "$bold" component detail result "$reset"
+  printf '  %s\n' '-----------------------+------------------------------------------+----------'
+  printf '  %-22s | %-40s | %s%s%s\n' 'agent_bootstrap repo' "${branch}@${local_rev} / ${available}" "$yellow" "$action" "$reset"
+  printf '\n'
+}
+
 run_update_prompt() {
   local action="$1" prompt answer=''
   case "$action" in
@@ -266,6 +285,7 @@ run_update_prompt() {
     continue-ahead) prompt='The local repository is ahead. Continue with the Agentbot update?' ;;
     *) return 1 ;;
   esac
+  print_repo_update_table
   printf '%s [y/N]: ' "$prompt" >/dev/tty
   IFS= read -r answer </dev/tty || true
   case "$answer" in
@@ -275,11 +295,11 @@ run_update_prompt() {
 }
 
 run_update_backend() {
-  local confirm=no arg update_outcome update_reason
+  local confirm=no dry_run=false arg update_outcome update_reason
   for arg in "$@"; do
     case "$arg" in
       --yes) confirm=yes ;;
-      --dry-run) ;;
+      --dry-run) dry_run=true ;;
       *) die "unknown update option: $arg" ;;
     esac
   done
@@ -304,6 +324,9 @@ run_update_backend() {
       return 1
       ;;
   esac
+  if [[ "$dry_run" == true || "${AGENTBOT_UPDATE_SHOW_STATUS:-1}" == 1 ]]; then
+    run_cli status
+  fi
   run_cli update "$@"
 }
 

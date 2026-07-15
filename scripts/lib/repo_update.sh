@@ -1,5 +1,9 @@
 # shellcheck shell=bash
 
+REPO_UPDATE_STATE=stopped
+REPO_UPDATE_AHEAD=0
+REPO_UPDATE_BEHIND=0
+
 _repo_update_set_result() {
   local outcome_name="$1" reason_name="$2" outcome_value="$3" reason_value="$4"
   printf -v "$outcome_name" '%s' "$outcome_value"
@@ -16,6 +20,9 @@ repo_update_classify() {
   local repo="$1" state_name="$2" reason_name="$3"
   local status_output branch upstream counts ahead behind classified_state classified_reason
 
+  REPO_UPDATE_AHEAD=0
+  REPO_UPDATE_BEHIND=0
+
   status_output="$(git -C "$repo" status --porcelain 2>/dev/null)" || {
     printf -v "$state_name" '%s' stopped
     printf -v "$reason_name" '%s' invalid-counts
@@ -31,6 +38,8 @@ repo_update_classify() {
     classified_state=stopped classified_reason=invalid-counts
   elif [[ "$counts" =~ ^([0-9]+)[[:space:]]+([0-9]+)$ ]]; then
     ahead="${BASH_REMATCH[1]}" behind="${BASH_REMATCH[2]}"
+    REPO_UPDATE_AHEAD="$ahead"
+    REPO_UPDATE_BEHIND="$behind"
     if ((ahead > 0 && behind > 0)); then classified_state=diverged
     elif ((ahead > 0)); then classified_state=ahead
     elif ((behind > 0)); then classified_state=behind
@@ -43,6 +52,7 @@ repo_update_classify() {
 
   printf -v "$state_name" '%s' "$classified_state"
   printf -v "$reason_name" '%s' "$classified_reason"
+  REPO_UPDATE_STATE="$classified_state"
 }
 
 repo_update_run() {
@@ -50,6 +60,9 @@ repo_update_run() {
   local worktree bare origin state reason
 
   _repo_update_set_result "$outcome_name" "$reason_name" stopped invalid-repository
+  REPO_UPDATE_STATE=stopped
+  REPO_UPDATE_AHEAD=0
+  REPO_UPDATE_BEHIND=0
   [[ -d "$repo" ]] || return 0
   worktree="$(git -C "$repo" rev-parse --is-inside-work-tree 2>/dev/null)" || return 0
   [[ "$worktree" == true ]] || return 0

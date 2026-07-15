@@ -111,7 +111,7 @@ FAKE
 	ui_pause() { printf 'pause\n' >>"$calls"; }
 	agentbot_menu_relaunch() { printf 'relaunch\n' >>"$calls"; }
 	agentbot_menu_update || return 1
-	[[ "$(<"$calls")" == $'install:status\ninstall:update --dry-run\npause\nrelaunch' ]]
+	[[ "$(<"$calls")" == $'install:update --dry-run\npause\nrelaunch' ]]
 )
 
 test_caller_guard_hides_dotfiles_entry() (

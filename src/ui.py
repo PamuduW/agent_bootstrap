@@ -67,11 +67,19 @@ def print_section(label: str) -> None:
 
 def color_result(result: str) -> str:
     key = result.strip().lower()
-    if key in {"ok", "installed", "configured", "linked", "up to date", "current"}:
+    if key in {"ok", "installed", "configured", "linked", "up to date", "current", "applied"}:
         return _c(result, GREEN)
     if key in {"missing", "failed", "error"}:
         return _c(result, RED)
-    if key.startswith("skipped") or key in {"check", "warn", "warning", "partial", "drift", "extra"}:
+    if key.startswith("skipped") or key in {
+        "check",
+        "warn",
+        "warning",
+        "partial",
+        "drift",
+        "extra",
+        "applied-with-local-changes",
+    }:
         return _c(result, YELLOW)
     if key in {"info", "dry-run"}:
         return _c(result, CYAN)

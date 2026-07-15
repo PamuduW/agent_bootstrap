@@ -29,7 +29,20 @@ test_repo_gate_short_circuits_unsafe_states() (
   run_update_backend_for current current; current_rc=$?
   set -e
   [[ "$dirty_rc" -ne 0 && "$pulled_rc" -eq 2 && "$current_rc" -eq 0 ]] || return 1
-  [[ "$(<"$TEST_ROOT/calls")" == 'cli:update --dry-run' ]]
+  [[ "$(<"$TEST_ROOT/calls")" == $'cli:status\ncli:update --dry-run' ]]
+)
+
+test_direct_update_shows_status_before_reconciliation() (
+  AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+  check_deps() { :; }
+  repo_update_run() {
+    printf -v "$3" '%s' current
+    printf -v "$4" '%s' current
+  }
+  run_cli() { printf 'cli:%s\n' "$*" >>"$TEST_ROOT/direct-update.calls"; }
+  : >"$TEST_ROOT/direct-update.calls"
+  run_update_backend --dry-run >/dev/null 2>&1 || return 1
+  [[ "$(<"$TEST_ROOT/direct-update.calls")" == $'cli:status\ncli:update --dry-run' ]]
 )
 
 test_dirty_state_has_manual_resolution_guidance() (
@@ -57,6 +70,7 @@ test_interactive_repo_decision_uses_tty_prompt_contract() (
 check 'repo gate short-circuits stopped and relaunch states' test_repo_gate_short_circuits_unsafe_states
 check 'dirty update stops with manual-resolution guidance' test_dirty_state_has_manual_resolution_guidance
 check 'interactive update decisions use the TTY prompt seam' test_interactive_repo_decision_uses_tty_prompt_contract
+check 'direct update shows the status table before reconciliation' test_direct_update_shows_status_before_reconciliation
 test_harness_verify_safety || failed=$((failed + 1))
 printf '\nRan %d update-integration test(s); %d failure(s).\n' "$((passed + failed))" "$failed"
 test_harness_cleanup || failed=$((failed + 1))

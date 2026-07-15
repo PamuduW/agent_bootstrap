@@ -26,6 +26,19 @@ test_menu_snapshot() {
 	[[ "$output" == *'Check the installed Agentbot components and baseline.'* ]] || return 1
 }
 
+test_menu_uses_in_place_redraw_contract() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	_agentbot_menu_setup
+	local frame output body redraw_call='agentbot_menu_redraw_up "$menu_lines"'
+	frame="$(agentbot_menu_lines 0)"
+	output="$(agentbot_menu_draw 0 80)"
+	[[ "$frame" -eq "$(printf '%s\n' "$output" | wc -l)" ]] || return 1
+	[[ "$(agentbot_menu_redraw_up "$frame")" == $'\033['"${frame}"'A' ]] || return 1
+	body="$(declare -f menu_simple_run)"
+	[[ "$body" == *"$redraw_call"* ]] || return 1
+	[[ "$body" != *$'while true; do\n\t\tui_clear'* ]]
+)
+
 test_dispatch_order_and_return() (
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
 	local calls="$TEST_ROOT/menu.calls"
@@ -125,6 +138,7 @@ test_caller_guard_hides_dotfiles_entry() (
 check 'Agentbot menu source exists' test_menu_source_exists
 if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'Agentbot menu snapshot has title, breadcrumb, spacing, and all actions' test_menu_snapshot
+	check 'Agentbot menu redraws in place without clearing on cursor movement' test_menu_uses_in_place_redraw_contract
 	check 'Agentbot menu dispatches actions in order and returns on Quit' test_dispatch_order_and_return
 	check 'failed Agentbot action pauses once and returns' test_failed_action_pauses_once
 	check 'Update calls the real backend and Dotfiles remains guarded' test_update_action_calls_real_backend_and_dotfiles_stays_guarded
@@ -132,6 +146,7 @@ if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'SETUP_CALLER=dotfiles hides the reciprocal menu entry' test_caller_guard_hides_dotfiles_entry
 else
 	fail 'Agentbot menu snapshot has title, breadcrumb, spacing, and all actions'
+	fail 'Agentbot menu redraws in place without clearing on cursor movement'
 	fail 'Agentbot menu dispatches actions in order and returns on Quit'
 	fail 'failed Agentbot action pauses once and returns'
 	fail 'deferred Update and Dotfiles actions are explicitly unavailable'

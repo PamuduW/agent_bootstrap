@@ -48,6 +48,26 @@ agentbot_menu_fit() {
 	fi
 }
 
+agentbot_menu_desc_lines() {
+	local cursor="$1" lines=0 line
+	local desc="${MENU_SIMPLE_DESCS[$cursor]:-}"
+	while IFS= read -r line; do
+		lines=$((lines + 1))
+	done <<<"$desc"
+	printf '%s\n' "$lines"
+}
+
+agentbot_menu_lines() {
+	local cursor="${1:-0}" desc_lines
+	desc_lines="$(agentbot_menu_desc_lines "$cursor")"
+	# Title, breadcrumb+spacer, hint+spacer, items, footer spacer, description.
+	printf '%s\n' $((1 + 2 + 2 + ${#MENU_SIMPLE_LABELS[@]} + 1 + desc_lines))
+}
+
+agentbot_menu_redraw_up() {
+	printf '\033[%dA' "$1"
+}
+
 agentbot_menu_draw() {
 	local cursor="$1" cols="${2:-80}" i prefix row desc
 
@@ -74,11 +94,12 @@ agentbot_menu_draw() {
 }
 
 menu_simple_run() {
-	local cursor=0 cols key seq next
+	local cursor=0 cols key seq next menu_lines next_lines
 	cols="$(agentbot_menu_cols)"
+	menu_lines="$(agentbot_menu_lines "$cursor")"
+	ui_clear
+	agentbot_menu_draw "$cursor" "$cols" >/dev/tty
 	while true; do
-		ui_clear
-		agentbot_menu_draw "$cursor" "$cols" >/dev/tty
 		IFS= read -rsn1 key </dev/tty || { MENU_SIMPLE_RESULT=''; return 1; }
 		case "$key" in
 		$'\e')
@@ -93,5 +114,13 @@ menu_simple_run() {
 			return 0
 			;;
 		esac
+		next_lines="$(agentbot_menu_lines "$cursor")"
+		if [[ "$next_lines" == "$menu_lines" ]]; then
+			agentbot_menu_redraw_up "$menu_lines" >/dev/tty
+		else
+			ui_clear
+		fi
+		menu_lines="$next_lines"
+		agentbot_menu_draw "$cursor" "$cols" >/dev/tty
 	done
 }

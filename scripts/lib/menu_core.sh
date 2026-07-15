@@ -3,10 +3,11 @@
 
 agentbot_menu_init_colors() {
 	if [[ -n "${NO_COLOR:-}" ]]; then
-		C_RESET=''; C_BOLD=''; C_DIM=''
+		C_RESET=''; C_BOLD=''; C_DIM=''; C_GREEN=''; C_YELLOW=''; C_CYAN=''
 		return 0
 	fi
 	C_RESET=$'\e[0m'; C_BOLD=$'\e[1m'; C_DIM=$'\e[2m'
+	C_GREEN=$'\e[32m'; C_YELLOW=$'\e[33m'; C_CYAN=$'\e[36m'
 }
 
 agentbot_menu_init_colors
@@ -20,6 +21,7 @@ ui_clear() {
 ui_pause() {
 	local ignored=''
 	if [[ -t 0 || -e /dev/tty ]]; then
+		printf '\n' >/dev/tty
 		printf 'Press Enter to continue: ' >/dev/tty
 		# shellcheck disable=SC2034
 		IFS= read -r ignored </dev/tty || true
@@ -71,25 +73,25 @@ agentbot_menu_redraw_up() {
 agentbot_menu_draw() {
 	local cursor="$1" cols="${2:-80}" i prefix row desc
 
-	printf '  %s%s%s\n' "$C_BOLD" "$(agentbot_menu_fit '=== Agentbot ===' "$cols")" "$C_RESET"
-	printf '  %s%s%s\n\n' "$C_DIM" "$(agentbot_menu_fit 'Agentbot' "$cols")" "$C_RESET"
-	printf '  %s%s%s\n\n' "$C_DIM" "$(agentbot_menu_fit 'Up/Down navigate   Enter confirm   q back' "$cols")" "$C_RESET"
+	printf '  %s%s%s\e[K\n' "$C_BOLD" "$(agentbot_menu_fit '=== Agentbot ===' "$cols")" "$C_RESET"
+	printf '  %s%s%s\e[K\n\e[K\n' "$C_DIM" "$(agentbot_menu_fit 'Agentbot' "$cols")" "$C_RESET"
+	printf '  %s%s%s\e[K\n\e[K\n' "$C_DIM" "$(agentbot_menu_fit 'Up/Down navigate   Enter confirm   q back' "$cols")" "$C_RESET"
 
 	for i in "${!MENU_SIMPLE_LABELS[@]}"; do
 		prefix=' '
 		[[ "$i" -eq "$cursor" ]] && prefix='>'
 		row="${prefix} $((i + 1)). ${MENU_SIMPLE_LABELS[$i]}"
 		if [[ "$i" -eq "$cursor" ]]; then
-			printf '  %s%s%s\n' "$C_BOLD" "$(agentbot_menu_fit "$row" "$cols")" "$C_RESET"
+			printf '  %s%s%s\e[K\n' "$C_BOLD" "$(agentbot_menu_fit "$row" "$cols")" "$C_RESET"
 		else
-			printf '  %s\n' "$(agentbot_menu_fit "$row" "$cols")"
+			printf '  %s\e[K\n' "$(agentbot_menu_fit "$row" "$cols")"
 		fi
 	done
 
-	printf '\n'
+	printf '\e[K\n'
 	desc="${MENU_SIMPLE_DESCS[$cursor]:-}"
 	while IFS= read -r line; do
-		printf '  %s%s%s\n' "$C_DIM" "$(agentbot_menu_fit "$line" "$cols")" "$C_RESET"
+		printf '  %s%s%s\e[K\n' "$C_DIM" "$(agentbot_menu_fit "$line" "$cols")" "$C_RESET"
 	done <<<"$desc"
 }
 

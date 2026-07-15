@@ -1,3 +1,5 @@
+import contextlib
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -24,6 +26,25 @@ class InstallLifecycleTests(unittest.TestCase):
                 rc = service.run_bootstrap()
             self.assertEqual(0, rc)
             self.assertEqual(["install", "refresh", "doctor"], events)
+
+    def test_bootstrap_header_uses_install_breadcrumb(self) -> None:
+        from src.paths import AgentbotPaths
+        from src.service import AgentbotService
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "global").mkdir()
+            (root / "global" / "AGENTS.md").write_text("# baseline\n", encoding="utf-8")
+            paths = AgentbotPaths(root, root / "codex", root / "claude", root / "cursor")
+            service = AgentbotService(paths)
+            output = io.StringIO()
+            with mock.patch("src.service.run_skills_install", return_value=[]), \
+                 mock.patch.object(service, "refresh_agent_outputs", return_value=(0, 0, 0)), \
+                 mock.patch.object(service, "doctor_issues", return_value=[]), \
+                 mock.patch.object(service, "skills_doctor_issues", return_value=[]), \
+                 contextlib.redirect_stdout(output):
+                service.run_bootstrap()
+            self.assertIn("Agentbot › Install Agentbot", output.getvalue())
 
 
 if __name__ == "__main__":

@@ -19,6 +19,16 @@ test_headless_no_arg_guidance() {
 	[[ "$rc" -ne 0 && "$output" == *'agentbot help'* && "$output" == *'agentbot install'* ]]
 }
 
+test_symlink_invocation_resolves_repository_root() {
+	local link="$TEST_ROOT/agentbot-link" output
+	ln -s "$AGENTBOT" "$link"
+	set +e
+	output="$(AGENTBOT_TTY=0 "$link" status 2>&1)"
+	local rc=$?
+	set -e
+	[[ "$rc" -eq 0 && "$output" == *'=== Status ==='* && "$output" != *'No such file or directory'* ]]
+}
+
 test_dispatch_matrix() (
 	AGENTBOT_SOURCE_ONLY=1 source "$AGENTBOT"
 	local calls="$TEST_ROOT/dispatch.calls"; : >"$calls"
@@ -95,6 +105,7 @@ test_environment_and_no_old_binary() {
 check 'agentbot dispatcher exists and is executable' test_dispatcher_exists
 if [[ -x "$AGENTBOT" ]]; then
 	check 'headless no-arg fails with explicit guidance' test_headless_no_arg_guidance
+	check 'symlink invocation resolves the Agentbot repository root' test_symlink_invocation_resolves_repository_root
 	check 'dispatcher routes exact backend and future seams' test_dispatch_matrix
 	check 'boot selectors produce default agents claude and combined outputs' test_boot_selector_matrix
 	check 'boot rejects invalid inputs before partial writes' test_boot_validation_is_atomic
@@ -103,6 +114,7 @@ if [[ -x "$AGENTBOT" ]]; then
 	check 'help and executable expose no old public surface' test_environment_and_no_old_binary
 else
 	fail 'headless no-arg fails with explicit guidance'
+	fail 'symlink invocation resolves the Agentbot repository root'
 	fail 'dispatcher routes exact backend and future seams'
 	fail 'boot selectors produce default agents claude and combined outputs'
 	fail 'boot rejects invalid inputs before partial writes'

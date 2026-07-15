@@ -50,7 +50,7 @@ class AgentbotService:
         return linked_total, skipped, updated
 
     def run_bootstrap(self) -> int:
-        print_header("Agentbot install", str(self.paths.root))
+        print_header("Install Agentbot", "Agentbot › Install Agentbot")
         results = run_skills_install(self.paths)
         skills_rc = print_skills_report(results, title="Skills install")
         self.refresh_agent_outputs()

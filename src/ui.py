@@ -202,7 +202,7 @@ def print_status_summary(
 
 
 def print_doctor_summary(issues: list) -> int:
-    print_header("Doctor", "Agentbot")
+    print_header("Doctor", "Agentbot › Doctor")
     if not issues:
         print_table(
             [("Health check", "skills + global baseline", "ok")],
@@ -233,7 +233,7 @@ def print_skills_report(results: list, *, title: str) -> int:
     from .skills_installer import InstallResult, summarize_install_results
 
     summary = summarize_install_results(results)
-    print_header(title, "Agentbot › skills")
+    print_header(title, f"Agentbot › {title}")
     print_section_block("── Sources ──")
     rows: list[tuple[str, str, str]] = []
     for result in results:

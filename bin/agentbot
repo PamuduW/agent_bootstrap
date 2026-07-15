@@ -4,7 +4,11 @@ set -euo pipefail
 if [[ -n "${AGENTBOT_HOME:-}" && -d "$AGENTBOT_HOME" ]]; then
   AGENTBOT_HOME="$(cd "$AGENTBOT_HOME" && pwd)"
 else
-  AGENTBOT_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  # Resolve the executable first: install.sh exposes Agentbot through
+  # ~/bin/agentbot, and BASH_SOURCE would otherwise resolve that symlink's
+  # directory instead of this repository.
+  AGENTBOT_SCRIPT="$(readlink -f "${BASH_SOURCE[0]}")"
+  AGENTBOT_HOME="$(cd "$(dirname "$AGENTBOT_SCRIPT")/.." && pwd)"
 fi
 export AGENTBOT_HOME
 

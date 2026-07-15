@@ -118,6 +118,18 @@ class CliTests(unittest.TestCase):
             os.environ.pop("NO_COLOR", None)
             self.assertEqual("\033[36mpreview\033[0m", color_result("preview"))
 
+    def test_reports_use_hierarchical_breadcrumbs(self) -> None:
+        from src.ui import print_doctor_summary, print_skills_report
+
+        output = io.StringIO()
+        with patch("sys.stdout", output):
+            print_doctor_summary([])
+            print_skills_report([], title="Skills install")
+
+        rendered = output.getvalue()
+        self.assertIn("Agentbot › Doctor", rendered)
+        self.assertIn("Agentbot › Skills install", rendered)
+
     def test_parser_and_paths_use_agentbot_product_contract(self) -> None:
         import os
         import tempfile

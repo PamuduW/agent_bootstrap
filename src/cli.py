@@ -120,12 +120,12 @@ def handle_skills_command(service: AgentbotService, skills_command: str) -> int:
             skills_rc = print_skills_report(results, title="Skills install")
             service.refresh_agent_outputs()
         except Exception as error:  # noqa: BLE001
-            print_header("Skills install", "Agentbot › skills")
+            print_header("Skills install", "Agentbot › Skills install")
             print(f"  Error: {error}")
             return 1
         return skills_rc
     if skills_command == "update":
-        print_header("Skills update", "Agentbot › skills")
+        print_header("Skills update", "Agentbot › Skills update")
         try:
             service.update_skills()
             linked, skipped, updated = service.refresh_agent_outputs()
@@ -136,11 +136,12 @@ def handle_skills_command(service: AgentbotService, skills_command: str) -> int:
     if skills_command == "list":
         skills = service.list_skills()
         if not skills:
-            print("No installed skills found.")
+            print_header("Installed Skills", "Agentbot › Installed Skills")
+            print("  No installed skills found.")
             return 0
-        print("\n=== Installed Skills ===")
+        print_header("Installed Skills", "Agentbot › Installed Skills")
         for skill in skills:
-            print(skill)
+            print(f"  {skill}")
         return 0
     if skills_command == "doctor":
         return print_skills_doctor(service)
@@ -155,16 +156,16 @@ def run_bootstrap_command(service: AgentbotService, paths: AgentbotPaths) -> int
 
 def print_skills_doctor(service: AgentbotService) -> int:
     issues = service.skills_doctor_issues()
-    print("\n=== Skills Doctor ===")
+    print_header("Skills Doctor", "Agentbot › Skills Doctor")
     if not issues:
-        print("No issues found.")
+        print("  No issues found.")
         return 0
-    print(f"Found {len(issues)} issue(s):")
+    print(f"  Found {len(issues)} issue(s):")
     errors = 0
     for issue in issues:
         if issue.level.lower() == "error":
             errors += 1
-        print(f"- [{issue.level.upper()}] {issue.scope}: {issue.message}")
+        print(f"  - [{issue.level.upper()}] {issue.scope}: {issue.message}")
     return 1 if errors else 0
 
 

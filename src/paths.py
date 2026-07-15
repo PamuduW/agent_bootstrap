@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
 @dataclass(frozen=True)
-class BootstrapPaths:
+class AgentbotPaths:
     root: Path
     codex_home: Path
     claude_home: Path
     cursor_home: Path
+    config_home: Path = field(default_factory=lambda: _default_config_home())
 
     @property
     def global_agents(self) -> Path:
@@ -36,11 +38,20 @@ class BootstrapPaths:
         return Path.home() / ".agents" / ".skill-lock.json"
 
 
-def default_paths(root: Path) -> BootstrapPaths:
+def default_paths(root: Path | None = None) -> AgentbotPaths:
     home = Path.home()
-    return BootstrapPaths(
-        root=root,
+    product_root = root or Path(
+        os.environ.get("AGENTBOT_HOME", Path(__file__).resolve().parents[1])
+    )
+    return AgentbotPaths(
+        root=product_root,
         codex_home=home / ".codex",
         claude_home=home / ".claude",
         cursor_home=home / ".cursor",
     )
+
+
+def _default_config_home() -> Path:
+    xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
+    base = Path(xdg_config_home).expanduser() if xdg_config_home else Path.home() / ".config"
+    return base / "agentbot"

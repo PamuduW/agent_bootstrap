@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
-from .paths import BootstrapPaths, default_paths
-from .service import BootstrapService
+from .paths import AgentbotPaths, default_paths
+from .service import AgentbotService
 from .skills_installer import SkillsInstallError
 from .ui import (
     print_doctor_summary,
@@ -33,7 +34,7 @@ def main() -> int:
     args = parser.parse_args()
 
     paths = default_paths(Path(args.root))
-    service = BootstrapService(paths)
+    service = AgentbotService(paths)
 
     try:
         command = args.command or "bootstrap"
@@ -50,6 +51,16 @@ def main() -> int:
             return 0
         if command == "doctor":
             return print_doctor(service)
+        if command == "update":
+            result = service.run_reconciliation_update(
+                dry_run=bool(getattr(args, "dry_run", False)),
+                confirm=bool(getattr(args, "confirm", False)),
+            )
+            print_header("Agentbot update", "Agentbot")
+            print(f"  {result.status}: {result.message or 'source-owned skills reconciled'}")
+            for path in result.changed_paths:
+                print(f"  changed: {path}")
+            return 0 if result.status in {"applied", "applied-with-local-changes", "preview", "confirmation_required"} else 1
         if command == "bootstrap":
             return run_bootstrap_command(service, paths)
         if command == "skills":
@@ -61,8 +72,12 @@ def main() -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="agent_bootstrap")
-    parser.add_argument("--root", dest="root", default=str(Path(__file__).resolve().parents[2]))
+    parser = argparse.ArgumentParser(prog="agentbot")
+    parser.add_argument(
+        "--root",
+        dest="root",
+        default=os.environ.get("AGENTBOT_HOME", str(Path(__file__).resolve().parents[1])),
+    )
     subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("bootstrap", help="Run fresh-machine bootstrap flow")
@@ -70,6 +85,9 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("--json", action="store_true", dest="status_json")
     subparsers.add_parser("global", help="Render global outputs")
     subparsers.add_parser("doctor", help="Validate skills and global baseline")
+    update = subparsers.add_parser("update", help="Reconcile source-owned skills after the repository gate")
+    update.add_argument("--dry-run", action="store_true", help="Preview reconciliation without writing")
+    update.add_argument("--yes", dest="confirm", action="store_true", help="Confirm source-owned changes")
 
     skills = subparsers.add_parser("skills", help="Install and manage curated skills")
     skills_sub = skills.add_subparsers(dest="skills_command", required=True)
@@ -93,19 +111,19 @@ def _archived_command_error(command: str) -> int:
     return 1
 
 
-def handle_skills_command(service: BootstrapService, skills_command: str) -> int:
+def handle_skills_command(service: AgentbotService, skills_command: str) -> int:
     if skills_command == "install":
         try:
             results = service.install_skills()
             skills_rc = print_skills_report(results, title="Skills install")
             service.refresh_agent_outputs()
         except Exception as error:  # noqa: BLE001
-            print_header("Skills install", "agent_bootstrap › skills")
+            print_header("Skills install", "Agentbot › skills")
             print(f"  Error: {error}")
             return 1
         return skills_rc
     if skills_command == "update":
-        print_header("Skills update", "agent_bootstrap › skills")
+        print_header("Skills update", "Agentbot › skills")
         try:
             service.update_skills()
             linked, skipped, updated = service.refresh_agent_outputs()
@@ -127,25 +145,28 @@ def handle_skills_command(service: BootstrapService, skills_command: str) -> int
     raise SystemExit(f"unknown skills command: {skills_command}")
 
 
-def run_bootstrap_command(service: BootstrapService, paths: BootstrapPaths) -> int:
+def run_bootstrap_command(service: AgentbotService, paths: AgentbotPaths) -> int:
     rc = service.run_bootstrap()
-    print(f"AGENT_BOOTSTRAP_HOME={paths.root.resolve()}")
+    print(f"AGENTBOT_HOME={paths.root.resolve()}")
     return rc
 
 
-def print_skills_doctor(service: BootstrapService) -> int:
+def print_skills_doctor(service: AgentbotService) -> int:
     issues = service.skills_doctor_issues()
     print("\n=== Skills Doctor ===")
     if not issues:
         print("No issues found.")
         return 0
     print(f"Found {len(issues)} issue(s):")
+    errors = 0
     for issue in issues:
+        if issue.level.lower() == "error":
+            errors += 1
         print(f"- [{issue.level.upper()}] {issue.scope}: {issue.message}")
-    return 1
+    return 1 if errors else 0
 
 
-def print_status(service: BootstrapService) -> None:
+def print_status(service: AgentbotService) -> None:
     summary = service.status_summary()
     print_status_summary(
         installed_skills=int(summary["installed_skills"]),
@@ -160,11 +181,11 @@ def print_status(service: BootstrapService) -> None:
     )
 
 
-def print_status_json(service: BootstrapService) -> None:
+def print_status_json(service: AgentbotService) -> None:
     print(json.dumps(service.status_summary(), indent=2, sort_keys=True))
 
 
-def print_doctor(service: BootstrapService) -> int:
+def print_doctor(service: AgentbotService) -> int:
     issues = service.doctor_issues() + service.skills_doctor_issues()
     return print_doctor_summary(issues)
 

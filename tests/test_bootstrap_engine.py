@@ -38,9 +38,9 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def _paths(self):
-        from src.paths import BootstrapPaths
+        from src.paths import AgentbotPaths
 
-        return BootstrapPaths(
+        return AgentbotPaths(
             root=self.root,
             codex_home=self.codex_home,
             claude_home=self.claude_home,
@@ -138,7 +138,7 @@ class SlimBootstrapEngineTests(unittest.TestCase):
 
     def test_non_object_lock_roots_do_not_crash_render_doctor_or_status(self) -> None:
         from src.render import render_global_outputs
-        from src.service import BootstrapService
+        from src.service import AgentbotService
 
         paths = self._paths()
         global_lock = self.root / "home" / ".agents" / ".skill-lock.json"
@@ -158,20 +158,20 @@ class SlimBootstrapEngineTests(unittest.TestCase):
                     new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / ".skill-lock.json"),
                 ):
                     render_global_outputs(paths)
-                    service = BootstrapService(paths)
+                    service = AgentbotService(paths)
                     service.doctor_issues()
                     summary = service.status_summary()
 
                 self.assertEqual(-1, summary["global_lock_skills"])
 
     def test_doctor_reports_missing_managed_link_and_manual_provenance(self) -> None:
-        from src.service import BootstrapService
+        from src.service import AgentbotService
 
         paths = self._paths()
         manual = self.agents_home / "manual-skill"
         manual.mkdir()
         (manual / "SKILL.md").write_text("# manual\n", encoding="utf-8")
-        service = BootstrapService(paths)
+        service = AgentbotService(paths)
 
         with mock.patch.object(
             type(paths),
@@ -188,7 +188,7 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         self.assertTrue(any("manual-skill" in message and "manual" in message for message in messages))
 
     def test_doctor_ignores_stale_global_lock_skills_outside_the_manifest(self) -> None:
-        from src.service import BootstrapService
+        from src.service import AgentbotService
 
         paths = self._paths()
         (self.root / "skills-lock.json").write_text(json.dumps({"sources": []}), encoding="utf-8")
@@ -198,7 +198,7 @@ class SlimBootstrapEngineTests(unittest.TestCase):
             json.dumps({"version": 3, "skills": {"pitstop": {"source": "old/source"}}}),
             encoding="utf-8",
         )
-        service = BootstrapService(paths)
+        service = AgentbotService(paths)
 
         with mock.patch.object(
             type(paths),
@@ -214,20 +214,20 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         self.assertFalse(any("pitstop" in message and "missing" in message for message in messages))
 
     def test_slim_doctor_reports_missing_global_agents(self) -> None:
-        from src.service import BootstrapService
+        from src.service import AgentbotService
 
         paths = self._paths()
         (paths.global_agents).unlink()
-        service = BootstrapService(paths)
+        service = AgentbotService(paths)
 
         messages = [issue.message for issue in service.doctor_issues()]
         self.assertTrue(any("Missing global baseline" in message for message in messages))
 
     def test_slim_status_summary_counts_installed_skills(self) -> None:
-        from src.service import BootstrapService
+        from src.service import AgentbotService
 
         paths = self._paths()
-        service = BootstrapService(paths)
+        service = AgentbotService(paths)
 
         with mock.patch.object(service, "list_skills", return_value=["alpha-skill", "beta-skill"]):
             summary = service.status_summary()

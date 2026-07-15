@@ -17,9 +17,9 @@ class SkillsInstallerTests(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def _paths(self):
-        from src.paths import BootstrapPaths
+        from src.paths import AgentbotPaths
 
-        return BootstrapPaths(
+        return AgentbotPaths(
             root=self.root,
             codex_home=self.root / "home" / ".codex",
             claude_home=self.root / "home" / ".claude",
@@ -351,7 +351,7 @@ sources:
         from src.skills_installer import run_install_command
 
         completed = MagicMock(returncode=0, stdout="ok", stderr="")
-        with patch.dict(os.environ, {"AGENT_BOOTSTRAP_NPX_TIMEOUT_SECONDS": "1200"}), patch(
+        with patch.dict(os.environ, {"AGENTBOT_NPX_TIMEOUT_SECONDS": "1200"}), patch(
             "src.skills_installer.subprocess.run", return_value=completed
         ) as mock_run:
             run_install_command(["npx", "skills", "add"], source_id="superpowers")

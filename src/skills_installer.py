@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 
 from .models import DoctorIssue
-from .paths import BootstrapPaths
+from .paths import AgentbotPaths
 from .skills_sources import SkillSourceEntry, SkillsSourcesConfig, load_skills_sources
 
 
@@ -50,7 +50,7 @@ def summarize_install_results(results: list[InstallResult]) -> InstallSummary:
 
 DEFAULT_NPX = "npx"
 DEFAULT_NPX_TIMEOUT_SECONDS = 900
-NPX_TIMEOUT_ENV = "AGENT_BOOTSTRAP_NPX_TIMEOUT_SECONDS"
+NPX_TIMEOUT_ENV = "AGENTBOT_NPX_TIMEOUT_SECONDS"
 GITHUB_CLONE_TIMEOUT_SECONDS = 120
 
 
@@ -300,7 +300,7 @@ def install_source(
     if dry_run or clone_url is None:
         result = run_install_command(argv, source_id=source.id, dry_run=dry_run, cwd=cwd)
     else:
-        with tempfile.TemporaryDirectory(prefix="agent-bootstrap-skill-") as temp_dir:
+        with tempfile.TemporaryDirectory(prefix="agentbot-skill-") as temp_dir:
             checkout = Path(temp_dir) / source.id
             _clone_github_source(source.repo, checkout)
             argv[3] = str(checkout)
@@ -363,7 +363,7 @@ def update_all(
     return result
 
 
-def install_skills(paths: BootstrapPaths, *, dry_run: bool = False) -> list[InstallResult]:
+def install_skills(paths: AgentbotPaths, *, dry_run: bool = False) -> list[InstallResult]:
     config = load_skills_sources(paths.skills_sources_file)
     return install_all(
         config,
@@ -373,19 +373,19 @@ def install_skills(paths: BootstrapPaths, *, dry_run: bool = False) -> list[Inst
     )
 
 
-def update_skills(paths: BootstrapPaths, *, dry_run: bool = False) -> InstallResult:
+def update_skills(paths: AgentbotPaths, *, dry_run: bool = False) -> InstallResult:
     config = load_skills_sources(paths.skills_sources_file)
     return update_all(config, dry_run=dry_run, cwd=paths.root)
 
 
-def list_installed_skills(paths: BootstrapPaths) -> list[str]:
+def list_installed_skills(paths: AgentbotPaths) -> list[str]:
     home = paths.agents_skills_home
     if not home.is_dir():
         return []
     return sorted(skill_dir.name for skill_dir in home.iterdir() if skill_dir.is_dir())
 
 
-def doctor_skills(paths: BootstrapPaths) -> list[DoctorIssue]:
+def doctor_skills(paths: AgentbotPaths) -> list[DoctorIssue]:
     issues: list[DoctorIssue] = []
     config: SkillsSourcesConfig | None = None
 

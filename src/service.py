@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import re
+import stat
 from pathlib import Path
+from typing import Callable, Mapping
 
 from .claude_bridge import bridge_claude_skills as link_claude_skills
 from .models import DoctorIssue
-from .paths import BootstrapPaths
+from .paths import AgentbotPaths
 from .render import installed_skill_dirs, managed_skill_names, render_global_outputs
 from .skills_installer import (
     doctor_skills,
@@ -14,11 +17,16 @@ from .skills_installer import (
     update_skills as run_skills_update,
 )
 from .skills_sources import load_skills_sources
+from .skill_reconcile import (
+    ReconcileResult,
+    apply_reconcile_plan,
+    build_reconcile_plan,
+)
 from .ui import print_bridge_summary, print_doctor_summary, print_header, print_skills_report
 
 
-class BootstrapService:
-    def __init__(self, paths: BootstrapPaths) -> None:
+class AgentbotService:
+    def __init__(self, paths: AgentbotPaths) -> None:
         self.paths = paths
 
     def render_global(self) -> None:
@@ -42,7 +50,7 @@ class BootstrapService:
         return linked_total, skipped, updated
 
     def run_bootstrap(self) -> int:
-        print_header("Bootstrap", str(self.paths.root))
+        print_header("Agentbot install", str(self.paths.root))
         results = run_skills_install(self.paths)
         skills_rc = print_skills_report(results, title="Skills install")
         self.refresh_agent_outputs()
@@ -54,6 +62,67 @@ class BootstrapService:
 
     def update_skills(self) -> None:
         run_skills_update(self.paths)
+
+    def reconcile_skills(
+        self,
+        *,
+        discovered: Mapping[str, list[str] | tuple[str, ...]] | None = None,
+        checkouts: Mapping[str, Path] | None = None,
+        confirm: bool | Callable = False,
+        dry_run: bool = False,
+        validate: Callable[[], None] | None = None,
+    ) -> ReconcileResult:
+        config = load_skills_sources(self.paths.skills_sources_file)
+        lock: dict = {}
+        if self.paths.global_skill_lock.exists():
+            lock = json.loads(self.paths.global_skill_lock.read_text(encoding="utf-8"))
+        if discovered is None:
+            installed = set(self.list_skills())
+            discovered = {}
+            for source in config.active_sources():
+                if source.skills == ["*"]:
+                    owned = {
+                        name
+                        for name, entry in lock.get("skills", {}).items()
+                        if isinstance(entry, dict) and entry.get("source") == source.repo and name in installed
+                    }
+                    discovered[source.id] = sorted(owned)
+                else:
+                    discovered[source.id] = sorted(installed & set(source.skills))
+        plan = build_reconcile_plan(config, discovered=discovered, lock=lock)
+        return apply_reconcile_plan(
+            self.paths,
+            config,
+            plan,
+            checkouts=checkouts,
+            confirm=confirm,
+            dry_run=dry_run,
+            validate=validate,
+        )
+
+    def run_reconciliation_update(self, *, dry_run: bool = False, confirm: bool = False) -> ReconcileResult:
+        """Refresh upstream pins, then reconcile source-owned runtime state."""
+        if not dry_run:
+            self.update_skills()
+        def validate() -> None:
+            errors = [
+                issue for issue in self.doctor_issues() + self.skills_doctor_issues()
+                if issue.level.lower() == "error"
+            ]
+            if errors:
+                raise RuntimeError(
+                    "post-reconciliation doctor found errors: "
+                    + "; ".join(issue.message for issue in errors)
+                )
+
+        result = self.reconcile_skills(
+            confirm=confirm,
+            dry_run=dry_run,
+            validate=None if dry_run else validate,
+        )
+        if result.status in {"applied", "applied-with-local-changes"}:
+            self.refresh_agent_outputs()
+        return result
 
     def refresh_agent_outputs(self) -> tuple[int, int, int]:
         linked, skipped, updated = self.apply_claude_bridge(print_summary=False)
@@ -68,6 +137,8 @@ class BootstrapService:
 
     def doctor_issues(self) -> list[DoctorIssue]:
         issues: list[DoctorIssue] = []
+
+        issues.extend(self._token_doctor_issues())
 
         if not self.paths.global_agents.exists():
             issues.append(
@@ -151,6 +222,28 @@ class BootstrapService:
 
         return issues
 
+    def _token_doctor_issues(self) -> list[DoctorIssue]:
+        """Report unsafe optional token state without reading or printing its value."""
+        token_file = self.paths.config_home / "github.env"
+        if not token_file.exists() and not token_file.is_symlink():
+            return []
+        if token_file.is_symlink() or not token_file.is_file():
+            return [DoctorIssue("warning", "token", f"saved GitHub token path is not a regular file: {token_file}")]
+        try:
+            mode = stat.S_IMODE(token_file.stat().st_mode)
+            content = token_file.read_text(encoding="utf-8")
+        except OSError as error:
+            return [DoctorIssue("warning", "token", f"saved GitHub token cannot be read: {error}")]
+        if mode != 0o600:
+            return [DoctorIssue("warning", "token", f"saved GitHub token must have mode 600: {token_file}")]
+        lines = content.splitlines(keepends=True)
+        if len(lines) != 1 or not lines[0].endswith("\n") or not lines[0].startswith("GITHUB_TOKEN="):
+            return [DoctorIssue("warning", "token", "saved GitHub token has malformed assignment")]
+        value = lines[0][len("GITHUB_TOKEN=") : -1]
+        if len(value) < 20 or re.fullmatch(r"[A-Za-z0-9_]+", value) is None:
+            return [DoctorIssue("warning", "token", "saved GitHub token has an invalid value")]
+        return []
+
     def status_summary(self) -> dict[str, object]:
         enabled_sources = 0
         if self.paths.skills_sources_file.exists():
@@ -189,7 +282,7 @@ class BootstrapService:
         }
 
     @staticmethod
-    def _count_global_lock_skills(paths: BootstrapPaths) -> int:
+    def _count_global_lock_skills(paths: AgentbotPaths) -> int:
         lock_path = paths.global_skill_lock
         if not lock_path.exists():
             return 0

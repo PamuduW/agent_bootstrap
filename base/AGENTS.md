@@ -5,7 +5,7 @@
 - **OS:** WSL2 Ubuntu
 - **Shell:** bash
 - **Primary agents:** Cursor, Claude Code, Codex, GitHub Copilot
-- **Bootstrap home:** `$AGENT_BOOTSTRAP_HOME` (agent_bootstrap repo on PATH)
+- **Agentbot home:** `$AGENTBOT_HOME` (`agent_bootstrap` repo on PATH)
 
 Invoke skills in Agent chat by typing `/<skill-name>`.
 
@@ -85,7 +85,7 @@ Never agree with me by default. Your first instinct should be to stress-test wha
 
 ## Project overlay
 
-Repo-specific notes belong below. Run `agentboot` in a new repo, then fill in the `## Project` section with stack, conventions, and constraints for that codebase.
+Repo-specific notes belong below. Run `agentbot boot` in a new repo, then fill in the `## Project` section with stack, conventions, and constraints for that codebase.
 
 ## Project
 

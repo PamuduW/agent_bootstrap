@@ -1,1 +1,1 @@
-"""Slim agent bootstrap — skills install, global render, and doctor CLI."""
+"""Agentbot — curated skills installation, global rendering, and diagnostics."""

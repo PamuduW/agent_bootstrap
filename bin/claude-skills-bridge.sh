@@ -4,7 +4,7 @@ set -euo pipefail
 
 AGENTS_SKILLS="${HOME}/.agents/skills"
 CLAUDE_SKILLS="${HOME}/.claude/skills"
-VERBOSE="${AGENT_BOOTSTRAP_BRIDGE_VERBOSE:-0}"
+VERBOSE="${AGENTBOT_BRIDGE_VERBOSE:-0}"
 
 if [[ "${1:-}" == "--verbose" || "${1:-}" == "-v" ]]; then
   VERBOSE=1
@@ -76,6 +76,6 @@ fi
 if (( skipped > 0 )); then
   msg+=", ${skipped} skipped"
 fi
-if [[ -z "${AGENT_BOOTSTRAP_TUI:-}${AGENT_BOOTSTRAP_QUIET:-}" ]]; then
+if [[ -z "${AGENTBOT_TUI:-}${AGENTBOT_QUIET:-}" ]]; then
   info "Claude skills bridge complete (${msg})"
 fi

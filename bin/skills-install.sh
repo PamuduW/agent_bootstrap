@@ -4,6 +4,13 @@ set -euo pipefail
 
 BOOTSTRAP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCES_FILE="${BOOTSTRAP_DIR}/skills.sources.yaml"
+# shellcheck source=scripts/lib/github_token.sh
+source "${BOOTSTRAP_DIR}/scripts/lib/github_token.sh"
+
+github_token_child() (
+  github_token_export_if_valid
+  "$@"
+)
 
 AGENT_FLAGS=(-a cursor -a codex -a claude-code -a github-copilot)
 GLOBAL_FLAGS=(-g -y)
@@ -63,6 +70,10 @@ for raw in path.read_text(encoding="utf-8").splitlines():
     if m := re.match(r"^\s+repo:\s+(.+)$", line):
         value = m.group(1).strip()
         current["repo"] = None if value == "null" else value
+    elif m := re.match(r"^\s+skills:\s+(.+)$", line):
+        value = m.group(1).strip().strip("\"'")
+        if value.lower() == "all":
+            current["skills"] = ["*"]
     elif re.match(r"^\s+enabled:\s+false\s*$", line):
         current["enabled"] = False
     elif m := re.match(r"^\s+-\s+(.+)$", line):
@@ -82,8 +93,8 @@ install_source() {
     skill_flags+=(--skill "$skill")
   done
 
-  if [[ -n "${AGENT_BOOTSTRAP_QUIET:-}${AGENT_BOOTSTRAP_TUI:-}" ]]; then
-    if npx skills add "$repo" "${skill_flags[@]}" "${AGENT_FLAGS[@]}" "${GLOBAL_FLAGS[@]}" </dev/null >/dev/null 2>&1; then
+  if [[ -n "${AGENTBOT_QUIET:-}${AGENTBOT_TUI:-}" ]]; then
+    if github_token_child npx skills add "$repo" "${skill_flags[@]}" "${AGENT_FLAGS[@]}" "${GLOBAL_FLAGS[@]}" </dev/null >/dev/null 2>&1; then
       info "installed skills from ${repo}"
     else
       die "failed installing skills from ${repo}"
@@ -92,7 +103,7 @@ install_source() {
   fi
 
   info "installing skills from ${repo}"
-  npx skills add "$repo" "${skill_flags[@]}" "${AGENT_FLAGS[@]}" "${GLOBAL_FLAGS[@]}" </dev/null
+  github_token_child npx skills add "$repo" "${skill_flags[@]}" "${AGENT_FLAGS[@]}" "${GLOBAL_FLAGS[@]}" </dev/null
 }
 
 install_all() {
@@ -118,12 +129,12 @@ install_all() {
 update_all() {
   require_npx
 
-  if npx skills update --help >/dev/null 2>&1; then
-    if [[ -n "${AGENT_BOOTSTRAP_QUIET:-}${AGENT_BOOTSTRAP_TUI:-}" ]]; then
-      npx skills update -g -y </dev/null >/dev/null 2>&1
+  if github_token_child npx skills update --help >/dev/null 2>&1; then
+    if [[ -n "${AGENTBOT_QUIET:-}${AGENTBOT_TUI:-}" ]]; then
+      github_token_child npx skills update -g -y </dev/null >/dev/null 2>&1
     else
       info "running npx skills update -g"
-      npx skills update -g -y </dev/null
+      github_token_child npx skills update -g -y </dev/null
     fi
     return 0
   fi

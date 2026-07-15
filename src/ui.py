@@ -22,7 +22,7 @@ ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 def use_color() -> bool:
     if os.environ.get("NO_COLOR"):
         return False
-    if os.environ.get("FORCE_COLOR") or os.environ.get("AGENT_BOOTSTRAP_TUI"):
+    if os.environ.get("FORCE_COLOR") or os.environ.get("AGENTBOT_TUI"):
         return True
     # Match dotfiles report_table: stdin may still be a TTY when stdout is piped (e.g. tee).
     return sys.stdout.isatty() or sys.stdin.isatty()
@@ -160,7 +160,7 @@ def print_status_summary(
     elif global_lock_exists:
         lock_detail = "~/.agents/.skill-lock.json (unreadable)"
 
-    print_header("Status", "agent_bootstrap")
+    print_header("Status", "Agentbot")
     print_section_block("── Skills & baseline ──")
     ok, check, miss = print_table(
         [
@@ -194,7 +194,7 @@ def print_status_summary(
 
 
 def print_doctor_summary(issues: list) -> int:
-    print_header("Doctor", "agent_bootstrap")
+    print_header("Doctor", "Agentbot")
     if not issues:
         print_table(
             [("Health check", "skills + global baseline", "ok")],
@@ -204,20 +204,28 @@ def print_doctor_summary(issues: list) -> int:
         return 0
 
     rows: list[tuple[str, str, str]] = []
+    errors = 0
+    warnings = 0
     for issue in issues:
         level = issue.level.lower()
+        if level == "error":
+            errors += 1
+        else:
+            warnings += 1
         result = "error" if level == "error" else "check"
         rows.append((issue.scope, shorten_detail(issue.message, max_len=DETAIL_W), result))
     _ok, check, miss = print_table(rows)
+    print()
+    print(f"  {errors} error(s), {warnings} warning(s).")
     print_rollup(ok=0, check=check, miss=miss)
-    return 1
+    return 1 if errors else 0
 
 
 def print_skills_report(results: list, *, title: str) -> int:
     from .skills_installer import InstallResult, summarize_install_results
 
     summary = summarize_install_results(results)
-    print_header(title, "agent_bootstrap › skills")
+    print_header(title, "Agentbot › skills")
     print_section_block("── Sources ──")
     rows: list[tuple[str, str, str]] = []
     for result in results:

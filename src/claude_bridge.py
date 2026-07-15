@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .paths import BootstrapPaths
+    from .paths import AgentbotPaths
 
 
 @dataclass(frozen=True)
@@ -87,7 +87,7 @@ def _bridge_entry(source: Path, target: Path, *, dry_run: bool) -> BridgeAction:
     return BridgeAction(skill_name=source.name, target=target, action="linked")
 
 
-def run_claude_bridge(paths: BootstrapPaths, *, dry_run: bool = False) -> BridgeResult:
+def run_claude_bridge(paths: AgentbotPaths, *, dry_run: bool = False) -> BridgeResult:
     return bridge_claude_skills(
         agents_home=paths.agents_skills_home,
         claude_home=paths.claude_skills_home,

@@ -29,6 +29,8 @@ source "$_AGENTBOT_MENU_DIR/menus/dotfiles.sh"
 
 # shellcheck disable=SC2034
 _agentbot_menu_setup() {
+	MENU_SIMPLE_TITLE='Agentbot'
+	MENU_SIMPLE_BREADCRUMB='Agentbot'
 	MENU_SIMPLE_LABELS=(
 		'Check status'
 		'Install Agentbot'
@@ -104,8 +106,8 @@ agentbot_menu_dispatch() {
 agentbot_menu_loop() {
 	local choice rc
 	export AGENTBOT_TUI=1
-	_agentbot_menu_setup
 	while true; do
+		_agentbot_menu_setup
 		if ! menu_simple_run; then
 			return 0
 		fi

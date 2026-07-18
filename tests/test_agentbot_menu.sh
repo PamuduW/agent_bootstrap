@@ -143,6 +143,30 @@ test_dispatch_order_and_return() (
 	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\npause\nboot\npause\nworkspaces\ncommand_lib\npause\ndoctor\npause\ndotfiles' ]]
 )
 
+test_main_menu_rebuilds_after_workspaces_returns() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local capture="$TEST_ROOT/main-after-workspaces.calls" choice_index=0 choice
+	local choices=(workspaces back quit)
+	: >"$capture"
+	menu_simple_run() {
+		choice="${choices[$choice_index]}"
+		choice_index=$((choice_index + 1))
+		if [[ "$choice" == back ]]; then
+			MENU_SIMPLE_RESULT=''
+			return 1
+		fi
+		if [[ "$choice" == quit ]]; then
+			printf '%s|%s|%s\n' "$MENU_SIMPLE_TITLE" "$MENU_SIMPLE_BREADCRUMB" \
+				"${MENU_SIMPLE_LABELS[*]}" >"$capture"
+		fi
+		MENU_SIMPLE_RESULT="$choice"
+	}
+	ui_clear() { :; }
+	ui_pause() { :; }
+	agentbot_menu_loop
+	[[ "$(<"$capture")" == 'Agentbot|Agentbot|Check status Install Agentbot Update Configure GitHub token Repo setup (agentbot) Workspaces Command Lib Doctor Dotfiles Quit' ]]
+)
+
 test_workspaces_menu_actions() (
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
 	local calls="$TEST_ROOT/workspaces.calls" choice_index=0 choice
@@ -283,6 +307,7 @@ if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'Workspaces uses the scrollable submenu title and breadcrumb contract' test_workspaces_menu_uses_scrollable_submenu_contract
 	check 'Agentbot pauses use the shared blank-line contract' test_pause_has_global_blank_line_contract
 	check 'Agentbot menu dispatches actions in order and returns on Quit' test_dispatch_order_and_return
+	check 'Agentbot menu rebuilds after returning from Workspaces' test_main_menu_rebuilds_after_workspaces_returns
 	check 'Workspaces menu exposes actions and keeps apply confirmation safe' test_workspaces_menu_actions
 	check 'declined Workspaces apply never invokes --yes' test_workspaces_menu_apply_decline_is_safe
 	check 'failed Agentbot action pauses once and returns' test_failed_action_pauses_once

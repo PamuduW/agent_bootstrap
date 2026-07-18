@@ -46,21 +46,15 @@ repository.
 
 - Agentbot's enabled manifest and installed skill metadata are the source of
   truth for reusable capabilities.
+- Discover available compatible skills through the active harness before
+  selecting capabilities. When Agentbot is available, its installed inventory
+  and manifest provide the durable capability catalog.
 - Select only the capabilities needed for the current phase.
 - Use portable skills for shared methodology.
 - Use a harness-compatible skill for native council behavior, model routing,
   permissions, or delegation.
 - Do not assume a skill written for a different harness works in the active one.
 - Follow the active harness's skill discovery and invocation mechanism.
-
-The identifiers below are manifest references, not a promise that every harness
-supports every skill or its invocation syntax. Discover availability before use.
-
-| Capability | Managed identifiers | Use only when the active harness supports it |
-|---|---|---|
-| Planning and execution | `brainstorming`, `writing-plans`, `executing-plans`, `subagent-driven-development`, `test-driven-development` | Exploration, structured planning, plan execution, authorized delegation, or test-first changes. |
-| Research and security | `literature-review`, `owasp` | Research synthesis or security review. |
-| Delivery and infrastructure | `kubernetes`, `k8s`, `kubernetes-specialist`, `terraform`, `github-actions`, `gitlab-ci`, `devops-engineer` | Kubernetes, infrastructure, CI/CD, or delivery work. |
 
 ## Delegation and planning
 

@@ -1,128 +1,114 @@
 # AGENTS.md
 
-## Environment
+Repository-level instructions. These refine the global Agentbot baseline and
+should stay practical, current, and specific to this repository.
 
-- **OS:** WSL2 Ubuntu
-- **Shell:** bash
-- **Primary agents:** Cursor, Claude Code, Codex, GitHub Copilot
-- **Agentbot home:** `$AGENTBOT_HOME` (`agent_bootstrap` repo on PATH)
+## Environment and ownership
 
-Invoke skills in Agent chat by typing `/<skill-name>`.
+- **Primary environment:** WSL2 Ubuntu; **shell:** bash.
+- **Primary agent surfaces:** Codex CLI, Cursor, Claude Code, and GitHub Copilot.
+- Prefer repository-relative paths and commands that work from the repository
+  root. Treat `$AGENTBOT_HOME` as optional tooling context, not a project path.
+- `AGENTS.md` is the canonical repository policy. Do not edit generated
+  `CLAUDE.md`, `.github/copilot-instructions.md`, or
+  `.cursor/rules/agentbot-policy.mdc`; edit `AGENTS.md` and regenerate instead.
+- Use the skill syntax supported by the active agent surface. Do not assume this
+  repository contains Agentbot's skill manifest or every globally installed skill.
 
-**Pick 2–4 skills per session by phase — do not load all at once.**
+## Default task workflow
 
-Skills below match `skills.sources.yaml` (enabled upstreams installed via `./install.sh skills install`).
+1. Read the complete request, repository instructions, relevant implementation,
+   tests, and git state before changing files.
+2. For complex work, maintain a requirement ledger: goal, current state,
+   required behavior, constraints, non-goals, edge cases, acceptance criteria,
+   deliverables, and unresolved decisions.
+3. Plan cross-repository, multi-phase, architectural, migration,
+   security-sensitive, or ambiguous work before coding. Proceed directly only
+   for small, well-scoped changes.
+4. Make the smallest coherent change, validate it, inspect the diff, and report
+   evidence. Respect requested review or approval checkpoints.
 
-### Methodology
+## Skills and delegation
 
-| Skill | Description |
-|---|---|
-| `brainstorming` | Explore options and trade-offs before committing to a direction. |
-| `council` | Parallel subagent exploration and synthesis for multi-area codebase review. |
-| `co-council` | Codex subagent council with evidence-based Luna-tier routing. |
-| `grilling` | Stress-test a plan or design before building; matches Interaction Rules below. |
-| `recursive-decomposition` | Partition large inputs (10+ files, 50k+ tokens) via subagents and aggregation. |
-| `yagni` | Simplest solution that works; resist premature complexity. |
-| `karpathy-guidelines` | Think before coding; surgical changes only; verifiable success criteria. |
-| `best-practices-research` | Live web recon on current practices before non-trivial implementation. |
-| `literature-review` | Structured review of papers, docs, and prior art with citations. |
+Select only the skills needed for the current phase. The following explicitly
+managed skills may be available globally; use each only when its scope fits.
 
-### Architecture
+| Group | Skills | Use when |
+|---|---|---|
+| Planning | `brainstorming`, `writing-plans`, `executing-plans`, `subagent-driven-development`, `test-driven-development` | Exploring, planning, executing reviewed work, authorized delegation, or test-first changes. |
+| Opt-in delegation | `co-council` | Explicitly requested parallel investigation with parent-owned synthesis. |
+| Research and security | `literature-review`, `owasp` | Research synthesis or security review. |
+| Delivery | `kubernetes`, `k8s`, `kubernetes-specialist`, `terraform`, `github-actions`, `gitlab-ci`, `devops-engineer` | The task directly concerns infrastructure, Kubernetes, IaC, or CI/CD. |
 
-| Skill | Description |
-|---|---|
-| `architecture-decision-records` | Capture architectural decisions as lightweight ADRs with rationale. |
-| `domain-modeling` | Build and sharpen domain terminology and ubiquitous language. |
-| `codebase-design` | Deep-module vocabulary for interfaces, seams, and testability. |
-| `codebase-onboarding` | Structured onboarding guide for an unfamiliar codebase. |
-| `improve-codebase-architecture` | Scan for deepening opportunities; visual report and review. |
+- Do not use subagents unless the user explicitly asks or invokes an appropriate
+  delegation workflow. The parent owns requirements, decisions, integration,
+  validation, and the final response.
+- When delegation is authorized, give each delegate a bounded non-overlapping
+  scope and inspect its evidence and diff before accepting it.
+- Do not use nested delegation or concurrent writers with overlapping files.
 
-### Planning
+## Planning, implementation, and validation
 
-| Skill | Description |
-|---|---|
-| `writing-plans` | Turn requirements into phased, actionable implementation plans. |
-| `implement-plan` | Router: council + best-practices research, implement, then yagni pass. |
-| `prototype` | Throwaway prototype to flesh out design (CLI or UI variations). |
-| `triage` | Move issues through triage roles on the project issue tracker. |
-| `setup-matt-pocock-skills` | Scaffold tracker, triage labels, and domain docs for planning skills. |
-| `executing-plans` | Work through a plan incrementally with checkpoints. |
-| `subagent-driven-development` | Delegate implementation slices to focused subagents. |
+- A substantial plan should state objectives, non-goals, evidence, assumptions,
+  affected files, phases, dependencies, failure handling, validation, rollout,
+  and completion criteria.
+- Preserve established architecture and user-authored content unless the plan
+  explicitly changes it. Avoid unrelated cleanup.
+- Run formatting or lint checks relevant to changed files, focused behavior
+  tests, and broader checks when shared contracts change. Exercise stated edge
+  cases, inspect git diff/status, and state checks that could not run.
+- Update durable documentation when commands, interfaces, setup, or operational
+  behavior changes. Use primary sources for current external facts when needed.
 
-### Quality
+## Git, secrets, and interaction
 
-| Skill | Description |
-|---|---|
-| `tdd` | Test-driven development via public interfaces; red-green-refactor. |
-| `test-driven-development` | Red-green-refactor cycle; tests before implementation. |
-| `diagnosing-bugs` | Diagnosis loop for hard bugs and performance regressions. |
-| `owasp` | Security review against OWASP guidance. |
-| `explain-code` | Scannable code explanation with TL;DR and small examples. |
-
-### Docs / handoff
-
-| Skill | Description |
-|---|---|
-| `document` | Create or update durable repo documentation verified against code. |
-| `handoff` | Compact session handoff to `docs/handoffs/CURRENT.md` for continuation. |
-
-### Implementation / DevOps (load on demand)
-
-| Skill | Description |
-|---|---|
-| `kubernetes` / `k8s` | Cluster manifests, deployments, and operational patterns. |
-| `kubernetes-specialist` | Deep K8s troubleshooting, networking, and production hardening. |
-| `terraform` | IaC modules, state, and environment provisioning. |
-| `github-actions` / `gitlab-ci` | CI/CD pipelines, workflows, and release automation. |
-| `devops-engineer` | Cross-cutting infra, observability, and delivery practices. |
-
-### Interaction Rules (how AI must behave in this project)
-
-Never agree with me by default. Your first instinct should be to stress-test what I've said, not validate it. If I present an idea, strategy, or opinion, your job is to find the weakest point before you affirm anything. No glazing. Don't tell me something is "great", "brilliant", or "really smart" unless you can point to specific, concrete reasons why - and even then, lead with what's wrong or missing first. Compliments without substance are noise. Don't echo my framing back to me. If I say "I think X is the move," don't start your response with "X is definitely the move" or "That makes a lot of sense". Instead, start by asking yourself: what am I not seeing? What's the counter-argument? What would someone who disagrees say, and are they right? When you do agree, earn it. Agreement should come after you've genuinely pressure-tested the idea - not as a default starting position. If you agree, say why in a way that adds something I didn't already say. Be direct and concise. Skip the warm-up sentences. Don't pad responses with filler affirmations. Get to the point. If the answer is "no" or "this won't work", say that in the first sentence. Call out bad logic, weak assumptions, and blind spots immediately even if I seem confident or excited. Especially then. The more certain I sound, the more I need pushback. If you catch yourself about to start a response with "That's a great point" or "You're absolutely right" - stop and rewrite. Start with the most useful thing you can say instead.
-
-## Project overlay
-
-Canonical scaffold templates live in `base/AGENTS.md` and `base/CLAUDE.md`. This root file is that template plus the project section below for **this** repo.
+- Do not commit or push without explicit authorization. Never stage unrelated
+  files, overwrite user changes, or perform destructive cleanup without approval.
+- Keep credentials out of tracked files and output. Treat CI/CD, authentication,
+  permissions, deployments, package management, and infrastructure as high-risk.
+- Lead with material problems or unsupported assumptions. Separate facts,
+  assumptions, and recommendations; do not claim a result without checking it.
 
 ## Project
 
 **Purpose:** Agentbot installs curated upstream skills via `npx`, renders a
 machine-level baseline from `global/AGENTS.md`, and manages per-folder agent
 policy surfaces with `agentbot boot`, `workspace`, and `resync`. Treat this
-repo as a small CLI + shell entrypoint, not a full config plane.
+repo as a small CLI plus shell entrypoint, not a full config plane.
 
-**Stack:** bash (`install.sh`, `bin/*`), Python 3 (`src/` — `python3 -m src.cli`), Node.js (`npx skills`).
-
-**Key paths:**
+**Stack:** Bash (`install.sh`, `bin/*`), Python 3 (`src/` via
+`python3 -m src.cli`), and Node.js (`npx skills`).
 
 | Path | Role |
-|------|------|
-| `install.sh` | Repository entrypoint (install, skills, global, doctor, workspace commands) |
-| `skills.sources.yaml` | Curated upstream skill manifest, including all published personal skills |
-| `skills-lock.json` | Project lock stub; global pins in `~/.agents/.skill-lock.json` |
-| `src/` | Slim Python CLI (`cli.py`, `service.py`, `skills_installer.py`, …) |
-| `bin/agentbot` | Public dispatcher; `boot` routes workspace rendering and registration |
-| `agentos.yaml` | Safe-default workspace profile and fixed output allowlist |
-| `base/` | Canonical Agentbot policy templates (keep skill tables in sync with manifest) |
-| `${XDG_CONFIG_HOME:-$HOME/.config}/agentbot/workspaces.json` | Private local workspace registry; never Git-tracked |
-| `global/AGENTS.md` | Machine baseline (authored; rendered to `~/.codex/`, `~/.claude/`) |
-| `tests/` | `python3 -m unittest discover -s tests` + `bash tests/test_agentbot.sh` |
-| `archive/` | Deferred catalog/MCP/memory features — phases in `archive/docs/stuff3.md` |
+|---|---|
+| `install.sh` | Repository entrypoint for install, skills, global render, Doctor, and workspace commands. |
+| `skills.sources.yaml` | Curated upstream skill manifest; global pins live in `~/.agents/.skill-lock.json`. |
+| `src/` | Python CLI, global rendering, skill reconciliation, and workspace services. |
+| `bin/agentbot` | Public dispatcher; `boot` renders and registers a workspace. |
+| `agentos.yaml` | Safe-default profile and fixed workspace output allowlist. |
+| `base/` | Canonical project-policy templates; keep its explicit skill table synchronized with this file. |
+| `${XDG_CONFIG_HOME:-$HOME/.config}/agentbot/workspaces.json` | Private local workspace registry; never Git-tracked. |
+| `global/AGENTS.md` | Authored machine baseline rendered to Codex and Claude homes. |
+| `tests/` | Python and shell regression suites. |
+| `archive/` | Deferred catalog, MCP, and memory work; do not restore modules without re-wiring imports. |
 
 **Commands:**
 
 ```bash
-./install.sh install                  # explicit Agentbot install
-./install.sh skills install|update
-./install.sh global && ./install.sh doctor
-python3 -m unittest discover -s tests && bash tests/test_agentbot.sh
+./install.sh install
+./install.sh skills install
+./install.sh global
+./install.sh doctor
+python3 -m unittest discover -s tests
+bash tests/test_agentbot.sh
+bash tests/test_agentbot_menu.sh
 ```
 
-**Conventions:**
+**Repository constraints:**
 
-- `install.sh` is the only supported interface for bootstrap operations.
-- Do not vendor upstream skills into this repo; manifest + `npx skills -g` only.
-- Keep `base/AGENTS.md` skill tables aligned with enabled entries in `skills.sources.yaml` (`graphify` and `obsidian-memory` stay disabled).
-- Archived CLI commands (`all`, `interactive`, `import-local`, …) must error with a pointer to `archive/README.md` — do not restore without re-wiring imports.
-- Never run uninstall flows without explicit user request.
-- `AGENTBOT_HOME` is exported from the unchanged `agent_bootstrap` clone path by `install.sh` (not from `.env`).
+- `install.sh` is the supported bootstrap interface.
+- Do not vendor upstream skills; use the manifest and global Skills CLI flow.
+- Keep `graphify` and `obsidian-memory` disabled unless a later phase explicitly
+  designs and enables them.
+- Archived commands (`all`, `interactive`, `import-local`, and similar) must
+  remain unavailable until their archived modules are deliberately restored.

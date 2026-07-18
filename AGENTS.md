@@ -36,7 +36,6 @@ Skills below match `skills.sources.yaml` (enabled upstreams installed via `./ins
 | `codebase-design` | Deep-module vocabulary for interfaces, seams, and testability. |
 | `codebase-onboarding` | Structured onboarding guide for an unfamiliar codebase. |
 | `improve-codebase-architecture` | Scan for deepening opportunities; visual report and review. |
-| `decision-mapping` | Turn a loose idea into sequenced investigation tickets. |
 
 ### Planning
 
@@ -45,8 +44,6 @@ Skills below match `skills.sources.yaml` (enabled upstreams installed via `./ins
 | `writing-plans` | Turn requirements into phased, actionable implementation plans. |
 | `implement-plan` | Router: council + best-practices research, implement, then yagni pass. |
 | `prototype` | Throwaway prototype to flesh out design (CLI or UI variations). |
-| `to-prd` | Synthesize conversation into a PRD; publish to issue tracker when configured. |
-| `to-issues` | Break a plan or PRD into independently grabbable tracker issues. |
 | `triage` | Move issues through triage roles on the project issue tracker. |
 | `setup-matt-pocock-skills` | Scaffold tracker, triage labels, and domain docs for planning skills. |
 | `executing-plans` | Work through a plan incrementally with checkpoints. |

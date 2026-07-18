@@ -8,18 +8,18 @@ agentbot_menu_update() {
 	else
 		rc=$?
 		if ((rc == 2)); then
-			printf '[info] repository pull complete; press Enter to reload Agentbot from the updated checkout.\n'
+			printf '%s[info]%s repository pull complete; press %sEnter%s to reload Agentbot from the updated checkout.\n' "$C_CYAN" "$C_RESET" "$C_CYAN" "$C_RESET"
 			ui_pause
 			agentbot_menu_relaunch
 			return $?
 		fi
 		return "$rc"
 	fi
-	printf 'Apply the Agentbot reconciliation update? [y/N] ' >/dev/tty
+	printf '%sApply the Agentbot reconciliation update?%s [y/N] ' "$C_YELLOW" "$C_RESET" >/dev/tty
 	IFS= read -r answer </dev/tty || answer=n
 	case "$answer" in
 		y|Y|yes|YES) AGENTBOT_UPDATE_SHOW_STATUS=0 "$AGENTBOT_HOME/install.sh" update --yes ;;
-		*) printf 'Update cancelled.\n'; return 0 ;;
+		*) printf '%sUpdate cancelled.%s\n' "$C_DIM" "$C_RESET"; return 0 ;;
 	esac
 }
 

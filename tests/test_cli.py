@@ -118,6 +118,22 @@ class CliTests(unittest.TestCase):
             os.environ.pop("NO_COLOR", None)
             self.assertEqual("\033[36mpreview\033[0m", color_result("preview"))
 
+    def test_shared_palette_hierarchy(self) -> None:
+        import os
+
+        from src.ui import print_header, print_section
+
+        output = io.StringIO()
+        with patch.dict(os.environ, {"AGENTBOT_TUI": "1"}, clear=False):
+            os.environ.pop("NO_COLOR", None)
+            with patch("sys.stdout", output):
+                print_header("Status", "Agentbot › Status")
+                print_section("── Sources ──")
+
+        rendered = output.getvalue()
+        self.assertIn("\033[1m\033[38;5;208m=== Status ===\033[0m", rendered)
+        self.assertIn("\033[1m\033[33m── Sources ──\033[0m", rendered)
+
     def test_reports_use_hierarchical_breadcrumbs(self) -> None:
         from src.ui import print_doctor_summary, print_skills_report
 

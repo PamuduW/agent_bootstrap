@@ -52,7 +52,7 @@ agentbot_menu_command_lib() {
 	description_w=$((available - command_w - behavior_w))
 	((description_w < 1)) && description_w=1
 
-	printf '\n  %s=== Command Lib ===%s\e[K\n' "$C_BOLD" "$C_RESET"
+	printf '\n  %s%s=== Command Lib ===%s\e[K\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
 	printf '  %sAgentbot › Command Lib%s\e[K\n\e[K\n' "$C_DIM" "$C_RESET"
 	printf '  %s%-*s | %-*s | %-*s%s\n' \
 		"$C_BOLD" "$command_w" command "$behavior_w" behavior "$description_w" description "$C_RESET"

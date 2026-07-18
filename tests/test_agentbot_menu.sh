@@ -17,10 +17,11 @@ test_menu_source_exists() { [[ -f "$ROOT/scripts/menu.sh" ]]; }
 test_menu_snapshot() {
 	local output
 	set +e
-	output="$(AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"; _agentbot_menu_setup; agentbot_menu_draw 0 80 2>&1)"
+	output="$(unset NO_COLOR; export AGENTBOT_TUI=1; AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"; _agentbot_menu_setup; agentbot_menu_draw 0 80 2>&1)"
 	set -e
 	output="${output//$'\033[K'/}"
 	[[ "$output" == *'=== Agentbot ==='* ]] || return 1
+	[[ "$output" == *$'\033[1m\033[38;5;208m=== Agentbot ===\033[0m'* ]] || return 1
 	[[ "$output" == *'Agentbot'* ]] || return 1
 	[[ "$output" == *'1. Check status'* && "$output" == *'9. Quit'* ]] || return 1
 	[[ "$output" == *$'9. Quit\n\n'* ]] || return 1
@@ -76,9 +77,20 @@ test_command_lib_matches_colored_table_contract() (
 	local output
 	output="$(agentbot_menu_command_lib)"
 	[[ "$output" == *'Agentbot › Command Lib'* ]] || return 1
+	[[ "$output" == *$'\033[1m\033[38;5;208m=== Command Lib ===\033[0m'* ]] || return 1
 	[[ "$output" == *'command              | behavior   | description'* ]] || return 1
 	grep -Eq '^  -+\+-+\+-+' <<<"$output" || return 1
 	[[ "$output" == *$'\033[33mmutating\033[0m'* ]]
+)
+
+test_menu_hint_colors_key_tokens() (
+	unset NO_COLOR
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local output
+	output="$(agentbot_menu_color_input_hint 'Up/Down navigate   Enter confirm   q back')"
+	[[ "$output" == *$'\033[36mUp/Down'* ]] || return 1
+	[[ "$output" == *$'\033[36mEnter'* ]] || return 1
+	[[ "$output" == *$'\033[36mq'* ]] || return 1
 )
 
 test_pause_has_global_blank_line_contract() (
@@ -127,6 +139,19 @@ test_failed_action_pauses_once() (
 	agentbot_menu_loop >/dev/null 2>&1
 	set -e
 	[[ "$(grep -c '^pause$' "$calls")" -eq 1 ]]
+)
+
+test_failed_action_reports_red() (
+	unset NO_COLOR
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	agentbot_menu_status() { return 17; }
+	local output rc
+	set +e
+	output="$(agentbot_menu_dispatch status 2>&1)"
+	rc=$?
+	set -e
+	[[ "$rc" -eq 17 ]] || return 1
+	[[ "$output" == *$'\033[31mAction failed (exit 17).\033[0m'* ]]
 )
 
 test_update_action_calls_real_backend_and_dotfiles_stays_guarded() (
@@ -191,9 +216,11 @@ if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'Agentbot menu redraws in place without clearing on cursor movement' test_menu_uses_in_place_redraw_contract
 	check 'Agentbot menu exports TUI render mode to backend reports' test_menu_exports_tui_render_mode_to_backend
 	check 'Agentbot Command Lib matches the colored table contract' test_command_lib_matches_colored_table_contract
+	check 'Agentbot input hints color the interactive key tokens' test_menu_hint_colors_key_tokens
 	check 'Agentbot pauses use the shared blank-line contract' test_pause_has_global_blank_line_contract
 	check 'Agentbot menu dispatches actions in order and returns on Quit' test_dispatch_order_and_return
 	check 'failed Agentbot action pauses once and returns' test_failed_action_pauses_once
+	check 'failed Agentbot actions use the red failure color' test_failed_action_reports_red
 	check 'Update calls the real backend and Dotfiles remains guarded' test_update_action_calls_real_backend_and_dotfiles_stays_guarded
 	check 'Update restarts the fresh install menu after a repository pull' test_update_pull_restarts_fresh_install_menu
 	check 'SETUP_CALLER=dotfiles hides the reciprocal menu entry' test_caller_guard_hides_dotfiles_entry
@@ -203,9 +230,11 @@ else
 	fail 'Agentbot menu redraws in place without clearing on cursor movement'
 	fail 'Agentbot menu exports TUI render mode to backend reports'
 	fail 'Agentbot Command Lib matches the colored table contract'
+	fail 'Agentbot input hints color the interactive key tokens'
 	fail 'Agentbot pauses use the shared blank-line contract'
 	fail 'Agentbot menu dispatches actions in order and returns on Quit'
 	fail 'failed Agentbot action pauses once and returns'
+	fail 'failed Agentbot actions use the red failure color'
 	fail 'deferred Update and Dotfiles actions are explicitly unavailable'
 fi
 

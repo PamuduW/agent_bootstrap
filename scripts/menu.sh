@@ -89,7 +89,7 @@ agentbot_menu_dispatch() {
 	*) printf 'Unknown Agentbot menu action: %s\n' "$choice" >&2; rc=2 ;;
 	esac
 	if ((rc != 0)); then
-		printf 'Action failed (exit %d).\n' "$rc" >&2
+		printf '%sAction failed (exit %d).%s\n' "$C_RED" "$rc" "$C_RESET" >&2
 	fi
 	return "$rc"
 }

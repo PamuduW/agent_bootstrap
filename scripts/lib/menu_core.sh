@@ -3,11 +3,12 @@
 
 agentbot_menu_init_colors() {
 	if [[ -n "${NO_COLOR:-}" ]]; then
-		C_RESET=''; C_BOLD=''; C_DIM=''; C_GREEN=''; C_YELLOW=''; C_CYAN=''
+		C_RESET=''; C_BOLD=''; C_DIM=''; C_GREEN=''; C_YELLOW=''; C_CYAN=''; C_ORANGE=''; C_RED=''
 		return 0
 	fi
 	C_RESET=$'\e[0m'; C_BOLD=$'\e[1m'; C_DIM=$'\e[2m'
 	C_GREEN=$'\e[32m'; C_YELLOW=$'\e[33m'; C_CYAN=$'\e[36m'
+	C_ORANGE=$'\e[38;5;208m'; C_RED=$'\e[31m'
 }
 
 agentbot_menu_init_colors
@@ -22,15 +23,34 @@ ui_pause() {
 	local ignored=''
 	if [[ -t 0 || -e /dev/tty ]]; then
 		printf '\n' >/dev/tty
-		printf 'Press Enter to continue: ' >/dev/tty
+		printf 'Press %sEnter%s to continue: ' "$C_CYAN" "$C_RESET" >/dev/tty
 		# shellcheck disable=SC2034
 		IFS= read -r ignored </dev/tty || true
 	fi
 }
 
+agentbot_menu_color_input_hint() {
+	local hint="$1"
+	local cyan="${C_CYAN:-}" reset="${C_RESET:-}" dim="${C_DIM:-}"
+	local key_start="${reset}${cyan}" key_end="${reset}${dim}"
+	hint="${hint//Up\/Down/${key_start}Up\/Down${key_end}}"
+	hint="${hint//Enter confirm/${key_start}Enter${key_end} confirm}"
+	hint="${hint//   q back/   ${key_start}q${key_end} back}"
+	printf '%s' "$hint"
+}
+
+agentbot_menu_print_header() {
+	local title="$1" breadcrumb="${2:-}" cols="${3:-80}"
+	printf '  %s%s%s\e[K\n' "$C_BOLD$C_ORANGE" "$(agentbot_menu_fit "=== ${title} ===" "$cols")" "$C_RESET"
+	if [[ -n "$breadcrumb" ]]; then
+		printf '  %s%s%s\e[K\n' "$C_DIM" "$(agentbot_menu_fit "$breadcrumb" "$cols")" "$C_RESET"
+	fi
+	printf '\e[K\n'
+}
+
 agentbot_menu_cols() {
 	local cols="${AGENTBOT_MENU_COLS:-}"
-	if [[ -z "$cols" ]]; then
+	if [[ -z "$cols" && ( -t 0 || -t 1 ) ]]; then
 		cols="$(stty size </dev/tty 2>/dev/null || true)"
 		cols="${cols##* }"
 	fi
@@ -73,9 +93,9 @@ agentbot_menu_redraw_up() {
 agentbot_menu_draw() {
 	local cursor="$1" cols="${2:-80}" i prefix row desc
 
-	printf '  %s%s%s\e[K\n' "$C_BOLD" "$(agentbot_menu_fit '=== Agentbot ===' "$cols")" "$C_RESET"
+	printf '  %s%s%s\e[K\n' "$C_BOLD$C_ORANGE" "$(agentbot_menu_fit '=== Agentbot ===' "$cols")" "$C_RESET"
 	printf '  %s%s%s\e[K\n\e[K\n' "$C_DIM" "$(agentbot_menu_fit 'Agentbot' "$cols")" "$C_RESET"
-	printf '  %s%s%s\e[K\n\e[K\n' "$C_DIM" "$(agentbot_menu_fit 'Up/Down navigate   Enter confirm   q back' "$cols")" "$C_RESET"
+	printf '  %s%s%s\e[K\n\e[K\n' "$C_DIM" "$(agentbot_menu_color_input_hint "$(agentbot_menu_fit 'Up/Down navigate   Enter confirm   q back' "$cols")")" "$C_RESET"
 
 	for i in "${!MENU_SIMPLE_LABELS[@]}"; do
 		prefix=' '

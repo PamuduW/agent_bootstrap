@@ -12,6 +12,7 @@ GREEN = "\033[32m"
 YELLOW = "\033[33m"
 RED = "\033[31m"
 CYAN = "\033[36m"
+ORANGE = "\033[38;5;208m"
 
 LABEL_W = 22
 DETAIL_W = 40
@@ -56,14 +57,14 @@ def shorten_detail(text: str, *, max_len: int = DETAIL_W) -> str:
 
 def print_header(title: str, breadcrumb: str = "") -> None:
     print()
-    print(f"  {_c(f'=== {title} ===', BOLD)}")
+    print(f"  {_c(f'=== {title} ===', BOLD + ORANGE)}")
     if breadcrumb:
         print(f"  {_c(breadcrumb, DIM)}")
     print()
 
 
 def print_section(label: str) -> None:
-    print(f"  {_c(label, DIM)}")
+    print(f"  {_c(label, BOLD + YELLOW)}")
 
 
 def color_result(result: str) -> str:

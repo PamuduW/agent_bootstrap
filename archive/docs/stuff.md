@@ -2,9 +2,15 @@
 
 **Status:** Docs-only archive (2026-07-10). Python modules and tests were removed from this folder; they remain in **git history** if you restore the full control plane.
 
-Nothing here is read by `./install.sh`, `npx skills`, or `agentboot` at runtime.
+Nothing here is read by `./install.sh`, `npx skills`, or `agentbot` at runtime.
 
 **Implementation roadmap:** [stuff3.md](./stuff3.md) — phased build plan for restoring deferred features.
+
+**Current status (2026-07-18):** Phase 1 is complete. The live system is the
+standalone Agentbot menu, `agentbot boot`, global baseline rendering, curated
+skills management, and the Dotfiles sibling bridge. The capabilities below are
+deferred starting with Phase 2; this file records the design map, not a promise
+to restore the old implementation unchanged.
 
 ---
 
@@ -14,7 +20,7 @@ Nothing here is read by `./install.sh`, `npx skills`, or `agentboot` at runtime.
 |------|----------|
 | **[docs/stuff.md](./stuff.md)** | This file — deferred map and restore pointers |
 | **[docs/stuff2.md](./stuff2.md)** | Day-to-day impact of deferred features |
-| **[docs/stuff3.md](./stuff3.md)** | Implementation phases (planned expansion) |
+| **[docs/stuff3.md](./stuff3.md)** | Implementation phases (Phase 0–1 complete; Phase 2 next) |
 | **[README.md](../README.md)** | Move log (Tier 1/2) and pack → bootstrap matrix |
 | **[LOCKFILE-NOTES.md](../LOCKFILE-NOTES.md)** | Global vs project lockfile history |
 | **[docs/](./)** | Harness architecture, OpenClaw plan, stuff*.md |
@@ -49,7 +55,7 @@ Removed **2026-07-10** to keep archive lean. None of this was on the runtime pat
 | Skills install/update | `skills.sources.yaml`, `bin/skills-install.sh` |
 | Global skill pins | `~/.agents/.skill-lock.json` |
 | Claude bridge | `bin/claude-skills-bridge.sh` |
-| `agentboot` minimal | `bin/agentboot`, `base/` |
+| `agentbot` bootstrap | `bin/agentbot`, `base/` |
 | Global baseline | `global/AGENTS.md` → `~/.codex/`, `~/.claude/` |
 | Slim CLI | `src/` (`python3 -m src.cli`) |
 | Doctor / status | `install.sh` |
@@ -65,7 +71,7 @@ Removed **2026-07-10** to keep archive lean. None of this was on the runtime pat
 | **Tracked workspaces** | Remember which git repos you care about, scan them, and re-render all of them when the catalog or global baseline changes. | `discovery.py` + `state.py` in **git**. Phase 2. |
 | **Package catalog** | A curated JSON registry of skills, rules, MCP servers, and templates with provenance — “import from disk/cache into catalog” workflows. | `../catalog/packages.json`. Phase 3. |
 | **MCP bundle render** | Filter the master MCP list per profile/workspace and write `.cursor/mcp.json` (and similar) automatically. | `../mcp/mcp.json` + catalog; render code in **git**. Phase 3. |
-| **`agentboot --full`** | After minimal `AGENTS.md` + `CLAUDE.md`, also drop Copilot/Cursor/MCP files into the repo from the catalog. | Merging into unified `agentboot` — [stuff3.md](./stuff3.md) Phase 1–3. |
+| **Agentbot workspace exports** | After the current `AGENTS.md` + `CLAUDE.md` bootstrap, also generate Copilot/Cursor compatibility files from one canonical source. | Phase 2 workspace render; MCP files remain Phase 3. |
 | **`agentos.yaml` profiles** | Declarative map of export targets (Codex, Claude, Cursor, Copilot, per-repo) and trust/skill policy per profile. | `../agentos.yaml`. Phase 2. |
 | **Obsidian memory vault** | Git-tracked markdown for durable context (decisions, lessons, preferences) — agents draft, you commit. | `../memory-vault/`. Phase 4. |
 | **CLI commands** | Extra `install.sh` / CLI subcommands: `workspace`, `all`, `interactive`, `import-local`, `remove-managed`, `delete-local`. | Hard-fail today; restore with re-wired `src/cli.py`. Phase 2–3. |
@@ -89,7 +95,7 @@ From `docs/harness-architecture.md` and `future/README.md`.
 
 | Tier | Mechanism | Status |
 |------|-----------|--------|
-| 1 | Per-repo `AGENTS.md` via `agentboot` | **Live** |
+| 1 | Per-repo `AGENTS.md` via `agentbot boot` | **Live — Phase 1 complete** |
 | 2 | Global `npx skills` | **Live** |
 | 3 | Obsidian vault | **Phase 4** (`../memory-vault/`) |
 | 4 | Hermes `MEMORY.md` + SQLite FTS (home server) | **Deferred** — Proxmox + Phase 7.3 |
@@ -113,7 +119,7 @@ From `docs/harness-architecture.md` and `future/README.md`.
 LIVE (slim)                 ARCHIVE (docs/config)        GIT HISTORY (code)     FUTURE (not built)
 ───────────                 ─────────────────────        ──────────────────     ────────────────
 npx skills                  harness-architecture.md      catalog.py             Hermes / Proxmox
-agentboot minimal           agentos.yaml                 discovery.py           Graphify / Mem0
+agentbot bootstrap          agentos.yaml                 discovery.py           Graphify / Mem0
 global render               packages.json + mcp.json     state.py, ui.py
 Claude bridge               memory-vault/                render.py (full)
 doctor                      templates/

@@ -1,6 +1,6 @@
 # agent_bootstrap archive
 
-This directory holds **pre-slim `agent_bootstrap` assets** moved during the 2026-07-09 rework. It is **not part of the runtime install path** — `./install.sh`, `npx skills`, `bin/agentboot`, and slim bootstrap flows do not read from here.
+This directory holds **pre-slim `agent_bootstrap` assets** moved during the 2026-07-09 rework. It is **not part of the runtime install path** — `./install.sh`, `npx skills`, `bin/agentbot`, and slim bootstrap flows do not read from here.
 
 **Docs (archive/docs/):**
 
@@ -8,7 +8,7 @@ This directory holds **pre-slim `agent_bootstrap` assets** moved during the 2026
 |------|------|
 | [stuff.md](./docs/stuff.md) | Deferred capability map + restore pointers |
 | [stuff2.md](./docs/stuff2.md) | Day-to-day impact of deferred features |
-| [stuff3.md](./docs/stuff3.md) | **Implementation phases** (planned expansion) |
+| [stuff3.md](./docs/stuff3.md) | **Implementation phases** (Phase 0–1 complete; Phase 2 next) |
 
 **Docs-only policy (2026-07-10):** Python modules and tests were removed from `archive/`; recover them from **git history** when restoring. Config (JSON/YAML) and markdown stay here.
 
@@ -55,7 +55,7 @@ Moved after CLI/service/render surgery:
 
 - `src/render.py` — `render_global_outputs` only (no MCP write from catalog)
 - `src/ui.py` — print helpers only (no interactive menus)
-- `bin/agentboot --full` — deprecated; runs minimal scaffold only
+- `bin/agentbot` — live unified scaffold; workspace render remains deferred
 
 ## Pack → bootstrap matrix
 
@@ -66,7 +66,7 @@ Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 
 | Upstream skills manifest (`npx skills`) | **Live** | `skills.sources.yaml` |
 | Global skill lockfile | **Live** (repo stub; global pins in `~/.agents/.skill-lock.json`) | `skills-lock.json` |
 | `install.sh` / Python CLI | **Live (trimmed)** | `install.sh`, `src/` (`cli.py`, `service.py`, …) |
-| `agentboot` scaffold | **Live** | `bin/agentboot`, `base/` |
+| `agentbot` scaffold | **Live** | `bin/agentbot`, `base/` |
 | Global `AGENTS.md` render | **Live** | `global/AGENTS.md`, `src/render.py` |
 | Claude skills bridge | **Live** | `bin/claude-skills-bridge.sh` |
 | Package catalog + MCP provenance | **Archived** | `archive/catalog/`, `archive/mcp/` |
@@ -88,7 +88,7 @@ Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 
 | Package catalog / import-local | `archive/catalog/` |
 | MCP filter / render into `.cursor/mcp.json` | `archive/mcp/`, `catalog/packages.json` |
 | Memory vault workflows | `archive/memory-vault/` |
-| agentboot `--full` (Copilot + Cursor rules) | catalog + full render — **git** |
+| Agentbot workspace exports (Copilot + Cursor rules) | catalog + full render — **git**; planned Phase 2 |
 | `agentos.yaml` profiles | `archive/agentos.yaml` |
 
 ## Slim core (stays at repo root)

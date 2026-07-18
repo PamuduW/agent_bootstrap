@@ -9,6 +9,18 @@ Personal AI-agent tooling installer. The Git repository and clone directory rema
 
 Deferred features and the phased expansion plan live in [`archive/`](archive/README.md) ([stuff3.md](archive/docs/stuff3.md)).
 
+## Current roadmap status
+
+Phase 0 and Phase 1 are complete. The live Phase 1 surface is the standalone
+Agentbot menu, the `agentbot boot` repository scaffold, global baseline
+rendering, curated skills management, and the Dotfiles sibling bridge. Phase 2
+is the next planned expansion: profile-driven workspace rendering and tracked
+workspace re-application. The detailed, implementation-aware roadmap is
+[`archive/docs/stuff3.md`](archive/docs/stuff3.md).
+
+The supported menu entrypoints are `./install.sh` on a controlling TTY and
+`agentbot` after installation. `./install.sh menu` is not a separate command.
+
 ## Fresh machine
 
 **Prerequisites:** Git, Python 3, Node.js (for `npx`). Install Python deps:
@@ -164,4 +176,5 @@ bash tests/test_agentbot.sh
 
 Deferred capabilities are documented in [`archive/docs/stuff.md`](archive/docs/stuff.md); the build roadmap is [`archive/docs/stuff3.md`](archive/docs/stuff3.md).
 
-Legacy v1 vendored assets (outside this repo) remain at [`../temp/archive/`](../temp/archive/) for history only.
+Legacy pre-slim code is recoverable from Git history; the retained design and
+configuration references are documented in [`archive/README.md`](archive/README.md).

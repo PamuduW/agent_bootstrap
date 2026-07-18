@@ -18,7 +18,7 @@ Match the repo or folder name: `agent-bootstrap.md`, `dotfiles.md`, `new-setup.m
 One paragraph.
 
 ## Agent notes
-- Bootstrap: `agentboot` / `./install.sh` commands
+- Bootstrap: `agentbot boot` / `./install.sh` commands
 - Key conventions or gotchas
 - Links to ADRs in `../decisions/`
 

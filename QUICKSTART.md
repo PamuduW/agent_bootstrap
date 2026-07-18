@@ -22,6 +22,10 @@ cd /any/path/agent_bootstrap
 
 Then in any project repo: `agentbot boot`.
 
+On a controlling TTY, `./install.sh` or `agentbot` with no arguments opens the
+Agentbot menu. Headless runs should use an explicit command such as
+`agentbot status` or `./install.sh doctor`.
+
 Update skills later: `./install.sh skills update`.
 
 Deferred features: [`archive/docs/stuff.md`](archive/docs/stuff.md) (map) · [`archive/docs/stuff3.md`](archive/docs/stuff3.md) (phases).

@@ -1,6 +1,6 @@
 # Harness Architecture — Three Planes
 
-**Status:** Phase 7.1 (config plane) — canonical design doc  
+**Status:** Phase 1 complete; Phase 2 design reference
 **Scope:** Laptop CLI agents + `agent_bootstrap` config repo. Hermes/Proxmox **DEFERRED**.  
 **Plan:** `docs/plan/plan7-agentic-harness.md` · **Verdicts:** `docs/plan/index.md` §2
 
@@ -8,7 +8,7 @@
 
 ## 1. Executive summary
 
-Daily coding runs on **first-party CLI agents** in WSL (Codex, Claude Code, Copilot, Cursor) fed by a single **config plane** — the rebuilt `agent_bootstrap` repo — which owns skills, templates, MCP exports, and human-curated memory. There is **no always-on harness on the laptop** (16 GB RAM, WSL2). A future **control plane** (Hermes on a Proxmox home server) handles persistent memory, cron, and messaging when the laptop is off; that rollout is **explicitly out of scope** for this project and deferred until config + work planes are stable. Markdown, skills, and per-repo `AGENTS.md` already deliver ~80% of the value; every heavier layer must earn its place.
+Daily coding runs on **first-party CLI agents** in WSL (Codex, Claude Code, Copilot, Cursor) fed by a single **config plane** — the rebuilt `agent_bootstrap` repo — which owns skills, templates, global outputs, and the Phase 2–4 designs. Workspace compatibility files and MCP exports are not live yet. There is **no always-on harness on the laptop** (16 GB RAM, WSL2). A future **control plane** (Hermes on a Proxmox home server) handles persistent memory, cron, and messaging when the laptop is off; that rollout is **explicitly out of scope** for this project and deferred until config + work planes are stable. Markdown, skills, and per-repo `AGENTS.md` already deliver most of the value; every heavier layer must earn its place.
 
 ---
 
@@ -25,11 +25,11 @@ Daily coding runs on **first-party CLI agents** in WSL (Codex, Claude Code, Copi
                                 ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  CONFIG PLANE — LIVE (agent_bootstrap)                                  │
-│  Skills catalog · base/ templates · install.sh · MCP/agents exports     │
-│  archive/memory-vault/ (human Obsidian) · global/AGENTS.md baseline     │
+│  Skills manifest · base/ templates · install.sh · Agentbot menu         │
+│  global/AGENTS.md baseline · Phase 2–4 reference material               │
 │  Single source of truth for every agent on every machine                │
 └───────────────────────────────┬─────────────────────────────────────────┘
-                                │ agentboot · npx skills · install.sh
+                                │ agentbot · npx skills · install.sh
                                 ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  WORK PLANE — LIVE (laptop WSL)                                         │
@@ -49,7 +49,7 @@ Daily coding runs on **first-party CLI agents** in WSL (Codex, Claude Code, Copi
 | **CLI agents only** | Native first-party tools; best ToS compliance and lowest surprise |
 | **No always-on harness** | Hermes, OpenClaw gateway, or similar daemons are wrong fit for 16 GB WSL |
 | **No heavy local runtime** | No Ollama-as-default, no embedding pipelines, no Graphify rebuild hooks on laptop |
-| **Design before infra** | Phase 7.1 is documentation + config hardening; server is a separate project |
+| **Design before infra** | Phase 2 workspace rendering comes before any server or memory infrastructure |
 
 The laptop is a **work terminal**, not a home lab. Background automation waits for the deferred control plane.
 
@@ -61,8 +61,8 @@ From `docs/plan/index.md` §2.4. Add layers only when the previous one hurts.
 
 | Tier | Mechanism | Status |
 |------|-----------|--------|
-| **1** | Per-repo `AGENTS.md` + `CLAUDE.md` via `agentboot` | **LIVE** — Stage 6 complete |
-| **2** | Global skills via `npx skills` (`skills.sources.yaml`) | **LIVE** — Stage 5 complete |
+| **1** | Per-repo `AGENTS.md` + `CLAUDE.md` via `agentbot boot` | **LIVE** — Phase 1 complete |
+| **2** | Global skills via `npx skills` (`skills.sources.yaml`) | **LIVE** — Phase 0 complete |
 | **3** | Obsidian vault (`archive/memory-vault/`: active-context, preferences, decisions/, lessons/) | **ARCHIVED** — human-owned; agents draft, you approve; restore from `archive/` |
 | **4** | Hermes `MEMORY.md` + SQLite FTS on server (`write_approval: true`) | **DEFERRED** — needs Phase 7.3 + Proxmox |
 | **5** | Graphify on-demand for large infra/K8s/TF repos | **DEFERRED** — trigger: codebase too large for grep + AGENTS.md |
@@ -80,33 +80,35 @@ From `docs/plan/index.md` §2.4. Add layers only when the previous one hurts.
 
 **Content sources:**
 - Curated manifest: `skills.sources.yaml` (superpowers, devops, research, etc.)
-- Personal pack: fork of Akindu's `my-agent-skills` for your own skills
+- Personal pack: public `PamuduW/agent_bootstrap_skills` source for personal skills
 - Ad hoc: `npx skills add <repo> --skill <name>` from any compliant repo
 
 **Config repo role:** `agent_bootstrap` declares what to install and wraps `npx skills`; it does not reinvent a package manager.
 
 ---
 
-## 6. Per-repo bootstrap (`agentboot`)
+## 6. Per-repo bootstrap (`agentbot boot`)
 
 ```
 new/cloned repo
       │
       ▼
-  agentboot              # default: --minimal
+  agentbot boot          # default: AGENTS.md + CLAUDE.md
       │
       ├─► ./AGENTS.md     ← base/AGENTS.md (env header, skill tables, ## Project overlay)
       ├─► ./CLAUDE.md     ← base/CLAUDE.md (@AGENTS.md pointer for Claude Code)
       │
-      ▼ (optional)
-  agentboot --full
+      ▼ (Phase 2, when workspace rendering is enabled)
+  Agentbot workspace render
       │
       ├─► .github/copilot-instructions.md
-      ├─► .cursor/rules/ …
-      └─► MCP workspace exports (render.py)
+      └─► .cursor/rules/ …
+
+      ▼ (Phase 3, after catalog + MCP ownership exists)
+      └─► profile-filtered MCP workspace exports
 
 Idempotent: skips existing files unless --force.
-PATH: ~/bin/agentboot (symlinked by install.sh).
+PATH: ~/bin/agentbot (symlinked by install.sh).
 ```
 
 **Convention:** `AGENTS.md` is the single authored instruction file. `CLAUDE.md`, Copilot, and Cursor outputs **point at it** — never duplicate conflicting rules.
@@ -180,5 +182,5 @@ Recorded for when pain appears. **Do not execute in this project.**
 - Master verdicts: `docs/plan/index.md` §2
 - Stage plan: `docs/plan/plan7-agentic-harness.md`
 - Research: `docs/research/04-gpt-synthesis.md`, `docs/research/06-web-agentic-landscape.md`
-- `agentboot`: `bin/agentboot`, `base/AGENTS.md`, `base/CLAUDE.md`
+- `agentbot`: `bin/agentbot`, `base/AGENTS.md`, `base/CLAUDE.md`
 - Skills manifest: `skills.sources.yaml`, `install.sh`

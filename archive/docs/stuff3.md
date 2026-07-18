@@ -1,248 +1,310 @@
-# Implementation phases — agent_bootstrap expansion
+# Agentbot expansion roadmap
 
-**Status:** Planning doc (2026-07-11). Not started.
+**Status:** Phase 0 and Phase 1 are complete and verified against the live
+repositories (2026-07-18). Phase 2 is the next implementation phase. Phases 3
+and 4 remain deferred.
 
-**Related:**
+This is a living design roadmap, not a promise that the archived architecture
+will be restored unchanged. The implementation, tests, and current README files
+are the source of truth. Update this document when a design decision changes.
 
-| Doc | Role |
-|-----|------|
-| [stuff.md](./stuff.md) | Deferred capability map + archive inventory |
-| [stuff2.md](./stuff2.md) | Day-to-day impact of deferred features (deep dive) |
-| [harness-architecture.md](./harness-architecture.md) | Three-plane design + memory tiers 1–6 |
-| [../README.md](../README.md) | Archive move log + pack → slim matrix |
+## Current system
 
-**Next session:** Phase 1 implementation plan (menu relocation + unified `agentboot`).
+| Area | Current source of truth | Status |
+|------|-------------------------|--------|
+| Agentbot CLI and menu | `install.sh`, `bin/agentbot`, `scripts/menu.sh` | Live |
+| Per-repo bootstrap | `bin/agentbot boot`, `base/AGENTS.md`, `base/CLAUDE.md` | Live |
+| Global baseline | `global/AGENTS.md` and `./install.sh global` | Live |
+| Curated skills | `skills.sources.yaml`, `./install.sh skills ...` | Live |
+| Dotfiles integration | sibling `dotfiles` `--agents` bridge | Live |
+| Workspace render and tracked repos | `archive/` design/config plus Git history | Phase 2 |
+| Package catalog and MCP bundles | `archive/catalog/`, `archive/mcp/` | Phase 3 |
+| Durable memory and Graphify | `archive/memory-vault/` and disabled sources | Phase 4 |
 
----
+`agent_bootstrap` remains the Git repository and clone directory. **Agentbot**
+is the installed product and public command. Legacy symlink cleanup is isolated
+to migration code and test fixtures; it is not part of the current public
+surface.
 
-## Verdict on this phase split
-
-**Yes — this is a good setup.** Dependencies flow in the right direction:
+## Phase dependency
 
 ```text
-Phase 1 (UX + standalone)     →  no render/catalog dependency
-Phase 2 (render + state)      →  needs stable entrypoints from Phase 1
-Phase 3 (catalog + MCP)       →  needs render pipeline from Phase 2
-Phase 4 (memory + graphs)     →  optional; does not block Phases 1–3
+Phase 0: slim skills + global baseline + static repo bootstrap
+    │
+    ▼
+Phase 1: standalone Agentbot menu + Dotfiles bridge + unified agentbot boot  ✅
+    │
+    ▼
+Phase 2: profiles + workspace render + tracked workspaces + batch CLI
+    │
+    ▼
+Phase 3: package catalog + profile-filtered MCP bundles
+    │
+    ▼
+Phase 4: human-owned memory vault + on-demand Graphify
 ```
 
-### Suggested tweaks (minor)
-
-1. **Rename Phase 1 “TUI” mentally** — you are moving the **dotfiles Agents submenu** into `agent_bootstrap`, not restoring the archived package/workspace **Apply** TUI yet. That fuller control plane lands in **Phase 2** with tracked workspaces + CLI `interactive` / `all`.
-
-2. **Order inside Phase 2** (when building):
-
-   ```text
-   agentos.yaml (live at repo root) → workspace render → tracked workspaces → CLI commands
-   ```
-
-   Profiles define export targets; render reads them; state remembers repos; CLI exposes the flows.
-
-3. **`agentboot` grows by phase** — Phase 1 removes `--full` and keeps today’s `AGENTS.md` + `CLAUDE.md` copy. Copilot/Cursor/MCP outputs attach in Phase 2–3 as render matures. One command, behavior expands — your instinct is right.
-
-4. **Phase 4: vault before Graphify** — populate Obsidian-style memory habits first; add Graphify when a specific large repo hurts. Enable `obsidian-memory` in `skills.sources.yaml` when the vault has real content.
-
-5. **Explicitly out of these four phases** (harness tiers 4 & 6): Hermes/Proxmox, Mem0, Graphiti, GraphRAG — revisit only if markdown + vault + Graphify stop scaling.
+Hermes/Proxmox, Mem0, Graphiti, GraphRAG, and an always-on laptop harness are
+separate future projects, not hidden requirements for these phases.
 
 ---
 
-## Phase 0 — current (slim bootstrap)
+## Phase 0 — slim bootstrap ✅
 
-**Goal:** Single config repo for skills + global baseline + minimal repo scaffold. **Live today.**
+The slim foundation is live:
 
-| Piece | Location |
-|-------|----------|
-| Skills manifest + install | `skills.sources.yaml`, `./install.sh skills *` |
-| Global baseline render | `global/AGENTS.md`, `./install.sh global` |
-| Repo scaffold | `bin/agentboot` → `base/AGENTS.md`, `base/CLAUDE.md` |
-| Agents UX | `dotfiles/scripts/menus/agents.sh` (to move in Phase 1) |
-| Deferred reference | `archive/docs/stuff.md`, `archive/docs/stuff2.md` |
+- `skills.sources.yaml` declares curated upstream sources.
+- `./install.sh skills install|update|list|doctor` manages skills through
+  `npx skills` and the global lock.
+- `./install.sh global` renders the authored `global/AGENTS.md` baseline to
+  Codex and Claude surfaces.
+- `agentbot boot` copies the canonical `AGENTS.md` and `CLAUDE.md` templates
+  into a repository.
+- `./install.sh doctor` validates the manifest, links, lock, and rendered
+  outputs.
 
-### Phase 0 follow-up — personal custom skills source (planned, not implemented)
-
-Create a dedicated NPM/Skills-CLI-compatible repository for personal skills (including `co-council`). Once it exists and has a reviewed revision, add it as a normal source in `skills.sources.yaml` and install it with `npx skills -g` so its selected skills are represented in `~/.agents/.skill-lock.json` and validated as managed Codex links. Until then, an ad-hoc `~/.agents/skills/` copy is supported as a manual local skill and linked non-destructively into Codex and Claude, but remains intentionally outside the reproducible global lock.
-
-**Exit criteria:** `./install.sh doctor` clean; tests pass; dotfiles Agents menu works.
+The personal skills repository is now a normal public Skills CLI source:
+`PamuduW/agent_bootstrap_skills`, currently publishing `co-council`.
 
 ---
 
-## Phase 1 — standalone UX + unified agentboot
+## Phase 1 — standalone UX + unified Agentbot ✅
 
-**Goal:** `agent_bootstrap` works without dotfiles; dotfiles becomes a thin launcher.
+**Goal:** Agentbot works without Dotfiles; Dotfiles is a thin launcher and
+sibling-path resolver.
 
-### Scope
+### Delivered
 
-| Item | Intent |
-|------|--------|
-| **Bootstrap menu (from dotfiles)** | Move Agents submenu (`status`, `clone/update`, `bootstrap`, `skills`, `link`, `agentboot`, `doctor`) into this repo. Reuse or share menu primitives (`menu_simple`, descriptions, colors) — discuss at build time. |
-| **Dotfiles integration** | Keep `agent_bootstrap_paths.sh` in dotfiles for sibling-path resolution. Main menu `--agents` delegates to `$AGENT_BOOTSTRAP_HOME/.../menu` (or `./install.sh menu`). |
-| **Unified `agentboot`** | Drop `--minimal` / `--full` split. Default `agentboot` does the full scaffold *for this phase* (`AGENTS.md` + `CLAUDE.md`). Remove `--full` prompts from dotfiles menu. As later phases land, the same command gains Copilot/Cursor/MCP without new flags. |
+- The Agentbot menu is owned by `agent_bootstrap/scripts/menu.sh`.
+- The menu covers status, install, update, token configuration, repository
+  setup, command reference, doctor, and the reciprocal Dotfiles route.
+- `./install.sh` with no arguments opens the menu on a controlling TTY.
+- `agentbot` with no arguments opens the same menu after installation; a
+  headless invocation gives explicit CLI guidance.
+- Dotfiles `./install.sh --agents`, the Dotfiles menu’s Agentbot action, and
+  `dotfiles agentbot` validate the sibling repository and launch its
+  `install.sh` menu.
+- `agentbot boot` is the single bootstrap command. Its default output is
+  `AGENTS.md` plus `CLAUDE.md`; `--agents`, `--claude`, and `--force` select
+  the current static-copy behavior.
+- The legacy minimal/full split and pre-Agentbot binary are gone. Installation
+  removes only an old symlink that can be proven to belong to this repository
+  and preserves unrelated paths.
+- The old archived package/workspace Apply TUI, workspace render, catalog,
+  MCP filtering, and archived CLI subcommands remain out of scope.
 
-### Not in Phase 1
+The supported menu entrypoints are therefore `./install.sh` and `agentbot`.
+`./install.sh menu` is not a command in the current contract.
 
-- Package/workspace **Apply** TUI from archived `ui.py`
-- Workspace render, catalog, MCP filter
-- Restoring archived CLI subcommands
+### Phase 1 verification
 
-### Architecture sketch
+The following checks passed in the development clones:
+
+```bash
+# agent_bootstrap
+python3 -m unittest discover -s tests
+bash tests/test_agentbot.sh
+bash tests/test_agentbot_menu.sh
+
+# dotfiles
+bash tests/test_agentbot_bridge.sh
+bash tests/test_main_menu.sh
+bash tests/regression_paths.sh
+```
+
+The shell trees also pass `bash -n`. Documentation changes in this update are
+the only intended working-tree changes; no commits or pushes are performed by
+the maintenance workflow.
+
+---
+
+## Phase 2 — profiles, workspace render, and tracked workspaces
+
+**Goal:** Keep one authored instruction source per repository while generating
+the compatibility files required by each agent surface. Make that render
+repeatable for one repository or a deliberate set of repositories.
+
+Phase 2 is not “restore every archived file.” It is a controlled render
+pipeline built around the stable Phase 1 entrypoints.
+
+### The desired ownership model
 
 ```text
-dotfiles/install.sh --agents
+global/AGENTS.md                 machine-wide authored baseline
+repo/AGENTS.md                   repository-authored policy + ## Project
         │
         ▼
-AGENT_BOOTSTRAP_HOME/install.sh menu   (new)
+   Agentbot profile              export policy and trust rules
         │
-        ├── status / doctor / bootstrap / skills / link
-        └── agentboot (target dir prompt)
+        ▼
+   workspace render               generated compatibility surfaces
+        │
+        ├── repo/CLAUDE.md
+        ├── repo/.github/copilot-instructions.md
+        └── repo/.cursor/rules/bootstrap-skills.mdc
 ```
 
-### Exit criteria
+`AGENTS.md` remains the authored source. Generated files receive a clear
+Agentbot marker, are idempotent, and are never treated as independent policy.
+MCP files are deliberately excluded from the first Phase 2 slice; they belong
+to the catalog-driven Phase 3 pipeline.
 
-- Fresh clone: `./install.sh` + `./install.sh menu` usable with no dotfiles
-- Dotfiles `--agents` calls into agent_bootstrap menu
-- `agentboot` has no `--full`; docs and menus updated
-- `AGENT_BOOTSTRAP_TUI=1` still works when piped via dotfiles `tee`
+### 2.1 Profiles and `agentos.yaml`
 
----
+Promote the archived [`agentos.yaml`](../agentos.yaml) into a live configuration
+location after reviewing its schema. The existing design already expresses:
 
-## Phase 2 — render engine + tracked workspaces
+- an active profile such as `safe-default`;
+- trust policy for community skills and executable scripts;
+- export targets for Codex, Claude, Cursor, Copilot, and repository outputs;
+- placeholders for the user’s home directory and workspace path.
 
-**Goal:** One canonical `AGENTS.md` per repo; generated compatibility files; batch re-apply.
+The loader should reject unknown or malformed profiles before writing anything.
+Profile selection should be explicit or use the documented safe default. A
+profile controls *where* and *what kind* of output is generated; it does not
+silently install arbitrary skills or execute scripts from a community source.
 
-### Scope
+### 2.2 Single-workspace render
 
-| Item | Intent |
-|------|--------|
-| **`agentos.yaml` profiles** | Promote `archive/agentos.yaml` → repo root (or `config/`). `safe-default` profile drives export policy. |
-| **Workspace render** | Restore/adapt `render.py`: merge `global/AGENTS.md` + repo `## Project` → `CLAUDE.md`, Copilot instructions, Cursor rules. Generated files gitignored. |
-| **Tracked workspaces** | Restore/adapt `state.py` + `discovery.py`: remember git roots; `workspace` / `all` re-render on demand. |
-| **CLI commands** | Re-enable: `workspace`, `all`, `interactive` (package/workspace Apply TUI), wire through `install.sh` + `src/cli.py`. |
+The first implementation slice should render one Git repository:
 
-### Build order (recommended)
+1. Resolve and validate the repository root.
+2. Require or scaffold the authored repository `AGENTS.md`; do not treat an
+   old generated file as canonical without an explicit decision.
+3. Read the global baseline from `global/AGENTS.md`.
+4. Read the repository’s `## Project` section and preserve the rest of the
+   authored file.
+5. Merge the global baseline and project overlay in a deterministic order.
+6. Render only the surfaces enabled by the selected profile.
+7. Write generated files atomically and report created, changed, skipped, and
+   conflicting paths.
+8. Add generated paths to the repository’s ignore policy only with an explicit,
+   reviewable rule; never overwrite an unrelated user-owned file silently.
 
-1. `agentos.yaml` at live path + loader in Python  
-2. Workspace render (single repo)  
-3. Operator state + discovery  
-4. CLI + optional interactive Apply menu  
-5. Extend `agentboot` to invoke workspace render (still one command)
+The merge must be deterministic and testable. Running the same render twice
+without source changes must produce no second diff. Existing user-authored
+`CLAUDE.md`, Cursor rules, or Copilot instructions need a clear conflict policy:
+skip and report by default, with an explicit force/replace path only if we later
+decide that generated ownership is appropriate.
 
-### Exit criteria
+### 2.3 Tracked workspace state
 
-- `./install.sh workspace ~/Dev/my-app` merges and writes generated surfaces  
-- `./install.sh all ~/Dev` updates every tracked repo  
-- `agentboot` in a git repo runs render path (not just static copy)  
-- Tests cover merge + gitignore idempotency  
+After single-workspace rendering is reliable, add local operator state for
+repositories the user intentionally manages. The state belongs under the
+Agentbot configuration area and must be ignored by Git; it is not a shared
+project manifest and must not contain secrets.
 
-**Reference:** git history for `archive/src/agent_bootstrap/{render,state,discovery,ui}.py`; config in `archive/templates/`, `archive/agentos.yaml`.
+The state model should record at least:
 
----
+- canonical repository path;
+- repository identity and last-known branch/commit;
+- selected profile;
+- last render result and timestamp;
+- whether the repository is enabled for batch rendering.
 
-## Phase 3 — catalog + MCP bundles
+Discovery may scan a user-supplied root for Git repositories, but discovery
+must not make every directory a managed workspace automatically. Registration
+and batch application need a visible preview and a confirmation boundary.
 
-**Goal:** Curated packages drive which MCP servers and artifacts appear per profile/workspace.
+### 2.4 CLI and menu behavior
 
-### Scope
+The planned public operations are:
 
-| Item | Intent |
-|------|--------|
-| **Package catalog** | Promote `archive/catalog/packages.json`; restore catalog load/filter + `import-local` / `remove-managed`. |
-| **MCP bundle render** | Filter `archive/mcp/mcp.json` by enabled packages’ `mcp_keys`; write global and per-workspace `.cursor/mcp.json`. |
-
-### Depends on Phase 2
-
-MCP render hooks into the same `render.py` / `agentos.yaml` export targets (`cursor` → `mcp.json`).
-
-### Exit criteria
-
-- Enable/disable package → MCP subset updates on next render  
-- `import-local` copies Cursor plugin cache artifact into catalog  
-- Doctor validates MCP ownership vs catalog  
-
----
-
-## Phase 4 — long-term memory
-
-**Goal:** Durable human-owned context beyond per-repo `AGENTS.md`.
-
-### Scope
-
-| Item | Intent |
-|------|--------|
-| **Obsidian memory vault** | Populate `archive/memory-vault/` structure (`active-context.md`, `decisions/`, `lessons/`, …). Agents draft; you commit. Optional: enable `obsidian-memory` in `skills.sources.yaml`. |
-| **Graphify** | On-demand per large repo (infra/K8s/TF). Enable `graphify` skill when upstream ships Agent Skills layout; manual `graphify build` until then. Not always-on on laptop. |
-
-### Not in Phase 4 (unless triggers hit)
-
-| Item | Trigger |
-|------|---------|
-| Hermes + SQLite FTS | Need background memory while laptop off (tier 4) |
-| Mem0 / Graphiti / GraphRAG | Markdown + vault + Graphify stop scaling (tier 6) |
-
-### Exit criteria
-
-- Vault has real content you use weekly  
-- Graphify run documented for at least one painful repo  
-- Agents read small vault slices / exports — not whole vault every session  
-
----
-
-## Cross-phase dependency diagram
-
-```text
-                    ┌─────────────────────────────────────┐
-                    │  Phase 0 (live): skills + agentboot │
-                    └──────────────────┬──────────────────┘
-                                       │
-                    ┌──────────────────▼──────────────────┐
-                    │  Phase 1: menu here + agentboot UX  │
-                    └──────────────────┬──────────────────┘
-                                       │
-         ┌─────────────────────────────▼─────────────────────────────┐
-         │  Phase 2: agentos.yaml → render → tracked workspaces → CLI │
-         └─────────────────────────────┬─────────────────────────────┘
-                                       │
-                    ┌──────────────────▼──────────────────┐
-                    │  Phase 3: catalog → MCP bundle render │
-                    └──────────────────┬──────────────────┘
-                                       │
-                    ┌──────────────────▼──────────────────┐
-                    │  Phase 4: memory vault + Graphify   │
-                    └─────────────────────────────────────┘
-
-     OUT OF SCOPE (separate projects): Hermes / Proxmox / Mem0 / Graphiti
+```bash
+./install.sh workspace ~/Dev/my-app   # render/register one workspace
+./install.sh all ~/Dev                # preview/apply enabled workspaces below a root
+./install.sh interactive              # review workspaces and apply selected changes
 ```
 
+The exact flags may change during implementation, but the safety contract
+should remain stable:
+
+- repository state is inspected before rendering;
+- dirty or ambiguous repositories are reported, not silently rewritten;
+- generated changes are previewable;
+- no `git add`, commit, push, or destructive cleanup occurs automatically;
+- one failed workspace does not hide results for the others;
+- the final report identifies every skipped, changed, and failed workspace.
+
+`agentbot boot` should eventually call the single-workspace render path when
+run inside a Git repository, while retaining the current static scaffold as a
+safe fallback for a fresh target. This is how the command grows without
+reintroducing a `--full` mode.
+
+### 2.5 Phase 2 build order
+
+1. Validate and promote the profile schema.
+2. Restore/adapt the full render logic from Git history and archive templates.
+3. Implement one-workspace render with atomic writes and idempotency tests.
+4. Add local workspace registration and discovery.
+5. Add `workspace`, `all`, and the optional interactive review surface.
+6. Extend `agentbot boot` to invoke render for an existing Git repository.
+
+### Phase 2 exit criteria
+
+- One workspace can be rendered from global policy plus its project overlay.
+- Re-running render is idempotent.
+- Generated outputs are clearly marked and ignored appropriately.
+- Workspace registration is explicit and local to the operator.
+- Batch rendering produces an auditable per-workspace report.
+- Tests cover merge order, missing overlays, conflicts, idempotency, and
+  failure isolation.
+- Existing Phase 0/1 tests remain green.
+
+### Not in Phase 2
+
+- Package enable/disable and MCP server filtering — Phase 3.
+- Obsidian memory workflows and Graphify — Phase 4.
+- Hermes, Proxmox, vector databases, or an always-on laptop service.
+
 ---
 
-## Mapping: deferred table → phases
+## Phase 3 — package catalog + MCP bundles
 
-| Deferred capability ([stuff.md](./stuff.md)) | Phase |
-|-----------------------------------------------|-------|
-| Interactive control-plane TUI (full Apply) | 2 |
-| Workspace render | 2 |
-| Tracked workspaces | 2 |
-| `agentos.yaml` profiles | 2 |
-| CLI commands (`workspace`, `all`, `interactive`, …) | 2 |
-| Package catalog | 3 |
-| MCP bundle render | 3 |
-| Obsidian memory vault | 4 |
-| Graphify | 4 |
-| `agentboot --full` (concept) | 1–3 → unified `agentboot` |
+**Goal:** Curated packages determine which MCP servers and related artifacts
+are rendered for a profile or workspace.
 
----
+- Promote and validate `archive/catalog/packages.json`.
+- Restore catalog load/filter and managed-artifact operations.
+- Use package `mcp_keys` to filter the master `archive/mcp/mcp.json` list.
+- Render only the selected MCP subset into the appropriate Cursor surfaces.
+- Make `import-local` and `remove-managed` provenance-aware and reviewable.
+- Extend Doctor to detect orphaned, conflicting, or unowned MCP entries.
 
-## Phase 1 planning checklist (next session)
-
-- [ ] Menu library: copy vs shared package vs git submodule from dotfiles  
-- [ ] Entrypoint name: `./install.sh menu` vs `bin/agent-menu`  
-- [ ] What stays in dotfiles: `agent_bootstrap_paths.sh`, clone URL allowlist, one-line `--agents` delegate  
-- [ ] `agentboot` flag removal + test updates  
-- [ ] README / QUICKSTART / dotfiles `AGENTS.md` path updates  
+Phase 3 depends on the Phase 2 profile and render contracts. It must not
+become a second, unrelated configuration system.
 
 ---
+
+## Phase 4 — durable memory + on-demand graphs
+
+**Goal:** Preserve human-approved context that should survive individual
+repository sessions without dumping a complete vault into every prompt.
+
+- Populate `archive/memory-vault/` with active context, decisions, lessons,
+  preferences, and project notes.
+- Let agents draft memory changes; the user approves and commits them.
+- Read small relevant slices or generated exports rather than the whole vault.
+- Use Graphify only for a large repository where Markdown navigation and `rg`
+  stop being sufficient.
+- Keep `graphify` and `obsidian-memory` disabled until their source layouts and
+  operational behavior are validated.
+
+Hermes/SQLite FTS, Mem0, Graphiti, and GraphRAG remain trigger-based projects
+outside this roadmap.
+
+## Related documents
+
+| Document | Role |
+|----------|------|
+| [stuff.md](./stuff.md) | Deferred capability map and restore boundaries |
+| [stuff2.md](./stuff2.md) | Day-to-day impact of the deferred capabilities |
+| [harness-architecture.md](./harness-architecture.md) | Three-plane model and memory tiers |
+| [../README.md](../README.md) | Archive inventory and slim/live matrix |
 
 ## Changelog
 
 | Date | Change |
 |------|--------|
-| 2026-07-11 | Initial phase map; `stuff.md` / `stuff2.md` moved to `archive/docs/` |
+| 2026-07-11 | Initial phase map created after the slim-bootstrap rework |
+| 2026-07-18 | Marked Phases 0–1 complete; reconciled Agentbot naming and entrypoints; expanded Phase 2 design |

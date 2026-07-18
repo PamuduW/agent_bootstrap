@@ -1,4 +1,8 @@
-These seven pieces were meant to be **one pipeline**: you curate once in `agent_bootstrap`, then **re-apply** to every machine and every repo when something changes. Today you have the **manual half** of that (global skills, `base/` templates, `agentboot --minimal`). The archived half is **automation + memory across repos**.
+These seven pieces are meant to become **one pipeline**: you curate once in
+`agent_bootstrap`, then **re-apply** to every machine and every repo when
+something changes. Phase 1 now provides the live manual foundation (global
+skills, `base/` templates, `agentbot boot`, and the standalone Agentbot menu).
+The archived half is the future **render automation + memory across repos**.
 
 ---
 
@@ -16,7 +20,7 @@ Rule from the harness doc: **`AGENTS.md` is the one authored instruction file.**
 **Your routine today (slim):**
 
 ```text
-New repo → agentboot → edit ## Project in AGENTS.md → git commit
+New repo → agentbot boot → edit ## Project in AGENTS.md → git commit
 Skills change → cd agent_bootstrap → ./install.sh skills install
 Global baseline change → edit global/AGENTS.md → copy/symlink manually or install.sh global
 ```
@@ -90,7 +94,10 @@ Merge order was explicit: generated header → full global baseline → repo-spe
 - **Open any repo in Cursor/Copilot/Claude** — each tool sees the **same** global habits (WSL, skill pick list, interaction rules) **plus** that repo’s `## Project`, without you maintaining four parallel files.  
 - **Edit one file** (`AGENTS.md`) when project context changes; re-run render instead of updating Copilot and Cursor separately.
 
-**Without it:** `agentboot` copies static `base/AGENTS.md` once. Global updates in `agent_bootstrap/global/AGENTS.md` do **not** automatically flow into old repos unless you re-copy or edit by hand. `CLAUDE.md` is a static pointer, not a merged view.
+**Without it:** `agentbot boot` copies the static `base/AGENTS.md` and
+`base/CLAUDE.md` once. Global updates in `agent_bootstrap/global/AGENTS.md` do
+**not** automatically flow into old repos unless you re-copy or edit by hand.
+`CLAUDE.md` is currently a static pointer, not a merged workspace view.
 
 **When you’d miss it:** When you have 5+ active repos and keep tweaking global agent behavior — you’ll feel sync pain.
 
@@ -111,23 +118,27 @@ Merge order was explicit: generated header → full global baseline → repo-spe
 
 ---
 
-## 5. `agentboot --full`
+## 5. Agentbot workspace exports (Phase 2)
 
 **Intended to work:** One command in a new repo:
 
 ```text
-agentboot --full
+agentbot boot
   → AGENTS.md + CLAUDE.md (minimal, same as today)
-  → .github/copilot-instructions.md
-  → .cursor/rules/...
-  → .cursor/mcp.json (filtered)
+  → Phase 2: generated Copilot/Cursor compatibility files
+  → Phase 3: filtered MCP bundle
 ```
 
 Idempotent: skip existing unless `--force`.
 
-**Day-to-day effect:** Clone repo → `agentboot --full` → open in VS Code/Cursor → Copilot and Cursor already have instructions and MCP, not just Claude/Codex via `AGENTS.md`.
+**Day-to-day effect:** Clone repo → `agentbot boot` → edit the authored
+`AGENTS.md` → run the Phase 2 workspace render when compatibility files are
+needed. Copilot and Cursor then receive generated views of the same policy,
+instead of becoming separate instruction sources.
 
-**Today:** `--full` warns and only does minimal copy. You’d manually add Copilot/Cursor files or skip them.
+**Today:** `agentbot boot` intentionally performs only the stable Phase 1
+scaffold. Copilot/Cursor workspace exports and MCP filtering are deliberately
+deferred to Phases 2–3.
 
 **When you’d miss it:** If you actually use Copilot instructions and Cursor rules daily and don’t want to set them up per repo.
 
@@ -205,7 +216,7 @@ Obsidian vault holds cross-cutting memory agents don't duplicate into every AGEN
 
 | Area | Slim (now) | Full deferred stack |
 |------|------------|---------------------|
-| **New repo** | `agentboot`, edit `AGENTS.md`, maybe skills install | Same + auto Copilot/Cursor/MCP; tracked for future updates |
+| **New repo** | `agentbot boot`, edit `AGENTS.md`, maybe skills install | Same + generated Copilot/Cursor/MCP views; tracked for future updates |
 | **Global habit change** | Edit `global/AGENTS.md`; manually propagate | One Apply → all tracked repos + global homes |
 | **Tool parity** | Strong for Codex/Claude via `AGENTS.md`; Copilot/Cursor more manual | All four surfaces stay aligned from one canonical file |
 | **MCP** | Cursor UI / hand config | Package-driven, filtered, reproducible |

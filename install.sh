@@ -358,7 +358,7 @@ Usage: ./install.sh <command> [args]
   help                   Show this help
 
 Run agentbot boot in a repository to scaffold AGENTS.md + CLAUDE.md.
-With no arguments a usable controlling TTY is required for the future Agentbot menu.
+With no arguments a usable controlling TTY is required for the Agentbot menu.
 
 Archived commands (see archive/README.md): workspace, all, interactive,
 import-local, remove-managed, delete-local.

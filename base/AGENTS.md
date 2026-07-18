@@ -50,15 +50,23 @@ repository.
 - Use portable skills for shared methodology.
 - Use a harness-compatible skill for native council behavior, model routing,
   permissions, or delegation.
-- Do not assume a skill written for Codex, Cursor, Claude Code, OpenCode,
-  Copilot, or another harness works elsewhere.
+- Do not assume a skill written for a different harness works in the active one.
 - Follow the active harness's skill discovery and invocation mechanism.
+
+The identifiers below are manifest references, not a promise that every harness
+supports every skill or its invocation syntax. Discover availability before use.
+
+| Capability | Managed identifiers | Use only when the active harness supports it |
+|---|---|---|
+| Planning and execution | `brainstorming`, `writing-plans`, `executing-plans`, `subagent-driven-development`, `test-driven-development` | Exploration, structured planning, plan execution, authorized delegation, or test-first changes. |
+| Research and security | `literature-review`, `owasp` | Research synthesis or security review. |
+| Delivery and infrastructure | `kubernetes`, `k8s`, `kubernetes-specialist`, `terraform`, `github-actions`, `gitlab-ci`, `devops-engineer` | Kubernetes, infrastructure, CI/CD, or delivery work. |
 
 ## Delegation and planning
 
-- Delegation may be used when the user requests it, invokes a compatible
-  workflow, or the task materially benefits from bounded independent
-  investigation.
+- Delegation is opt-in. Use it only when the user explicitly requests it or
+  explicitly invokes a compatible workflow; task complexity alone is not
+  authorization.
 - Do not delegate routine work merely because delegation is available.
 - This shared policy does not name or require a particular council
   implementation.
@@ -142,4 +150,4 @@ deliverable is a plan, do not implement.
 <!-- Project-owned section. Add purpose, supported environments, stack, key
 paths, setup/run/test commands, generated files, architecture constraints,
 external services, deployment notes, hazards, approval checkpoints, and the
-definition of done. -->
+definition of done. Agentbot preserves this section during baseline resync. -->

@@ -48,6 +48,17 @@ class ManifestAgentsSyncTests(unittest.TestCase):
             leaked = sorted(skill for skill in disabled_skills if skill in advertised)
             self.assertEqual([], leaked, f"{path} advertises disabled manifest skills: {', '.join(leaked)}")
 
+    def test_root_agents_uses_the_canonical_base_baseline(self) -> None:
+        from src.workspace_render import split_base_template
+
+        base_baseline, _ = split_base_template(
+            (self.repo_root / "base" / "AGENTS.md").read_text(encoding="utf-8")
+        )
+        root_baseline, _ = split_base_template(
+            (self.repo_root / "AGENTS.md").read_text(encoding="utf-8")
+        )
+        self.assertEqual(base_baseline, root_baseline)
+
 
 if __name__ == "__main__":
     unittest.main()

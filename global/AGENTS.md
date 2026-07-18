@@ -45,9 +45,9 @@ file durable, provider-neutral, and limited to rules that apply across projects.
 - Shared policy defines goals and guardrails. Harness adapters and compatible
   skills define native invocation, routing, permissions, and delegation details.
 - A skill written for one harness is not automatically portable to another.
-- Delegation may be used when the user requests it, invokes a compatible
-  workflow, or complex work materially benefits from bounded independent
-  investigation.
+- Delegation is opt-in. Use it only when the user explicitly requests it or
+  explicitly invokes a compatible workflow; task complexity alone is not
+  authorization.
 - Do not delegate routine work merely because delegation is available.
 - If no compatible delegation workflow exists, use the active harness directly
   rather than emulating subagents with extra CLI processes.

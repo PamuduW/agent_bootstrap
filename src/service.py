@@ -23,11 +23,14 @@ from .skill_reconcile import (
     build_reconcile_plan,
 )
 from .ui import print_bridge_summary, print_doctor_summary, print_header, print_skills_report
+from .workspace_service import WorkspaceReport, WorkspaceResult, WorkspaceService
+from .workspace_state import WorkspaceRecord
 
 
 class AgentbotService:
     def __init__(self, paths: AgentbotPaths) -> None:
         self.paths = paths
+        self.workspace_service = WorkspaceService(paths)
 
     def render_global(self) -> None:
         render_global_outputs(self.paths)
@@ -62,6 +65,45 @@ class AgentbotService:
 
     def update_skills(self) -> None:
         run_skills_update(self.paths)
+
+    def preview_workspace(
+        self,
+        path: Path,
+        *,
+        profile: str | None,
+        targets: tuple[str, ...] | None,
+    ) -> WorkspaceResult:
+        return self.workspace_service.preview(
+            path,
+            profile_name=profile,
+            targets=targets,
+        )
+
+    def apply_workspace(
+        self,
+        path: Path,
+        *,
+        profile: str | None,
+        targets: tuple[str, ...] | None,
+        register: bool,
+    ) -> WorkspaceResult:
+        return self.workspace_service.apply(
+            path,
+            profile_name=profile,
+            targets=targets,
+            register=register,
+        )
+
+    def resync_workspaces(
+        self,
+        *,
+        apply: bool,
+        paths: tuple[Path, ...] = (),
+    ) -> WorkspaceReport:
+        return self.workspace_service.resync(apply=apply, paths=paths)
+
+    def list_workspaces(self) -> tuple[WorkspaceRecord, ...]:
+        return self.workspace_service.store.load()
 
     def reconcile_skills(
         self,

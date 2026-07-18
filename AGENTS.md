@@ -86,7 +86,10 @@ Canonical scaffold templates live in `base/AGENTS.md` and `base/CLAUDE.md`. This
 
 ## Project
 
-**Purpose:** Agentbot installs curated upstream skills via `npx`, scaffolds per-repo agent files with `agentbot boot`, and renders a machine-level baseline from `global/AGENTS.md`. Treat this repo as a small CLI + shell entrypoint, not a full config plane.
+**Purpose:** Agentbot installs curated upstream skills via `npx`, renders a
+machine-level baseline from `global/AGENTS.md`, and manages per-folder agent
+policy surfaces with `agentbot boot`, `workspace`, and `resync`. Treat this
+repo as a small CLI + shell entrypoint, not a full config plane.
 
 **Stack:** bash (`install.sh`, `bin/*`), Python 3 (`src/` — `python3 -m src.cli`), Node.js (`npx skills`).
 
@@ -94,15 +97,17 @@ Canonical scaffold templates live in `base/AGENTS.md` and `base/CLAUDE.md`. This
 
 | Path | Role |
 |------|------|
-| `install.sh` | Repository entrypoint (explicit install, skills, global, doctor) |
+| `install.sh` | Repository entrypoint (install, skills, global, doctor, workspace commands) |
 | `skills.sources.yaml` | Curated upstream skill manifest, including all published personal skills |
 | `skills-lock.json` | Project lock stub; global pins in `~/.agents/.skill-lock.json` |
 | `src/` | Slim Python CLI (`cli.py`, `service.py`, `skills_installer.py`, …) |
-| `bin/agentbot` | Public dispatcher; `boot` copies `base/` templates into another repo |
-| `base/` | Canonical Agentbot templates (keep skill tables in sync with manifest) |
+| `bin/agentbot` | Public dispatcher; `boot` routes workspace rendering and registration |
+| `agentos.yaml` | Safe-default workspace profile and fixed output allowlist |
+| `base/` | Canonical Agentbot policy templates (keep skill tables in sync with manifest) |
+| `${XDG_CONFIG_HOME:-$HOME/.config}/agentbot/workspaces.json` | Private local workspace registry; never Git-tracked |
 | `global/AGENTS.md` | Machine baseline (authored; rendered to `~/.codex/`, `~/.claude/`) |
 | `tests/` | `python3 -m unittest discover -s tests` + `bash tests/test_agentbot.sh` |
-| `archive/` | Deferred catalog/MCP/workspace render — `archive/docs/stuff.md`, phases in `archive/docs/stuff3.md` |
+| `archive/` | Deferred catalog/MCP/memory features — phases in `archive/docs/stuff3.md` |
 
 **Commands:**
 
@@ -118,6 +123,6 @@ python3 -m unittest discover -s tests && bash tests/test_agentbot.sh
 - `install.sh` is the only supported interface for bootstrap operations.
 - Do not vendor upstream skills into this repo; manifest + `npx skills -g` only.
 - Keep `base/AGENTS.md` skill tables aligned with enabled entries in `skills.sources.yaml` (`graphify` and `obsidian-memory` stay disabled).
-- Archived CLI commands (`workspace`, `all`, `interactive`, …) must error with a pointer to `archive/README.md` — do not restore without re-wiring imports.
+- Archived CLI commands (`all`, `interactive`, `import-local`, …) must error with a pointer to `archive/README.md` — do not restore without re-wiring imports.
 - Never run uninstall flows without explicit user request.
 - `AGENTBOT_HOME` is exported from the unchanged `agent_bootstrap` clone path by `install.sh` (not from `.env`).

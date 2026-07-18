@@ -31,14 +31,17 @@ agentbot_menu_command_lib() {
 	local cols="$(agentbot_menu_cols)" command_w=20 behavior_w=10 available description_w
 	local command behavior description command_fit behavior_fit description_fit
 	local command_rule behavior_rule description_rule
-	local -a commands=(status install update token boot command_lib doctor dotfiles)
-	local -a behaviors=(read-only mutating mutating mutating mutating read-only read-only mutating)
+	local -a commands=(status install update token boot workspace workspaces resync command_lib doctor dotfiles)
+	local -a behaviors=(read-only mutating mutating mutating mutating mutating read-only mutating read-only read-only mutating)
 	local -a descriptions=(
 		'Show Agentbot health and installation state.'
 		'Install skills, render outputs, run Doctor, and link agentbot.'
 		'Run the repo-first update and reconcile source-owned skills.'
 		'Configure the optional shared GitHub API token.'
-		'Scaffold AGENTS.md and CLAUDE.md in a target repository.'
+		'Create/preserve AGENTS and selected outputs in a target repository.'
+		'Preview or render one registered workspace.'
+		'List locally registered workspaces.'
+		'Preview or refresh registered workspaces.'
 		'Show this authoritative command reference.'
 		'Validate skills, rendered outputs, links, and configuration.'
 		'Open the sibling Dotfiles installer when available.'

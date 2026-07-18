@@ -1,0 +1,9 @@
+version: 1
+active_profile: safe-default
+
+profiles:
+  safe-default:
+    description: Complete repository-policy exports; no MCP or executable-skill policy.
+    default_targets: [agents, claude, copilot, cursor]
+    allowed_targets: [agents, claude, copilot, cursor]
+    allow_community_skill_scripts: false

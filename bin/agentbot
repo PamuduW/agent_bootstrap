@@ -34,31 +34,40 @@ agentbot_run_token() { agentbot_die 'Agentbot token screen is not available unti
 agentbot_run_dotfiles() { agentbot_die 'Dotfiles integration is not available until the sibling integration slice.'; }
 agentbot_run_backend() { "$AGENTBOT_HOME/install.sh" "$@"; }
 
-AGENTBOT_BOOT_FLAGS=(--agents --claude)
-AGENTBOT_BOOT_SOURCES=(base/AGENTS.md base/CLAUDE.md)
-AGENTBOT_BOOT_DESTINATIONS=(AGENTS.md CLAUDE.md)
-AGENTBOT_BOOT_DEFAULTS=(true true)
+AGENTBOT_BOOT_OPTIONAL_FLAGS=(--claude --copilot --cursor)
+AGENTBOT_BOOT_DEFAULTS=(true true true)
 
 agentbot_boot() {
-  local force=false target='' selectors_seen=false arg i flag
+  local target='' profile='' selectors_seen=false arg i flag
   local -a selected=()
-  for i in "${!AGENTBOT_BOOT_FLAGS[@]}"; do selected+=("${AGENTBOT_BOOT_DEFAULTS[$i]}"); done
+  for i in "${!AGENTBOT_BOOT_OPTIONAL_FLAGS[@]}"; do selected+=("${AGENTBOT_BOOT_DEFAULTS[$i]}"); done
 
   while (($#)); do
     arg="$1"; shift
     case "$arg" in
-      --force) force=true ;;
-      --*)
+      --profile)
+        [[ $# -gt 0 ]] || { agentbot_die '--profile requires a name'; return 1; }
+        profile="$1"
+        shift
+        ;;
+      --agents|--codex|--claude|--copilot|--cursor)
         if [[ "$selectors_seen" == false ]]; then
           for i in "${!selected[@]}"; do selected[i]=false; done
           selectors_seen=true
         fi
-        local matched=false
-        for i in "${!AGENTBOT_BOOT_FLAGS[@]}"; do
-          flag="${AGENTBOT_BOOT_FLAGS[$i]}"
-          if [[ "$arg" == "$flag" ]]; then selected[i]=true; matched=true; break; fi
-        done
-        [[ "$matched" == true ]] || { agentbot_die "unknown boot selector: $arg"; return 1; }
+        if [[ "$arg" != --agents && "$arg" != --codex ]]; then
+          for i in "${!AGENTBOT_BOOT_OPTIONAL_FLAGS[@]}"; do
+            flag="${AGENTBOT_BOOT_OPTIONAL_FLAGS[$i]}"
+            if [[ "$arg" == "$flag" ]]; then
+              selected[i]=true
+              break
+            fi
+          done
+        fi
+        ;;
+      --*)
+        agentbot_die "unknown boot selector: $arg"
+        return 1
         ;;
       *)
         [[ -z "$target" ]] || { agentbot_die 'boot accepts only one TARGET directory'; return 1; }
@@ -69,26 +78,16 @@ agentbot_boot() {
   target="${target:-$PWD}"
   [[ -d "$target" && -w "$target" ]] || { agentbot_die "boot target must be a writable directory: $target"; return 1; }
 
-  local selected_count=0 src dest
+  local targets_csv=agents
   for i in "${!selected[@]}"; do
     [[ "${selected[$i]}" == true ]] || continue
-    selected_count=$((selected_count + 1))
-    src="$AGENTBOT_HOME/${AGENTBOT_BOOT_SOURCES[$i]}"
-    [[ -f "$src" ]] || { agentbot_die "missing template: $src"; return 1; }
+    targets_csv+=",${AGENTBOT_BOOT_OPTIONAL_FLAGS[$i]#--}"
   done
-  ((selected_count > 0)) || { agentbot_die 'select at least one boot output'; return 1; }
 
-  for i in "${!selected[@]}"; do
-    [[ "${selected[$i]}" == true ]] || continue
-    src="$AGENTBOT_HOME/${AGENTBOT_BOOT_SOURCES[$i]}"
-    dest="$target/${AGENTBOT_BOOT_DESTINATIONS[$i]}"
-    if [[ -e "$dest" && "$force" != true ]]; then
-      agentbot_info "skip (exists): $dest"
-    else
-      cp -- "$src" "$dest"
-      agentbot_info "wrote: $dest"
-    fi
-  done
+  local -a backend_args=(workspace --yes)
+  [[ -n "$profile" ]] && backend_args+=(--profile "$profile")
+  backend_args+=(--targets "$targets_csv" "$target")
+  agentbot_run_backend "${backend_args[@]}"
 }
 
 agentbot_usage() {
@@ -99,14 +98,19 @@ Commands:
   status                         Show Agentbot status
   install                        Run the explicit Agentbot install
   token                          Open token configuration (future seam)
-  boot [--agents] [--claude] [--force] [TARGET]
-                                 Scaffold AGENTS.md and/or CLAUDE.md
+  boot [--claude] [--copilot] [--cursor] [--codex] [--profile NAME] [TARGET]
+                                 Create/preserve AGENTS and selected outputs
+  workspace [--profile NAME] [--targets LIST] [--yes] PATH
+                                 Preview or render one workspace
+  workspaces                     List locally registered workspaces
+  resync [--all | PATH ...] [--yes]
+                                 Preview or refresh registered workspaces
   doctor                         Run Agentbot doctor
   update [--dry-run] [--yes]     Repo-first skill reconciliation update
   dotfiles                       Open Dotfiles integration (future seam)
   help                           Show this help
 
-Scaffold the default pair with: agentbot boot [TARGET]
+Set up the current directory with: agentbot boot
 EOF
 }
 
@@ -120,6 +124,7 @@ agentbot_main() {
       ;;
     status|install|doctor) agentbot_run_backend "$command" "$@" ;;
     boot) agentbot_boot "$@" ;;
+    workspace|workspaces|resync) agentbot_run_backend "$command" "$@" ;;
     token) agentbot_run_token "$@" ;;
     dotfiles) agentbot_run_dotfiles "$@" ;;
     update) agentbot_run_backend update "$@" ;;

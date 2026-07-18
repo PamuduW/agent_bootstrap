@@ -189,6 +189,8 @@ class CliTests(unittest.TestCase):
         self.assertIsInstance(paths, AgentbotPaths)
         self.assertEqual(root, paths.root)
         self.assertEqual(xdg / "agentbot", paths.config_home)
+        self.assertEqual(root / "agentos.yaml", paths.workspace_profiles_file)
+        self.assertEqual(xdg / "agentbot" / "workspaces.json", paths.workspace_state_file)
 
 
 if __name__ == "__main__":

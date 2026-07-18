@@ -23,8 +23,9 @@ test_menu_snapshot() {
 	[[ "$output" == *'=== Agentbot ==='* ]] || return 1
 	[[ "$output" == *$'\033[1m\033[38;5;208m=== Agentbot ===\033[0m'* ]] || return 1
 	[[ "$output" == *'Agentbot'* ]] || return 1
-	[[ "$output" == *'1. Check status'* && "$output" == *'9. Quit'* ]] || return 1
-	[[ "$output" == *$'9. Quit\n\n'* ]] || return 1
+	[[ "$output" == *'1. Check status'* && "$output" == *'10. Quit'* ]] || return 1
+	[[ "$output" == *$'10. Quit\n\n'* ]] || return 1
+	[[ "$output" == *'Workspaces'* ]] || return 1
 	[[ "$output" == *'Check the installed Agentbot components and baseline.'* ]] || return 1
 }
 
@@ -104,7 +105,7 @@ test_dispatch_order_and_return() (
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
 	local calls="$TEST_ROOT/menu.calls"
 	: >"$calls"
-	MENU_TEST_CHOICES=(status install update token boot command_lib doctor dotfiles quit)
+	MENU_TEST_CHOICES=(status install update token boot workspaces command_lib doctor dotfiles quit)
 	MENU_TEST_INDEX=0
 	menu_simple_run() {
 		local choice="${MENU_TEST_CHOICES[$MENU_TEST_INDEX]}"
@@ -118,11 +119,39 @@ test_dispatch_order_and_return() (
 	agentbot_menu_update() { printf 'update\n' >>"$calls"; }
 	agentbot_menu_token() { printf 'token\n' >>"$calls"; }
 	agentbot_menu_boot() { printf 'boot\n' >>"$calls"; }
+	agentbot_menu_workspaces() { printf 'workspaces\n' >>"$calls"; }
 	agentbot_menu_command_lib() { printf 'command_lib\n' >>"$calls"; }
 	agentbot_menu_doctor() { printf 'doctor\n' >>"$calls"; }
 	agentbot_menu_dotfiles() { printf 'dotfiles\n' >>"$calls"; }
 	agentbot_menu_loop
-	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\npause\nboot\npause\ncommand_lib\npause\ndoctor\npause\ndotfiles' ]]
+	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\npause\nboot\npause\nworkspaces\npause\ncommand_lib\npause\ndoctor\npause\ndotfiles' ]]
+)
+
+test_workspaces_menu_actions() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local calls="$TEST_ROOT/workspaces.calls" choice_index=0 choice
+	: >"$calls"
+	local choices=(1 2 3 4)
+	agentbot_menu_workspaces_read_choice() {
+		choice="${choices[$choice_index]}"
+		choice_index=$((choice_index + 1))
+		printf '%s\n' "$choice"
+	}
+	agentbot_menu_workspaces_confirm() { printf 'n\n'; }
+	agentbot_run_backend() { printf 'backend:%s\n' "$*" >>"$calls"; }
+	agentbot_menu_workspaces
+	[[ "$(<"$calls")" == $'backend:workspaces' ]]
+)
+
+test_workspaces_menu_apply_decline_is_safe() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local calls="$TEST_ROOT/workspaces-decline.calls"
+	: >"$calls"
+	agentbot_menu_workspaces_read_choice() { printf '3\n'; }
+	agentbot_menu_workspaces_confirm() { printf 'n\n'; }
+	agentbot_run_backend() { printf 'backend:%s\n' "$*" >>"$calls"; }
+	agentbot_menu_workspaces
+	[[ ! -s "$calls" ]]
 )
 
 test_failed_action_pauses_once() (
@@ -219,6 +248,8 @@ if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'Agentbot input hints color the interactive key tokens' test_menu_hint_colors_key_tokens
 	check 'Agentbot pauses use the shared blank-line contract' test_pause_has_global_blank_line_contract
 	check 'Agentbot menu dispatches actions in order and returns on Quit' test_dispatch_order_and_return
+	check 'Workspaces menu exposes actions and keeps apply confirmation safe' test_workspaces_menu_actions
+	check 'declined Workspaces apply never invokes --yes' test_workspaces_menu_apply_decline_is_safe
 	check 'failed Agentbot action pauses once and returns' test_failed_action_pauses_once
 	check 'failed Agentbot actions use the red failure color' test_failed_action_reports_red
 	check 'Update calls the real backend and Dotfiles remains guarded' test_update_action_calls_real_backend_and_dotfiles_stays_guarded

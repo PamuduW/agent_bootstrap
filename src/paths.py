@@ -37,6 +37,14 @@ class AgentbotPaths:
     def global_skill_lock(self) -> Path:
         return Path.home() / ".agents" / ".skill-lock.json"
 
+    @property
+    def workspace_profiles_file(self) -> Path:
+        return self.root / "agentos.yaml"
+
+    @property
+    def workspace_state_file(self) -> Path:
+        return self.config_home / "workspaces.json"
+
 
 def default_paths(root: Path | None = None) -> AgentbotPaths:
     home = Path.home()

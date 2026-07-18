@@ -355,13 +355,18 @@ Usage: ./install.sh <command> [args]
   update [--dry-run]     Repo-first skill reconciliation update
   status                 Show skills and global render status
   global                 Render global agent outputs
+  workspace [options] PATH
+                         Preview or render one workspace
+  workspaces             List locally registered workspaces
+  resync [--all | PATH ...] [--yes]
+                         Preview or refresh registered workspaces
   help                   Show this help
 
-Run agentbot boot in a repository to scaffold AGENTS.md + CLAUDE.md.
+Run agentbot boot in a repository to create/preserve AGENTS.md and selected outputs.
 With no arguments a usable controlling TTY is required for the Agentbot menu.
 
-Archived commands (see archive/README.md): workspace, all, interactive,
-import-local, remove-managed, delete-local.
+Archived commands (see archive/README.md): all, interactive, import-local,
+remove-managed, delete-local.
 
 Legacy flags (backward compatible):
   --status, --global
@@ -411,7 +416,10 @@ main() {
       status) run_slim_status "${@:2}" ;;
       esac
       ;;
-    workspace|all|interactive|import-local|remove-managed|delete-local)
+    workspace|workspaces|resync)
+      run_cli "$cmd" "${@:2}"
+      ;;
+    all|interactive|import-local|remove-managed|delete-local)
       die "${cmd} is archived — see archive/README.md"
       ;;
     -h|--help|help)

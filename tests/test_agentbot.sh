@@ -45,24 +45,43 @@ test_dispatch_matrix() (
 	agentbot_main token; [[ $? -eq 12 ]] || exit 1
 	agentbot_main dotfiles; [[ $? -eq 13 ]] || exit 1
 	agentbot_main update; [[ $? -eq 14 ]] || exit 1
+	agentbot_main workspace /tmp/project; [[ $? -eq 14 ]] || exit 1
+	agentbot_main workspaces; [[ $? -eq 14 ]] || exit 1
+	agentbot_main resync --all; [[ $? -eq 14 ]] || exit 1
 	set -e
-	[[ "$(<"$calls")" == $'menu\nbackend:status\nbackend:install\nbackend:doctor\ntoken\ndotfiles\nbackend:update' ]]
+	[[ "$(<"$calls")" == $'menu\nbackend:status\nbackend:install\nbackend:doctor\ntoken\ndotfiles\nbackend:update\nbackend:workspace /tmp/project\nbackend:workspaces\nbackend:resync --all' ]]
 )
 
 test_boot_selector_matrix() {
-	local target="$TEST_ROOT/boot-target"
+	local target="$TEST_ROOT/boot-target" config="$TEST_ROOT/boot-config"
 	mkdir -p "$target"
-	AGENTBOT_HOME="$ROOT" "$AGENTBOT" boot "$target" >/dev/null
+	XDG_CONFIG_HOME="$config" AGENTBOT_HOME="$ROOT" "$AGENTBOT" boot "$target" >/dev/null
 	[[ -f "$target/AGENTS.md" && -f "$target/CLAUDE.md" ]] || return 1
-	rm -f "$target/AGENTS.md" "$target/CLAUDE.md"
-	AGENTBOT_HOME="$ROOT" "$AGENTBOT" boot --agents "$target" >/dev/null
-	[[ -f "$target/AGENTS.md" && ! -e "$target/CLAUDE.md" ]] || return 1
-	rm -f "$target/AGENTS.md"
-	AGENTBOT_HOME="$ROOT" "$AGENTBOT" boot --claude "$target" >/dev/null
-	[[ ! -e "$target/AGENTS.md" && -f "$target/CLAUDE.md" ]] || return 1
+	[[ -f "$target/.github/copilot-instructions.md" ]] || return 1
+	[[ -f "$target/.cursor/rules/agentbot-policy.mdc" ]] || return 1
+	python3 -c 'import json, sys; state=json.load(open(sys.argv[1])); item=state["workspaces"][0]; assert item["kind"] == "directory"; assert item["targets"] == ["agents", "claude", "copilot", "cursor"]' "$config/agentbot/workspaces.json" || return 1
+
+	rm -rf "$target" "$config"
+	mkdir -p "$target"
+	XDG_CONFIG_HOME="$config" AGENTBOT_HOME="$ROOT" "$AGENTBOT" boot --claude "$target" >/dev/null
+	[[ -f "$target/AGENTS.md" && -f "$target/CLAUDE.md" ]] || return 1
+	[[ ! -e "$target/.github/copilot-instructions.md" && ! -e "$target/.cursor/rules/agentbot-policy.mdc" ]] || return 1
 	printf stale >"$target/CLAUDE.md"
-	AGENTBOT_HOME="$ROOT" "$AGENTBOT" boot --agents --claude --force "$target" >/dev/null
-	grep -Fq '@AGENTS.md' "$target/CLAUDE.md"
+	set +e
+	XDG_CONFIG_HOME="$config" AGENTBOT_HOME="$ROOT" "$AGENTBOT" boot --force "$target" >/dev/null 2>&1
+	local rc=$?
+	set -e
+	[[ "$rc" -ne 0 ]]
+}
+
+test_boot_without_target_registers_pwd() {
+	local target="$TEST_ROOT/current-dir" config="$TEST_ROOT/current-config"
+	mkdir -p "$target"
+	(
+		cd "$target"
+		XDG_CONFIG_HOME="$config" AGENTBOT_HOME="$ROOT" "$AGENTBOT" boot >/dev/null
+	)
+	[[ -f "$target/AGENTS.md" && -f "$config/agentbot/workspaces.json" ]]
 }
 
 test_boot_validation_is_atomic() {
@@ -107,7 +126,8 @@ if [[ -x "$AGENTBOT" ]]; then
 	check 'headless no-arg fails with explicit guidance' test_headless_no_arg_guidance
 	check 'symlink invocation resolves the Agentbot repository root' test_symlink_invocation_resolves_repository_root
 	check 'dispatcher routes exact backend and future seams' test_dispatch_matrix
-	check 'boot selectors produce default agents claude and combined outputs' test_boot_selector_matrix
+	check 'boot selectors register folders and keep AGENTS canonical' test_boot_selector_matrix
+	check 'boot without a target registers the current directory' test_boot_without_target_registers_pwd
 	check 'boot rejects invalid inputs before partial writes' test_boot_validation_is_atomic
 	check 'explicit install links agentbot and cleans owned old link' test_install_link_and_owned_cleanup
 	check 'foreign and regular old paths are preserved' test_foreign_old_paths_are_preserved

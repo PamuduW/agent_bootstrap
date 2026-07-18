@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import textwrap
+from pathlib import Path
 
 BOLD = "\033[1m"
 DIM = "\033[2m"
@@ -71,7 +72,7 @@ def color_result(result: str) -> str:
     key = result.strip().lower()
     if key in {"ok", "installed", "configured", "linked", "up to date", "current", "applied"}:
         return _c(result, GREEN)
-    if key in {"missing", "failed", "error"}:
+    if key in {"missing", "failed", "error", "conflict"}:
         return _c(result, RED)
     if key.startswith("skipped") or key in {
         "check",
@@ -333,3 +334,62 @@ def print_bridge_summary(*, linked: int, skipped: int, updated: int = 0) -> None
     if skipped:
         parts.append(f"{skipped} skipped")
     print(f"  {_c('Claude skills bridge: ' + ', '.join(parts) + '.', CYAN)}")
+
+
+def print_workspace_report(result) -> None:
+    from .workspace_service import WorkspaceResult
+
+    if not isinstance(result, WorkspaceResult):
+        raise TypeError("expected WorkspaceResult")
+    print_header("Workspace", "Agentbot › Workspace")
+    print_section_block("── Render ──")
+    rows: list[tuple[str, str, str]] = []
+    for action in result.actions:
+        rows.append((action.relative_path, action.detail, action.kind))
+    if not rows:
+        rows.append((str(result.path), result.message, result.status))
+    print_table(rows, show_header=False, wrap_details=True)
+    print()
+    print(f"  {result.message}")
+
+
+def print_workspace_resync_report(report) -> None:
+    print_header("Workspace Resync", "Agentbot › Workspace Resync")
+    print_section_block("── Workspaces ──")
+    rows: list[tuple[str, str, str]] = []
+    for result in report.results:
+        if result.actions:
+            for action in result.actions:
+                rows.append(
+                    (
+                        f"{result.path}:{action.relative_path}",
+                        action.detail,
+                        action.kind,
+                    )
+                )
+        else:
+            rows.append((str(result.path), result.message, result.status))
+    if rows:
+        print_table(rows, show_header=False, wrap_details=True)
+    else:
+        print("  No registered workspaces.")
+    print()
+
+
+def print_workspace_list(records) -> None:
+    print_header("Workspaces", "Agentbot › Workspaces")
+    print_section_block("── Registered ──")
+    if not records:
+        print("  No registered workspaces.")
+        print()
+        return
+    rows: list[tuple[str, str, str]] = []
+    for record in records:
+        exists = Path(record.path).is_dir()
+        detail = (
+            f"{record.kind}, {record.policy_mode}, profile={record.profile}, "
+            f"targets={','.join(record.targets)}"
+        )
+        rows.append((record.path, detail, "ok" if exists and record.enabled else "missing"))
+    print_table(rows, show_header=False, wrap_details=True)
+    print()

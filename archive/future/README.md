@@ -1,8 +1,9 @@
 # Deferred AgentOS features
 
-Delivered in the slim bootstrap / Phase 1: curated skills install/update,
-global AGENTS.md outputs, `agentbot boot`, the standalone Agentbot menu, and
-the Dotfiles sibling bridge.
+Delivered in the slim bootstrap / Phases 0–2: curated skills install/update,
+global AGENTS.md outputs, profile-driven `agentbot boot` workspace rendering
+and registration, the standalone Agentbot menu, and the Dotfiles sibling
+bridge.
 
 Still deferred:
 

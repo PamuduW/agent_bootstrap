@@ -16,11 +16,14 @@ from .ui import (
     print_skills_report,
     print_skills_update_report,
     print_status_summary,
+    print_workspace_list,
+    print_workspace_report,
+    print_workspace_resync_report,
 )
+from .workspace_render import WORKSPACE_TARGETS
 
 ARCHIVED_COMMANDS = frozenset(
     {
-        "workspace",
         "all",
         "interactive",
         "import-local",
@@ -63,6 +66,39 @@ def main() -> int:
                 print(f"  changed: {path}")
             print_reconciliation_report(result)
             return 0 if result.status in {"applied", "applied-with-local-changes", "preview", "confirmation_required"} else 1
+        if command == "workspace":
+            targets = parse_workspace_targets(args.targets)
+            if args.yes:
+                result = service.apply_workspace(
+                    Path(args.path),
+                    profile=args.profile,
+                    targets=targets,
+                    register=True,
+                )
+            else:
+                result = service.preview_workspace(
+                    Path(args.path),
+                    profile=args.profile,
+                    targets=targets,
+                )
+            print_workspace_report(result)
+            return 1 if result.status in {"conflict", "failed"} else 0
+        if command == "workspaces":
+            print_workspace_list(service.list_workspaces())
+            return 0
+        if command == "resync":
+            if args.yes and args.dry_run:
+                raise ValueError("resync cannot use --yes and --dry-run together")
+            if args.all and args.paths:
+                raise ValueError("resync cannot combine --all with explicit PATH values")
+            if not args.all and not args.paths:
+                raise ValueError("resync requires --all or at least one PATH")
+            report = service.resync_workspaces(
+                apply=bool(args.yes),
+                paths=() if args.all else tuple(Path(path) for path in args.paths),
+            )
+            print_workspace_resync_report(report)
+            return 1 if any(item.status in {"conflict", "failed"} for item in report.results) else 0
         if command == "bootstrap":
             return run_bootstrap_command(service, paths)
         if command == "skills":
@@ -91,6 +127,24 @@ def build_parser() -> argparse.ArgumentParser:
     update.add_argument("--dry-run", action="store_true", help="Preview reconciliation without writing")
     update.add_argument("--yes", dest="confirm", action="store_true", help="Confirm source-owned changes")
 
+    workspace = subparsers.add_parser("workspace", help="Preview or render one workspace")
+    workspace.add_argument("--profile", help="Workspace profile name")
+    workspace.add_argument(
+        "--targets",
+        help="Comma-separated outputs: agents,claude,copilot,cursor (codex aliases agents)",
+    )
+    workspace.add_argument("--yes", action="store_true", help="Apply and register the render")
+    workspace.add_argument("path", help="Workspace directory")
+
+    subparsers.add_parser("workspaces", help="List locally registered workspaces")
+
+    resync = subparsers.add_parser("resync", help="Preview or refresh registered workspaces")
+    resync_group = resync.add_mutually_exclusive_group()
+    resync_group.add_argument("--yes", action="store_true", help="Apply Agentbot-managed changes")
+    resync_group.add_argument("--dry-run", action="store_true", help="Preview without writing")
+    resync.add_argument("--all", action="store_true", help="Include all enabled registered workspaces")
+    resync.add_argument("paths", nargs="*", help="Explicit registered workspace paths")
+
     skills = subparsers.add_parser("skills", help="Install and manage curated skills")
     skills_sub = skills.add_subparsers(dest="skills_command", required=True)
     skills_sub.add_parser("install", help="Install skills from skills.sources.yaml")
@@ -106,11 +160,28 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _archived_command_error(command: str) -> int:
     print(
-        f"Error: '{command}' is archived. See archive/README.md for workspace render, "
-        "catalog, MCP, and interactive control-plane features.",
+        f"Error: '{command}' is archived. See archive/README.md for catalog, "
+        "MCP, and interactive control-plane features.",
         file=sys.stderr,
     )
     return 1
+
+
+def parse_workspace_targets(value: str | None) -> tuple[str, ...] | None:
+    if value is None:
+        return None
+    raw_targets = tuple(part.strip() for part in value.split(",") if part.strip())
+    if not raw_targets:
+        raise ValueError("--targets must name at least one target")
+    targets: list[str] = []
+    for raw_target in raw_targets:
+        target = "agents" if raw_target == "codex" else raw_target
+        if target not in WORKSPACE_TARGETS:
+            raise ValueError(f"unsupported workspace target: {raw_target}")
+        if target in targets:
+            raise ValueError(f"--targets contains duplicates: {target}")
+        targets.append(target)
+    return ("agents",) + tuple(target for target in targets if target != "agents")
 
 
 def handle_skills_command(service: AgentbotService, skills_command: str) -> int:

@@ -4,18 +4,18 @@ Personal AI-agent tooling installer. The Git repository and clone directory rema
 `agent_bootstrap`; the installed product and command are Agentbot / `agentbot`.
 
 - **Skills** — curated upstreams in [`skills.sources.yaml`](skills.sources.yaml), installed globally via [`npx skills`](https://www.npmjs.com/package/skills)
-- **agentbot boot** — scaffold `AGENTS.md` + `CLAUDE.md` in any git repo from [`base/`](base/)
+- **agentbot boot** — register a folder or Git repo and render `AGENTS.md` plus selected agent surfaces from [`base/`](base/)
 - **Global baseline** — machine-level policy in [`global/AGENTS.md`](global/AGENTS.md), rendered to agent home dirs
 
 Deferred features and the phased expansion plan live in [`archive/`](archive/README.md) ([stuff3.md](archive/docs/stuff3.md)).
 
 ## Current roadmap status
 
-Phase 0 and Phase 1 are complete. The live Phase 1 surface is the standalone
-Agentbot menu, the `agentbot boot` repository scaffold, global baseline
-rendering, curated skills management, and the Dotfiles sibling bridge. Phase 2
-is the next planned expansion: profile-driven workspace rendering and tracked
-workspace re-application. The detailed, implementation-aware roadmap is
+Phase 0, Phase 1, and the Phase 2 workspace pipeline are complete. The live
+surface includes the standalone Agentbot menu, profile-driven workspace
+rendering, local workspace registration/resync, global baseline rendering,
+curated skills management, and the Dotfiles sibling bridge. The detailed,
+implementation-aware roadmap is
 [`archive/docs/stuff3.md`](archive/docs/stuff3.md).
 
 The supported menu entrypoints are `./install.sh` on a controlling TTY and
@@ -98,17 +98,39 @@ GitHub skill sources are shallow-cloned locally with a two-minute bound before `
 
 A folder copied into `~/.agents/skills/` is a valid **manual local skill**. `./install.sh global` (and both skill install/update commands) links every valid local skill into Codex and Claude without replacing conflicting user-owned links. Manual skills remain distinct from managed installs: `doctor` and `status` report them as available-but-not-reproducible until their repository and selected skill names are added to `skills.sources.yaml` and installed through `npx skills`, which records them in the global lock.
 
-## Repository scaffolding
+## Workspace setup and repository scaffolding
 
-Scaffold base agent files in any git repo:
+Set up the current directory. With no selectors, Agentbot creates or preserves
+the canonical `AGENTS.md`, `CLAUDE.md`, Copilot instructions, and the Cursor
+rule, then records the canonical folder or Git root in local XDG state:
 
 ```bash
 cd ~/Dev/my-project
-agentbot boot                       # AGENTS.md + CLAUDE.md in the current directory
-agentbot boot --agents TARGET       # AGENTS.md only
-agentbot boot --claude TARGET       # CLAUDE.md only
-agentbot boot --force TARGET        # overwrite selected existing files
+agentbot boot
+agentbot boot --claude             # AGENTS.md + CLAUDE.md
+agentbot boot --copilot            # AGENTS.md + Copilot instructions
+agentbot boot --cursor             # AGENTS.md + .cursor/rules/agentbot-policy.mdc
+agentbot boot --codex              # AGENTS.md only; Codex consumes AGENTS.md
 ```
+
+All write-capable workspace commands preview by default; `--yes` applies a
+render. Existing unmarked compatibility files are reported as conflicts.
+An existing unmarked `AGENTS.md` is preserved as custom policy. The project
+owned `## Project` section remains outside Agentbot's managed baseline block.
+
+```bash
+agentbot workspace ~/Dev/existing-project
+agentbot workspace --yes ~/Dev/existing-project
+agentbot workspaces
+agentbot resync --dry-run --all
+agentbot resync --yes --all
+agentbot resync --yes ~/Dev/existing-project
+```
+
+Workspace records are stored privately at
+`${XDG_CONFIG_HOME:-$HOME/.config}/agentbot/workspaces.json`; they are not
+written into projects or tracked by Git. Cursor's generated rule is
+`.cursor/rules/agentbot-policy.mdc`, not a skill installer.
 
 Templates: [`base/AGENTS.md`](base/AGENTS.md), [`base/CLAUDE.md`](base/CLAUDE.md). Machine baseline stays in `global/AGENTS.md`.
 
@@ -121,6 +143,9 @@ Re-link after moving the clone by running `./install.sh install` explicitly.
 ./install.sh status     # skills count + global baseline status
 ./install.sh doctor     # validate manifest, locks, and managed Codex skill links
 ./install.sh update --dry-run # preview source-owned skill changes
+./install.sh workspace ~/Dev/existing-project
+./install.sh workspaces
+./install.sh resync --dry-run --all
 ```
 
 The public Agentbot command matrix is:
@@ -131,7 +156,10 @@ agentbot status
 agentbot install
 agentbot update [--dry-run] [--yes]
 agentbot token
-agentbot boot [--agents] [--claude] [--force] [target]
+agentbot boot [--claude] [--copilot] [--cursor] [--codex] [--profile NAME] [target]
+agentbot workspace [--profile NAME] [--targets LIST] [--yes] PATH
+agentbot workspaces
+agentbot resync [--all | PATH ...] [--yes]
 agentbot doctor
 agentbot dotfiles
 agentbot help
@@ -158,7 +186,8 @@ agent_bootstrap/
 ├── skills.sources.yaml
 ├── skills-lock.json
 ├── bin/                  # agentbot, skills-install, claude-skills-bridge
-├── base/                 # agentbot boot templates
+├── agentos.yaml          # safe-default workspace profile
+├── base/                 # canonical Agentbot policy templates
 ├── global/AGENTS.md      # machine-level baseline (authored)
 ├── src/                  # slim Python CLI (cli.py, service.py, …)
 ├── tests/

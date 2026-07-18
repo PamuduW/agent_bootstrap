@@ -1,8 +1,9 @@
 These seven pieces are meant to become **one pipeline**: you curate once in
-`agent_bootstrap`, then **re-apply** to every machine and every repo when
-something changes. Phase 1 now provides the live manual foundation (global
-skills, `base/` templates, `agentbot boot`, and the standalone Agentbot menu).
-The archived half is the future **render automation + memory across repos**.
+`agent_bootstrap`, then preview or re-apply selected workspace policy when
+something changes. Phases 0–2 now provide the live foundation: global skills,
+`base/` templates, the standalone Agentbot menu, profile-driven rendering, and
+private local workspace registration/resync. Catalog/MCP and durable memory
+remain deferred.
 
 ---
 
@@ -17,15 +18,16 @@ The old design split files into two kinds:
 
 Rule from the harness doc: **`AGENTS.md` is the one authored instruction file.** Everything else for Copilot/Cursor/Claude was supposed to **point at or merge** that text — not drift into separate rule sets.
 
-**Your routine today (slim):**
+**Your routine today:**
 
 ```text
 New repo → agentbot boot → edit ## Project in AGENTS.md → git commit
 Skills change → cd agent_bootstrap → ./install.sh skills install
-Global baseline change → edit global/AGENTS.md → copy/symlink manually or install.sh global
+Workspace policy change → agentbot resync --dry-run --all → agentbot resync --yes --all
+Global machine baseline change → edit global/AGENTS.md → ./install.sh global
 ```
 
-**Your routine with the full stack restored:**
+**The deferred catalog routine:**
 
 ```text
 Change catalog or global/AGENTS.md once
@@ -59,15 +61,18 @@ Packages had states:
 
 ## 2. `agentos.yaml` profiles
 
-**Intended to work:** Declarative map of **who gets what**. The archived `safe-default` profile says: global skills only, no executable scripts from community packs, read-first MCP.
+**Live Phase 2 profile:** `agentos.yaml` is a deliberately small allowlist for
+workspace output targets. `safe-default` selects `AGENTS.md`, Claude, Copilot,
+and Cursor and rejects executable community-skill policy or arbitrary output
+paths. Catalog/MCP profile filtering is still deferred.
 
-`export_targets` defines paths per surface:
+The live output paths are fixed per surface:
 
-- Codex → `~/.codex/AGENTS.md` from `global/AGENTS.md`  
-- Claude → same content to `CLAUDE.md` + `AGENTS.md`  
-- Cursor → global `mcp.json` + generated workspace rules  
+- Codex / agents → canonical project `AGENTS.md`
+- Claude → generated `CLAUDE.md` pointer to `AGENTS.md`
+- Cursor → `.cursor/rules/agentbot-policy.mdc`
 - Copilot → `.github/copilot-instructions.md`  
-- Repo → **merged** outputs (global + repo overlay)
+- Project policy → managed `AGENTS.md` baseline plus `## Project` overlay
 
 **Day-to-day effect:** You pick a profile (`safe-default` vs a future `full-dev` with more MCP) instead of mentally tracking “does Copilot get the same text as Codex?” Profiles are the **policy layer** — conservative vs permissive.
 
@@ -79,25 +84,27 @@ Packages had states:
 
 ## 3. Workspace render
 
-**Intended to work:** Given a git repo path, `render.py` would:
+**Live behavior:** `agentbot workspace PATH` previews a canonical folder or Git
+root, and `agentbot workspace --yes PATH` renders and registers it. The default
+profile writes `AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md`, and
+`.cursor/rules/agentbot-policy.mdc`.
 
-1. Require a **real** `AGENTS.md` in the repo (authored by you, not a generated stub)  
-2. **Merge** `global/AGENTS.md` + repo `## Project` overlay into generated files  
-3. Write Copilot + Cursor + Claude compatibility files  
-4. Add generated paths to `.gitignore` so you don’t commit disposable outputs  
-5. Optionally write `.cursor/rules/bootstrap-skills.mdc` listing enabled skill paths  
-
-Merge order was explicit: generated header → full global baseline → repo-specific section.
+`base/AGENTS.md` is the shared project baseline. A managed `AGENTS.md` keeps
+that baseline between explicit Agentbot markers and preserves the repository's
+`## Project` section. An unmarked existing `AGENTS.md` is custom and is never
+overwritten. Existing unowned compatibility files are reported as conflicts.
 
 **Day-to-day effect:**
 
-- **Open any repo in Cursor/Copilot/Claude** — each tool sees the **same** global habits (WSL, skill pick list, interaction rules) **plus** that repo’s `## Project`, without you maintaining four parallel files.  
-- **Edit one file** (`AGENTS.md`) when project context changes; re-run render instead of updating Copilot and Cursor separately.
+- **Open any repo in Cursor/Copilot/Claude** — each tool sees the same resolved
+  canonical policy plus that repo's `## Project`, without four authored policy
+  files.
+- **Edit one file** (`AGENTS.md`) when project context changes; preview and
+  resync instead of updating compatibility files separately.
 
-**Without it:** `agentbot boot` copies the static `base/AGENTS.md` and
-`base/CLAUDE.md` once. Global updates in `agent_bootstrap/global/AGENTS.md` do
-**not** automatically flow into old repos unless you re-copy or edit by hand.
-`CLAUDE.md` is currently a static pointer, not a merged workspace view.
+**Without it:** each project would require manual compatibility-file updates.
+The renderer deliberately does not manage MCP files, skills, Git staging, or
+commits.
 
 **When you’d miss it:** When you have 5+ active repos and keep tweaking global agent behavior — you’ll feel sync pain.
 
@@ -120,25 +127,25 @@ Merge order was explicit: generated header → full global baseline → repo-spe
 
 ## 5. Agentbot workspace exports (Phase 2)
 
-**Intended to work:** One command in a new repo:
+**Live:** One command in a new repo:
 
 ```text
 agentbot boot
-  → AGENTS.md + CLAUDE.md (minimal, same as today)
-  → Phase 2: generated Copilot/Cursor compatibility files
+  → AGENTS.md + CLAUDE.md + Copilot + Cursor compatibility files
   → Phase 3: filtered MCP bundle
 ```
 
-Idempotent: skip existing unless `--force`.
+The default creates all four policy surfaces. Optional selectors narrow the
+compatibility outputs but never remove the canonical `AGENTS.md`; `--codex`
+means the same canonical target as `--agents`.
 
 **Day-to-day effect:** Clone repo → `agentbot boot` → edit the authored
-`AGENTS.md` → run the Phase 2 workspace render when compatibility files are
-needed. Copilot and Cursor then receive generated views of the same policy,
-instead of becoming separate instruction sources.
+`AGENTS.md` → run `agentbot resync --dry-run --all` and then apply when ready.
+Copilot and Cursor receive generated views of the same policy, instead of
+becoming separate instruction sources.
 
-**Today:** `agentbot boot` intentionally performs only the stable Phase 1
-scaffold. Copilot/Cursor workspace exports and MCP filtering are deliberately
-deferred to Phases 2–3.
+**Current boundary:** MCP filtering remains deferred to Phase 3. Workspace
+state is private local operator state, not a file in the repository.
 
 **When you’d miss it:** If you actually use Copilot instructions and Cursor rules daily and don’t want to set them up per repo.
 
@@ -146,19 +153,26 @@ deferred to Phases 2–3.
 
 ## 6. Tracked workspaces
 
-**Intended to work:** When you run `install.sh workspace ~/Dev/my-app` or `install.sh all ~/Dev`, the system:
+**Live behavior:** When you run `agentbot workspace --yes ~/Dev/my-app` or
+`agentbot boot` in a project, the system:
 
-- Records paths in `state/operator_state.json` (local, gitignored)  
-- Renders that repo  
-- Later: `install.sh all` or interactive **Apply** re-renders **every tracked repo** after you change global baseline, catalog, or MCP master list  
+- Records the canonical Git root or plain folder in the private local
+  `${XDG_CONFIG_HOME:-$HOME/.config}/agentbot/workspaces.json`.
+- Renders only the selected Agentbot-owned instruction surfaces.
+- Later: `agentbot resync --dry-run --all` previews every enabled record and
+  `agentbot resync --yes --all` applies them independently.
 
-Discovery could also scan for existing artifacts and Cursor cache.
+The system does not discover arbitrary folders, inspect Cursor caches, delete
+missing records, or silently convert a recorded Git workspace to a directory.
 
 **Day-to-day effect:** The “render everything I care about” button.
 
-Example: You add a skill to `global/AGENTS.md` and enable a new MCP package. One Apply → all tracked repos get updated Copilot/Cursor files without visiting each project.
+Example: You update `base/AGENTS.md`. One preview and resync updates managed
+baseline blocks and generated compatibility files without visiting each
+project.
 
-**Without it:** Each repo is a island. Global change = you remember which repos need attention.
+**Without it:** Each repo is an island. A policy change would require you to
+remember which repos need attention.
 
 **When you’d miss it:** Same as workspace render pain, but amplified — it’s the **batch** version.
 
@@ -196,18 +210,17 @@ Workflow: agents **draft** updates (“you always use conventional commits” �
 ## How they chain together (one story)
 
 ```text
-You enable "gitlab" + "deploy-on-aws" in catalog
+Edit base/AGENTS.md or a repo's ## Project section
         ↓
-agentos.yaml safe-default says what surfaces get exports
+agentbot boot or agentbot workspace --yes
         ↓
-MCP render filters mcp.json to GitLab + AWS keys only
+Managed AGENTS.md block + selected Claude/Copilot/Cursor views
         ↓
-Workspace render merges global/AGENTS.md + repo ## Project
-        → Copilot, Cursor rules, CLAUDE.md
+Private local workspaces.json records the opted-in folder or Git root
         ↓
-Tracked workspaces re-run that for ~/Dev/* in one Apply
+agentbot resync --dry-run --all → agentbot resync --yes --all
         ↓
-Obsidian vault holds cross-cutting memory agents don't duplicate into every AGENTS.md
+Future Phase 3 MCP exports and Phase 4 memory remain separate extensions
 ```
 
 ---
@@ -216,13 +229,13 @@ Obsidian vault holds cross-cutting memory agents don't duplicate into every AGEN
 
 | Area | Slim (now) | Full deferred stack |
 |------|------------|---------------------|
-| **New repo** | `agentbot boot`, edit `AGENTS.md`, maybe skills install | Same + generated Copilot/Cursor/MCP views; tracked for future updates |
-| **Global habit change** | Edit `global/AGENTS.md`; manually propagate | One Apply → all tracked repos + global homes |
-| **Tool parity** | Strong for Codex/Claude via `AGENTS.md`; Copilot/Cursor more manual | All four surfaces stay aligned from one canonical file |
+| **New repo** | `agentbot boot`, edit `AGENTS.md`, optionally select compatibility outputs | Same Phase 2 surfaces; catalog/MCP remains deferred |
+| **Workspace policy change** | Preview and resync enabled local records | Future catalog/MCP extensions may add filtered exports |
+| **Tool parity** | All four policy surfaces derive from canonical `AGENTS.md` | Additional adapters only when explicitly justified |
 | **MCP** | Cursor UI / hand config | Package-driven, filtered, reproducible |
 | **Memory** | Per-repo `## Project` + chat | Durable vault for preferences/decisions; small injected slices |
 | **Cognitive load** | Lower system complexity, more manual sync | Higher setup once, less ongoing drift |
-| **Risk** | You forget to update old repos | Generated files + gitignore; less duplicate editing |
+| **Risk** | You forget to resync an old repo | Private registration plus preview/apply makes the boundary visible |
 
 ---
 

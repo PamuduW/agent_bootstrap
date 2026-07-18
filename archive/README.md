@@ -8,7 +8,7 @@ This directory holds **pre-slim `agent_bootstrap` assets** moved during the 2026
 |------|------|
 | [stuff.md](./docs/stuff.md) | Deferred capability map + restore pointers |
 | [stuff2.md](./docs/stuff2.md) | Day-to-day impact of deferred features |
-| [stuff3.md](./docs/stuff3.md) | **Implementation phases** (Phase 0–1 complete; Phase 2 next) |
+| [stuff3.md](./docs/stuff3.md) | **Implementation phases** (Phase 0–2 complete; Phases 3–4 deferred) |
 
 **Docs-only policy (2026-07-10):** Python modules and tests were removed from `archive/`; recover them from **git history** when restoring. Config (JSON/YAML) and markdown stay here.
 
@@ -55,7 +55,7 @@ Moved after CLI/service/render surgery:
 
 - `src/render.py` — `render_global_outputs` only (no MCP write from catalog)
 - `src/ui.py` — print helpers only (no interactive menus)
-- `bin/agentbot` — live unified scaffold; workspace render remains deferred
+- `bin/agentbot` — live unified scaffold and Phase 2 workspace entrypoint
 
 ## Pack → bootstrap matrix
 
@@ -70,26 +70,26 @@ Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 
 | Global `AGENTS.md` render | **Live** | `global/AGENTS.md`, `src/render.py` |
 | Claude skills bridge | **Live** | `bin/claude-skills-bridge.sh` |
 | Package catalog + MCP provenance | **Archived** | `archive/catalog/`, `archive/mcp/` |
-| Workspace render + templates | **Archived** | `archive/templates/`; render code in **git** |
-| Interactive Apply / tracked workspaces | **Archived** | ui/state/discovery in **git** |
-| `agentos.yaml` profiles | **Archived** | `archive/agentos.yaml` |
+| Workspace render + templates | **Live (Phase 2)** | `agentos.yaml`, `src/workspace_render.py`, `base/` |
+| Local registration / tracked workspaces | **Live (Phase 2)** | `src/workspace_state.py`, `src/workspace_service.py` |
+| `agentos.yaml` profiles | **Live (Phase 2)** | `agentos.yaml`, `src/workspace_profiles.py` |
 | Obsidian memory vault | **Archived** | `archive/memory-vault/` |
 | Deferred AgentOS / harness phases | **Archived** | `archive/future/`, `archive/docs/` |
 | `graphify` skill source | **Disabled** | `skills.sources.yaml` (`enabled: false`) |
 | `obsidian-memory` skill source | **Disabled** | `skills.sources.yaml` (`enabled: false`) |
 
-## Deferred use cases
+## Archived and deferred use cases
 
 | Use case | Archive / git dependency |
 |----------|--------------------------|
-| Full bootstrap / interactive Apply | `ui.py`, `state.py` — **git**; restore CLI commands |
-| Workspace render | `templates/` + full `render.py` — **git** |
-| Render all tracked workspaces | `discovery.py`, `state.py` — **git** |
+| Full bootstrap / catalog Apply | `ui.py`, `state.py` — **git**; restore only with a new Phase 3 design |
+| Workspace render | **Live Phase 2**: `src/workspace_render.py`, `base/`, `agentos.yaml` |
+| Render all registered workspaces | **Live Phase 2**: `src/workspace_state.py`, `src/workspace_service.py` |
 | Package catalog / import-local | `archive/catalog/` |
 | MCP filter / render into `.cursor/mcp.json` | `archive/mcp/`, `catalog/packages.json` |
 | Memory vault workflows | `archive/memory-vault/` |
-| Agentbot workspace exports (Copilot + Cursor rules) | catalog + full render — **git**; planned Phase 2 |
-| `agentos.yaml` profiles | `archive/agentos.yaml` |
+| Agentbot workspace exports (Copilot + Cursor rules) | `src/workspace_render.py` — live Phase 2 |
+| `agentos.yaml` profiles | `agentos.yaml` |
 
 ## Slim core (stays at repo root)
 

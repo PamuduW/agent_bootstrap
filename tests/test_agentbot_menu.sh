@@ -94,6 +94,22 @@ test_menu_hint_colors_key_tokens() (
 	[[ "$output" == *$'\033[36mq'* ]] || return 1
 )
 
+test_workspaces_menu_uses_scrollable_submenu_contract() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local capture="$TEST_ROOT/workspaces-menu-contract.calls"
+	: >"$capture"
+	menu_simple_run() {
+		printf '%s|%s|%s|%s\n' "$MENU_SIMPLE_TITLE" "$MENU_SIMPLE_BREADCRUMB" \
+			"${MENU_SIMPLE_LABELS[*]}" "${MENU_SIMPLE_KEYS[*]}" >"$capture"
+		MENU_SIMPLE_RESULT=''
+		return 1
+	}
+	ui_clear() { :; }
+	agentbot_menu_workspaces
+	[[ "$(<"$capture")" == 'Workspaces|Agentbot › Workspaces|List recorded workspaces Preview resync (all) Apply resync (all) Set up current repository|list preview apply setup' ]] || return 1
+	[[ "$MENU_SIMPLE_TITLE" == Agentbot && "$MENU_SIMPLE_BREADCRUMB" == Agentbot ]]
+)
+
 test_pause_has_global_blank_line_contract() (
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
 	local body
@@ -124,34 +140,52 @@ test_dispatch_order_and_return() (
 	agentbot_menu_doctor() { printf 'doctor\n' >>"$calls"; }
 	agentbot_menu_dotfiles() { printf 'dotfiles\n' >>"$calls"; }
 	agentbot_menu_loop
-	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\npause\nboot\npause\nworkspaces\npause\ncommand_lib\npause\ndoctor\npause\ndotfiles' ]]
+	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\npause\nboot\npause\nworkspaces\ncommand_lib\npause\ndoctor\npause\ndotfiles' ]]
 )
 
 test_workspaces_menu_actions() (
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
 	local calls="$TEST_ROOT/workspaces.calls" choice_index=0 choice
 	: >"$calls"
-	local choices=(1 2 3 4)
-	agentbot_menu_workspaces_read_choice() {
+	local choices=(list preview apply setup back)
+	menu_simple_run() {
 		choice="${choices[$choice_index]}"
 		choice_index=$((choice_index + 1))
-		printf '%s\n' "$choice"
+		if [[ "$choice" == back ]]; then
+			MENU_SIMPLE_RESULT=''
+			return 1
+		fi
+		MENU_SIMPLE_RESULT="$choice"
+		return 0
 	}
-	agentbot_menu_workspaces_confirm() { printf 'n\n'; }
+	ui_clear() { :; }
+	ui_pause() { printf 'pause\n' >>"$calls"; }
+	agentbot_menu_workspaces_confirm() { return 0; }
 	agentbot_run_backend() { printf 'backend:%s\n' "$*" >>"$calls"; }
 	agentbot_menu_workspaces
-	[[ "$(<"$calls")" == $'backend:workspaces' ]]
+	[[ "$(<"$calls")" == $'backend:workspaces\npause\nbackend:resync --all\npause\nbackend:resync --all --yes\npause\nbackend:workspace --yes '"$PWD"$'\npause' ]]
 )
 
 test_workspaces_menu_apply_decline_is_safe() (
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
 	local calls="$TEST_ROOT/workspaces-decline.calls"
 	: >"$calls"
-	agentbot_menu_workspaces_read_choice() { printf '3\n'; }
-	agentbot_menu_workspaces_confirm() { printf 'n\n'; }
+	local choice_index=0
+	menu_simple_run() {
+		if ((choice_index == 0)); then
+			choice_index=1
+			MENU_SIMPLE_RESULT='apply'
+			return 0
+		fi
+		MENU_SIMPLE_RESULT=''
+		return 1
+	}
+	ui_clear() { :; }
+	ui_pause() { printf 'pause\n' >>"$calls"; }
+	agentbot_menu_workspaces_confirm() { return 1; }
 	agentbot_run_backend() { printf 'backend:%s\n' "$*" >>"$calls"; }
 	agentbot_menu_workspaces
-	[[ ! -s "$calls" ]]
+	[[ "$(<"$calls")" == 'pause' ]]
 )
 
 test_failed_action_pauses_once() (
@@ -246,6 +280,7 @@ if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'Agentbot menu exports TUI render mode to backend reports' test_menu_exports_tui_render_mode_to_backend
 	check 'Agentbot Command Lib matches the colored table contract' test_command_lib_matches_colored_table_contract
 	check 'Agentbot input hints color the interactive key tokens' test_menu_hint_colors_key_tokens
+	check 'Workspaces uses the scrollable submenu title and breadcrumb contract' test_workspaces_menu_uses_scrollable_submenu_contract
 	check 'Agentbot pauses use the shared blank-line contract' test_pause_has_global_blank_line_contract
 	check 'Agentbot menu dispatches actions in order and returns on Quit' test_dispatch_order_and_return
 	check 'Workspaces menu exposes actions and keeps apply confirmation safe' test_workspaces_menu_actions

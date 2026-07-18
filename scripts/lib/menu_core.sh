@@ -92,9 +92,10 @@ agentbot_menu_redraw_up() {
 
 agentbot_menu_draw() {
 	local cursor="$1" cols="${2:-80}" i prefix row desc
+	local title="${MENU_SIMPLE_TITLE:-Agentbot}" breadcrumb="${MENU_SIMPLE_BREADCRUMB:-Agentbot}"
 
-	printf '  %s%s%s\e[K\n' "$C_BOLD$C_ORANGE" "$(agentbot_menu_fit '=== Agentbot ===' "$cols")" "$C_RESET"
-	printf '  %s%s%s\e[K\n\e[K\n' "$C_DIM" "$(agentbot_menu_fit 'Agentbot' "$cols")" "$C_RESET"
+	printf '  %s%s%s\e[K\n' "$C_BOLD$C_ORANGE" "$(agentbot_menu_fit "=== ${title} ===" "$cols")" "$C_RESET"
+	printf '  %s%s%s\e[K\n\e[K\n' "$C_DIM" "$(agentbot_menu_fit "$breadcrumb" "$cols")" "$C_RESET"
 	printf '  %s%s%s\e[K\n\e[K\n' "$C_DIM" "$(agentbot_menu_color_input_hint "$(agentbot_menu_fit 'Up/Down navigate   Enter confirm   q back' "$cols")")" "$C_RESET"
 
 	for i in "${!MENU_SIMPLE_LABELS[@]}"; do

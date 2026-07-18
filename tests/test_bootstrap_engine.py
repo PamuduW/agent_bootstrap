@@ -187,6 +187,44 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         self.assertTrue(any("alpha-skill" in message and "missing" in message for message in messages))
         self.assertTrue(any("manual-skill" in message and "manual" in message for message in messages))
 
+    def test_doctor_does_not_reclassify_declared_skill_missing_from_lock_as_manual(self) -> None:
+        from src.service import AgentbotService
+
+        paths = self._paths()
+        (self.root / "skills.sources.yaml").write_text(
+            """\
+version: 1
+agents: [cursor]
+scope: global
+sources:
+  - id: superpowers
+    repo: obra/superpowers
+    skills:
+      - brainstorming
+""",
+            encoding="utf-8",
+        )
+        declared = self.agents_home / "brainstorming"
+        declared.mkdir()
+        (declared / "SKILL.md").write_text("# brainstorming\n", encoding="utf-8")
+        global_lock = self.root / "home" / ".agents" / ".skill-lock.json"
+        global_lock.parent.mkdir(parents=True, exist_ok=True)
+        global_lock.write_text(json.dumps({"version": 3, "skills": {}}), encoding="utf-8")
+        service = AgentbotService(paths)
+
+        with mock.patch.object(
+            type(paths),
+            "agents_skills_home",
+            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / "skills"),
+        ), mock.patch.object(
+            type(paths),
+            "global_skill_lock",
+            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / ".skill-lock.json"),
+        ):
+            messages = [issue.message for issue in service.doctor_issues()]
+
+        self.assertFalse(any("Manual skill 'brainstorming'" in message for message in messages))
+
     def test_doctor_ignores_stale_global_lock_skills_outside_the_manifest(self) -> None:
         from src.service import AgentbotService
 

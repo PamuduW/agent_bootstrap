@@ -78,7 +78,14 @@ sources:
         )
         mock_run.return_value = self._success_result("superpowers", expected_argv)
 
-        results = install_skills(self._paths())
+        paths = self._paths()
+        global_lock = self.root / "home" / ".agents" / ".skill-lock.json"
+        with patch.object(
+            type(paths),
+            "global_skill_lock",
+            new_callable=lambda: property(lambda _self: global_lock),
+        ):
+            results = install_skills(paths)
 
         self.assertEqual(1, mock_run.call_count)
         command = mock_run.call_args.args[0]
@@ -108,8 +115,9 @@ sources:
             MagicMock(returncode=0, stdout="", stderr=""),
             MagicMock(returncode=0, stdout="ok", stderr=""),
         ]
+        lock_file = self.root / "home" / ".agents" / ".skill-lock.json"
 
-        result = install_source(source, agents=["codex"])
+        result = install_source(source, agents=["codex"], global_lock_file=lock_file)
 
         self.assertIsInstance(result, InstallResult)
         self.assertEqual(2, mock_run.call_count)

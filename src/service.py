@@ -201,6 +201,7 @@ class AgentbotService:
             )
 
         managed_names = managed_skill_names(self.paths)
+        declared_names = self._manifest_declared_skill_names()
         managed_dirs = {skill_dir.name: skill_dir for skill_dir in installed_skill_dirs(self.paths)}
         codex_skills = self.paths.codex_home / "skills"
 
@@ -236,7 +237,12 @@ class AgentbotService:
 
         if self.paths.agents_skills_home.is_dir():
             for source in sorted(self.paths.agents_skills_home.iterdir()):
-                if not source.is_dir() or not (source / "SKILL.md").is_file() or source.name in managed_names:
+                if (
+                    not source.is_dir()
+                    or not (source / "SKILL.md").is_file()
+                    or source.name in managed_names
+                    or source.name in declared_names
+                ):
                     continue
                 target = codex_skills / source.name
                 if not target.is_symlink() or not target.exists() or target.resolve() != source.resolve():
@@ -263,6 +269,27 @@ class AgentbotService:
                     )
 
         return issues
+
+    def _manifest_declared_skill_names(self) -> set[str]:
+        """Return explicit manifest names before lock provenance is applied.
+
+        A stale global lock must not make a skill that is explicitly declared
+        in the manifest look like an unrelated manual install. The skills
+        doctor separately reports the missing lock entry, so this prevents
+        duplicate and misleading warnings without hiding the real drift.
+        Wildcard sources are intentionally excluded because their membership is
+        only knowable from the successful lock/install result.
+        """
+        try:
+            config = load_skills_sources(self.paths.skills_sources_file)
+        except (OSError, ValueError):
+            return set()
+        return {
+            skill
+            for source in config.active_sources()
+            for skill in source.skills
+            if skill != "*"
+        }
 
     def _token_doctor_issues(self) -> list[DoctorIssue]:
         """Report unsafe optional token state without reading or printing its value."""

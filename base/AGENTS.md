@@ -1,88 +1,181 @@
 # AGENTS.md
 
+Repository-level operating instructions. These refine the global Agentbot
+baseline and should remain practical, current, and specific to this repository.
+
 ## Environment
 
-- **OS:** WSL2 Ubuntu
+- **Primary environment:** WSL2 Ubuntu
 - **Shell:** bash
-- **Primary agents:** Cursor, Claude Code, Codex, GitHub Copilot
-- **Agentbot home:** `$AGENTBOT_HOME` (`agent_bootstrap` repo on PATH)
+- **Primary agent surfaces:** Codex CLI, Cursor, Claude Code, GitHub Copilot
+- **Agentbot home:** `$AGENTBOT_HOME`
+- Prefer repository-relative paths and commands that work from the repository
+  root.
 
-Invoke skills in Agent chat by typing `/<skill-name>`.
+Invoke a skill using the syntax supported by the active agent surface. Installed
+skill metadata and `skills.sources.yaml` are the source of truth.
 
-**Pick 2–4 skills per session by phase — do not load all at once.**
+## Default Task Workflow
 
-Skills below match `skills.sources.yaml` (enabled upstreams installed via `./install.sh skills install`).
+1. Read the entire request and all referenced files before changing anything.
+2. Build a requirement ledger:
+   - goal;
+   - current state and relevant paths;
+   - required changes;
+   - constraints and non-goals;
+   - examples and edge cases;
+   - acceptance criteria;
+   - requested deliverables;
+   - unresolved decisions.
+3. Inspect the repository instructions, current implementation, tests, and git
+   state before proposing architecture.
+4. For complex work, plan before coding. For small, well-scoped work, proceed
+   directly with a short internal plan.
+5. Make the smallest coherent change, validate it, inspect the diff, and report
+   evidence.
+6. Do not proceed to a later phase when the user explicitly requested a review or
+   approval checkpoint.
 
-### Methodology
+For requests containing many numbered changes, maintain a traceability table in
+the plan or working notes that maps each requirement to affected components,
+implementation phase, and validation.
 
-| Skill | Description |
-|---|---|
-| `brainstorming` | Explore options and trade-offs before committing to a direction. |
-| `council` | Parallel subagent exploration and synthesis for multi-area codebase review. |
-| `co-council` | Codex subagent council with evidence-based Luna-tier routing. |
-| `grilling` | Stress-test a plan or design before building; matches Interaction Rules below. |
-| `recursive-decomposition` | Partition large inputs (10+ files, 50k+ tokens) via subagents and aggregation. |
-| `yagni` | Simplest solution that works; resist premature complexity. |
-| `karpathy-guidelines` | Think before coding; surgical changes only; verifiable success criteria. |
-| `best-practices-research` | Live web recon on current practices before non-trivial implementation. |
-| `literature-review` | Structured review of papers, docs, and prior art with citations. |
+## Planning Contract
 
-### Architecture
+Use plan mode or the `writing-plans` skill for cross-repository, multi-phase,
+architectural, migration, security-sensitive, or ambiguous work.
 
-| Skill | Description |
-|---|---|
-| `architecture-decision-records` | Capture architectural decisions as lightweight ADRs with rationale. |
-| `domain-modeling` | Build and sharpen domain terminology and ubiquitous language. |
-| `codebase-design` | Deep-module vocabulary for interfaces, seams, and testability. |
-| `codebase-onboarding` | Structured onboarding guide for an unfamiliar codebase. |
-| `improve-codebase-architecture` | Scan for deepening opportunities; visual report and review. |
+The planning parent must:
 
-### Planning
+- retain ownership of requirements and architectural decisions;
+- inspect critical primary evidence itself;
+- use `co-council` only for bounded independent investigation;
+- reconcile conflicting delegate findings;
+- write and audit the final plan itself;
+- avoid implementing when the requested deliverable is only a plan.
 
-| Skill | Description |
-|---|---|
-| `writing-plans` | Turn requirements into phased, actionable implementation plans. |
-| `implement-plan` | Router: council + best-practices research, implement, then yagni pass. |
-| `prototype` | Throwaway prototype to flesh out design (CLI or UI variations). |
-| `triage` | Move issues through triage roles on the project issue tracker. |
-| `setup-matt-pocock-skills` | Scaffold tracker, triage labels, and domain docs for planning skills. |
-| `executing-plans` | Work through a plan incrementally with checkpoints. |
-| `subagent-driven-development` | Delegate implementation slices to focused subagents. |
+A substantial plan should include:
 
-### Quality
+- objective and non-goals;
+- current-state findings with file/path references;
+- assumptions, decisions, and open questions;
+- proposed architecture, interfaces, and data flow;
+- exact repositories, modules, and files expected to change;
+- ordered phases with dependencies and ownership boundaries;
+- migration, compatibility, security, and failure handling;
+- testing and validation per phase;
+- rollout/rollback where applicable;
+- completion criteria and requirement traceability.
 
-| Skill | Description |
-|---|---|
-| `tdd` | Test-driven development via public interfaces; red-green-refactor. |
-| `test-driven-development` | Red-green-refactor cycle; tests before implementation. |
-| `diagnosing-bugs` | Diagnosis loop for hard bugs and performance regressions. |
-| `owasp` | Security review against OWASP guidance. |
-| `explain-code` | Scannable code explanation with TL;DR and small examples. |
+When the user asks for clarification questions in a file, create that file only
+for material blockers. Do not manufacture questions that can be resolved safely
+from repository evidence.
 
-### Docs / handoff
+## Delegation Contract
 
-| Skill | Description |
-|---|---|
-| `document` | Create or update durable repo documentation verified against code. |
-| `handoff` | Compact session handoff to `docs/handoffs/CURRENT.md` for continuation. |
+Use the global **delegation-first, not delegation-only** policy.
 
-### Implementation / DevOps (load on demand)
+- The parent remains the planner, integrator, reviewer, and final author.
+- Use the parent directly for known-file reads, ordinary shell commands, simple
+  edits, plan writing, integration, and final validation.
+- Use `co-council` for genuinely independent exploration, research, review,
+  testing, or non-overlapping implementation.
+- Default planning fan-out: 2–3 delegates; maximum 4.
+- Default implementation fan-out: 0–2 delegates; maximum 3 per phase.
+- Maximum two concurrent writers with explicit, non-overlapping ownership.
+- No nested delegation.
+- One targeted follow-up is allowed after the initial batch; do not rerun the
+  whole council because one result was weak.
+- Stop spawning once the evidence is sufficient.
 
-| Skill | Description |
-|---|---|
-| `kubernetes` / `k8s` | Cluster manifests, deployments, and operational patterns. |
-| `kubernetes-specialist` | Deep K8s troubleshooting, networking, and production hardening. |
-| `terraform` | IaC modules, state, and environment provisioning. |
-| `github-actions` / `gitlab-ci` | CI/CD pipelines, workflows, and release automation. |
-| `devops-engineer` | Cross-cutting infra, observability, and delivery practices. |
+Do not interpret “act as the higher brain” as “perform no direct work.” Interpret
+it as:
 
-### Interaction Rules (how AI must behave in this project)
+> Keep requirements, judgment, synthesis, final artifacts, integration, and
+> validation in the parent. Delegate only bounded independent work where a
+> separate context or parallel execution materially improves quality or speed.
 
-Never agree with me by default. Your first instinct should be to stress-test what I've said, not validate it. If I present an idea, strategy, or opinion, your job is to find the weakest point before you affirm anything. No glazing. Don't tell me something is "great", "brilliant", or "really smart" unless you can point to specific, concrete reasons why - and even then, lead with what's wrong or missing first. Compliments without substance are noise. Don't echo my framing back to me. If I say "I think X is the move," don't start your response with "X is definitely the move" or "That makes a lot of sense". Instead, start by asking yourself: what am I not seeing? What's the counter-argument? What would someone who disagrees say, and are they right? When you do agree, earn it. Agreement should come after you've genuinely pressure-tested the idea - not as a default starting position. If you agree, say why in a way that adds something I didn't already say. Be direct and concise. Skip the warm-up sentences. Don't pad responses with filler affirmations. Get to the point. If the answer is "no" or "this won't work", say that in the first sentence. Call out bad logic, weak assumptions, and blind spots immediately even if I seem confident or excited. Especially then. The more certain I sound, the more I need pushback. If you catch yourself about to start a response with "That's a great point" or "You're absolutely right" - stop and rewrite. Start with the most useful thing you can say instead.
+## Skills
 
-## Project overlay
+Select only the skills needed for the current phase.
 
-Repo-specific notes belong below. Run `agentbot boot` in a new repo, then fill in the `## Project` section with stack, conventions, and constraints for that codebase.
+### Common workflow skills
+
+- `brainstorming`: explore options before committing.
+- `grilling`: challenge assumptions and expose failure modes.
+- `co-council`: bounded Codex subagent investigation with Luna routing.
+- `writing-plans`: create phased implementation plans.
+- `executing-plans`: implement a reviewed plan incrementally.
+- `diagnosing-bugs`: evidence-driven debugging.
+- `tdd` or `test-driven-development`: red-green-refactor.
+- `yagni`: remove unnecessary complexity.
+- `handoff`: write a compact continuation artifact.
+
+### Load on demand
+
+Use architecture, security, documentation, Kubernetes, Terraform, CI/CD, or
+other domain skills only when the task requires them. Do not load overlapping
+skills without a clear reason.
+
+## Implementation Contract
+
+- Work in reviewable phases with explicit completion criteria.
+- Preserve existing architecture and conventions unless the plan explicitly
+  changes them.
+- Avoid unrelated cleanup while implementing a feature or fix.
+- Do not overwrite user-authored changes.
+- Give each implementation delegate an explicit file or directory boundary.
+- Inspect every delegated diff before accepting it.
+- Update the plan or progress notes when reality differs from the plan.
+- For cross-repository changes, verify contracts at both sides of each boundary.
+
+## Testing and Validation
+
+Fill in repository-specific commands under `## Project`.
+
+At minimum:
+
+- run formatting/lint checks relevant to changed files;
+- run focused tests for changed behavior;
+- run broader integration/build checks when shared contracts, infrastructure, or
+  deployment behavior changes;
+- exercise stated examples and edge cases;
+- review the final diff and git status;
+- state checks that could not be run.
+
+Passing tests do not excuse a requirement mismatch. Audit the result against the
+original requirement ledger before reporting completion.
+
+## Research and Documentation
+
+- Use live research when the task depends on current APIs, versions, security
+  guidance, pricing, limits, or external behavior.
+- Prefer primary sources and record URLs or citations in durable research or plan
+  artifacts when requested.
+- Keep implementation comments focused on why, not on restating obvious code.
+- Update durable documentation when commands, interfaces, behavior, setup, or
+  operational procedures change.
+
+## Git and Secrets
+
+- Do not commit or push unless the current user request explicitly authorizes it.
+- For authorized commits, stage only intended files and use a descriptive,
+  task-specific message.
+- Never print or persist secrets in tracked files. Store credentials outside the
+  repository with restrictive permissions.
+- Token-entry interfaces should mask values by default and display only a short
+  fingerprint when confirming an existing token.
+- Treat changes to CI/CD, credentials, permissions, deployments, package
+  management, and infrastructure as high-risk and validate them explicitly.
+
+## Interaction Style
+
+- Lead with the first material problem, conflict, or unsupported assumption.
+- Do not agree by default or add empty praise.
+- Separate facts, assumptions, and recommendations.
+- Be concise, but include enough evidence to make decisions reviewable.
+- Never claim a file, command, test, commit, or deployment exists or succeeded
+  without checking it.
 
 ## Project
 

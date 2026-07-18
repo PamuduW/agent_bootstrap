@@ -79,6 +79,13 @@ Curated upstreams are listed in [`skills.sources.yaml`](skills.sources.yaml). In
 ./install.sh skills doctor
 ```
 
+Agent policy does not maintain a hardcoded list of skill names. Before choosing
+a skill, an agent should use the active harness's discovery mechanism and select
+only compatible capabilities for the current task. Agentbot's installed
+inventory is available with `agentbot skills list` (or
+`./install.sh skills list`); `skills.sources.yaml` and
+`~/.agents/.skill-lock.json` remain the durable source records.
+
 ### Lockfile strategy
 
 | File | Role |
@@ -141,7 +148,7 @@ Re-link after moving the clone by running `./install.sh install` explicitly.
 ```bash
 ./install.sh global     # re-render ~/.codex and ~/.claude outputs from global/AGENTS.md
 ./install.sh status     # skills count + global baseline status
-./install.sh doctor     # validate manifest, locks, and managed Codex skill links
+./install.sh doctor     # validate manifest, locks, and managed agent skill links
 ./install.sh update --dry-run # preview source-owned skill changes
 ./install.sh workspace ~/Dev/existing-project
 ./install.sh workspaces
@@ -168,8 +175,8 @@ agentbot help
 `agentbot update` is repo-first: dirty, detached, diverged, missing-upstream,
 declined, or failed pull states stop before skills work. A confirmed
 reconciliation never runs `git add`, `git commit`, or `git push`; tracked
-manifest/table changes are handed back as `applied-with-local-changes` for the
-user to review and commit or discard.
+manifest or policy changes are handed back as `applied-with-local-changes` for
+the user to review and commit or discard.
 
 From the TTY menu, **Update** checks the repository first. If it is behind, a
 colored repository table is shown before the fast-forward pull prompt; after a

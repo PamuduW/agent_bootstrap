@@ -121,9 +121,19 @@ agentbot boot --codex              # AGENTS.md only; Codex consumes AGENTS.md
 ```
 
 All write-capable workspace commands preview by default; `--yes` applies a
-render. Existing unmarked compatibility files are reported as conflicts.
-An existing unmarked `AGENTS.md` is preserved as custom policy. The project
-owned `## Project` section remains outside Agentbot's managed baseline block.
+render. Existing unmarked compatibility files are preserved and receive a
+review copy instead of blocking the render. An existing unmarked `AGENTS.md`
+is preserved as custom policy and receives `AGENTS_temp.md` containing the
+current base template. The project-owned `## Project` section remains outside
+Agentbot's managed baseline block.
+
+Review copies use the target stem, for example `CLAUDE_temp.md`,
+`.github/copilot-instructions_temp.md`, and
+`.cursor/rules/agentbot-policy_temp.mdc`. Each generated review copy stores a
+SHA-256 marker in its first HTML comment. An untouched copy is refreshed in
+place when the template changes; an edited stale copy is preserved and the
+next available suffix (`_temp_1`, `_temp_2`, and so on) is created. Existing
+original files are never overwritten just because they conflict.
 
 ```bash
 agentbot workspace ~/Dev/existing-project
@@ -140,6 +150,8 @@ written into projects or tracked by Git. Cursor's generated rule is
 `.cursor/rules/agentbot-policy.mdc`, not a skill installer.
 
 Templates: [`base/AGENTS.md`](base/AGENTS.md), [`base/CLAUDE.md`](base/CLAUDE.md). Machine baseline stays in `global/AGENTS.md`.
+The same preserved-original and review-copy behavior applies to the rendered
+files under `~/.codex` and `~/.claude`.
 
 Re-link after moving the clone by running `./install.sh install` explicitly.
 

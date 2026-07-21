@@ -85,6 +85,86 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         self.assertTrue((claude_skills / "alpha-skill").is_symlink())
         self.assertTrue((claude_skills / "beta-skill").is_symlink())
 
+    def test_render_global_outputs_preserves_unowned_instruction_files(self) -> None:
+        from src.render import render_global_outputs
+
+        paths = self._paths()
+        outputs = (
+            paths.codex_home / "AGENTS.md",
+            paths.claude_home / "AGENTS.md",
+            paths.claude_home / "CLAUDE.md",
+        )
+        for output in outputs:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(f"# User-owned {output.name}\n", encoding="utf-8")
+
+        with mock.patch.object(
+            type(paths),
+            "agents_skills_home",
+            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / "skills"),
+        ):
+            render_global_outputs(paths)
+
+        for output in outputs:
+            self.assertEqual(
+                f"# User-owned {output.name}\n",
+                output.read_text(encoding="utf-8"),
+            )
+            review = output.with_name(f"{output.stem}_temp{output.suffix}")
+            self.assertTrue(review.is_file())
+            self.assertIn("sha256=", review.read_text(encoding="utf-8"))
+
+    def test_render_global_outputs_refreshes_untouched_review_template(self) -> None:
+        from src.render import render_global_outputs
+
+        paths = self._paths()
+        codex_agents = paths.codex_home / "AGENTS.md"
+        codex_agents.parent.mkdir(parents=True, exist_ok=True)
+        codex_agents.write_text("# User-owned\n", encoding="utf-8")
+
+        with mock.patch.object(
+            type(paths),
+            "agents_skills_home",
+            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / "skills"),
+        ):
+            render_global_outputs(paths)
+            review = codex_agents.with_name("AGENTS_temp.md")
+            old_review = review.read_text(encoding="utf-8")
+            (self.root / "global" / "AGENTS.md").write_text(
+                "# Global Baseline\n\nNew global instructions.\n",
+                encoding="utf-8",
+            )
+            render_global_outputs(paths)
+
+        self.assertNotEqual(old_review, review.read_text(encoding="utf-8"))
+        self.assertIn("New global instructions.", review.read_text(encoding="utf-8"))
+        self.assertEqual("# User-owned\n", codex_agents.read_text(encoding="utf-8"))
+
+    def test_render_global_outputs_rolls_edited_stale_review_template(self) -> None:
+        from src.render import render_global_outputs
+
+        paths = self._paths()
+        codex_agents = paths.codex_home / "AGENTS.md"
+        codex_agents.parent.mkdir(parents=True, exist_ok=True)
+        codex_agents.write_text("# User-owned\n", encoding="utf-8")
+
+        with mock.patch.object(
+            type(paths),
+            "agents_skills_home",
+            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / "skills"),
+        ):
+            render_global_outputs(paths)
+            review = codex_agents.with_name("AGENTS_temp.md")
+            review.write_text(review.read_text(encoding="utf-8") + "\nMy notes.\n", encoding="utf-8")
+            (self.root / "global" / "AGENTS.md").write_text(
+                "# Global Baseline\n\nNew global instructions.\n",
+                encoding="utf-8",
+            )
+            render_global_outputs(paths)
+
+        self.assertIn("My notes.", review.read_text(encoding="utf-8"))
+        self.assertTrue(codex_agents.with_name("AGENTS_temp_1.md").is_file())
+
     def test_render_preserves_unmanaged_codex_skill_links(self) -> None:
         from src.render import render_global_outputs
 

@@ -18,6 +18,7 @@ from .workspace_render import (
     WorkspaceRenderPlan,
     apply_workspace_render_plan,
     build_workspace_render_plan,
+    is_review_template_path,
 )
 from .workspace_state import WorkspaceRecord, WorkspaceStore
 
@@ -314,6 +315,22 @@ class WorkspaceService:
                 )
             if path.is_file():
                 existing[relative_path] = path.read_text(encoding="utf-8")
+            if path.parent.is_dir():
+                for candidate in sorted(path.parent.iterdir()):
+                    candidate_relative = candidate.relative_to(root).as_posix()
+                    if not is_review_template_path(relative_path, candidate_relative):
+                        continue
+                    if candidate.is_symlink():
+                        raise WorkspaceConflict(
+                            candidate_relative,
+                            f"workspace output is a symlink: {candidate}",
+                        )
+                    if not candidate.is_file():
+                        raise WorkspaceConflict(
+                            candidate_relative,
+                            f"workspace output is not a regular file: {candidate}",
+                        )
+                    existing[candidate_relative] = candidate.read_text(encoding="utf-8")
         return existing
 
     def _dirty_before_render(self, identity: WorkspaceIdentity) -> bool:

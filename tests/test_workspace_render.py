@@ -76,6 +76,54 @@ class WorkspaceRenderTests(unittest.TestCase):
         self.assertEqual("create", plan.action_for("CLAUDE.md").kind)
         self.assertEqual("# My policy\n", plan.action_for("AGENTS.md").content)
 
+    def test_unmarked_custom_agents_file_gets_a_review_template(self) -> None:
+        plan = build_workspace_render_plan(
+            self.base_agents,
+            {"AGENTS.md": "# My policy\n"},
+            ("agents",),
+        )
+
+        review = plan.action_for("AGENTS_temp.md")
+
+        self.assertEqual("create", review.kind)
+        self.assertIn("sha256=", review.content or "")
+        self.assertIn("# AGENTS.md", review.content or "")
+        self.assertIn("## Project", review.content or "")
+
+    def test_unowned_compatibility_file_gets_a_review_template(self) -> None:
+        plan = build_workspace_render_plan(
+            self.base_agents,
+            {"CLAUDE.md": "# User-owned instructions\n"},
+            ("claude",),
+        )
+
+        original = plan.action_for("CLAUDE.md")
+        review = plan.action_for("CLAUDE_temp.md")
+
+        self.assertEqual("unchanged", original.kind)
+        self.assertEqual("# User-owned instructions\n", original.content)
+        self.assertEqual("create", review.kind)
+        self.assertIn(GENERATED_HEADER, review.content or "")
+        self.assertIn("sha256=", review.content or "")
+
+    def test_each_compatibility_target_uses_a_sibling_review_name(self) -> None:
+        targets = (
+            ("claude", "CLAUDE.md", "CLAUDE_temp.md"),
+            ("copilot", ".github/copilot-instructions.md", ".github/copilot-instructions_temp.md"),
+            ("cursor", ".cursor/rules/agentbot-policy.mdc", ".cursor/rules/agentbot-policy_temp.mdc"),
+        )
+
+        for target, relative_path, review_path in targets:
+            with self.subTest(target=target):
+                plan = build_workspace_render_plan(
+                    self.base_agents,
+                    {relative_path: "# User-owned instructions\n"},
+                    (target,),
+                )
+
+                self.assertEqual("unchanged", plan.action_for(relative_path).kind)
+                self.assertEqual("create", plan.action_for(review_path).kind)
+
     def test_every_custom_selection_still_plans_agents(self) -> None:
         plan = build_workspace_render_plan(self.base_agents, {}, ("copilot",))
 
@@ -98,15 +146,114 @@ class WorkspaceRenderTests(unittest.TestCase):
         self.assertIn(MANAGED_BEGIN, content)
         self.assertIn("Keep this legacy project policy.", content)
 
-    def test_existing_unowned_compatibility_file_is_a_conflict(self) -> None:
+    def test_existing_unowned_compatibility_file_is_preserved(self) -> None:
         plan = build_workspace_render_plan(
             self.base_agents,
             {"CLAUDE.md": "# User-owned instructions\n"},
             ("claude",),
         )
 
-        self.assertEqual("conflict", plan.action_for("CLAUDE.md").kind)
-        self.assertIsNone(plan.action_for("CLAUDE.md").content)
+        self.assertEqual("unchanged", plan.action_for("CLAUDE.md").kind)
+        self.assertEqual("create", plan.action_for("CLAUDE_temp.md").kind)
+
+    def test_untouched_review_template_is_refreshed_in_place(self) -> None:
+        first = build_workspace_render_plan(
+            self.base_agents,
+            {"AGENTS.md": "# My policy\n"},
+            ("agents",),
+        )
+        old_review = first.action_for("AGENTS_temp.md").content or ""
+        newer_base = self.base_agents.replace("Shared environment.", "new shared base")
+
+        second = build_workspace_render_plan(
+            newer_base,
+            {
+                "AGENTS.md": "# My policy\n",
+                "AGENTS_temp.md": old_review,
+            },
+            ("agents",),
+        )
+
+        review = second.action_for("AGENTS_temp.md")
+        self.assertEqual("update", review.kind)
+        self.assertIn("new shared base", review.content or "")
+        self.assertNotIn("AGENTS_temp_1.md", second.paths())
+
+    def test_edited_stale_review_template_rolls_to_next_suffix(self) -> None:
+        first = build_workspace_render_plan(
+            self.base_agents,
+            {"AGENTS.md": "# My policy\n"},
+            ("agents",),
+        )
+        old_review = (first.action_for("AGENTS_temp.md").content or "") + "\nMy notes.\n"
+        newer_base = self.base_agents.replace("Shared environment.", "new shared base")
+
+        second = build_workspace_render_plan(
+            newer_base,
+            {
+                "AGENTS.md": "# My policy\n",
+                "AGENTS_temp.md": old_review,
+            },
+            ("agents",),
+        )
+
+        self.assertNotIn("AGENTS_temp.md", second.paths())
+        review = second.action_for("AGENTS_temp_1.md")
+        self.assertEqual("create", review.kind)
+        self.assertIn("new shared base", review.content or "")
+
+    def test_edited_current_review_template_is_not_duplicated(self) -> None:
+        first = build_workspace_render_plan(
+            self.base_agents,
+            {"AGENTS.md": "# My policy\n"},
+            ("agents",),
+        )
+        edited_review = (first.action_for("AGENTS_temp.md").content or "") + "\nMy notes.\n"
+
+        second = build_workspace_render_plan(
+            self.base_agents,
+            {
+                "AGENTS.md": "# My policy\n",
+                "AGENTS_temp.md": edited_review,
+            },
+            ("agents",),
+        )
+
+        self.assertEqual("unchanged", second.action_for("AGENTS_temp.md").kind)
+        self.assertNotIn("AGENTS_temp_1.md", second.paths())
+
+    def test_copied_agents_review_template_is_migrated(self) -> None:
+        first = build_workspace_render_plan(
+            self.base_agents,
+            {"AGENTS.md": "# My policy\n"},
+            ("agents",),
+        )
+        copied = first.action_for("AGENTS_temp.md").content or ""
+
+        second = build_workspace_render_plan(
+            self.base_agents,
+            {"AGENTS.md": copied},
+            ("agents",),
+        )
+
+        self.assertEqual("managed", second.policy_mode)
+        self.assertEqual("update", second.action_for("AGENTS.md").kind)
+        self.assertIn(MANAGED_BEGIN, second.action_for("AGENTS.md").content or "")
+
+    def test_malformed_agents_markers_get_a_review_template(self) -> None:
+        malformed = (
+            f"{MANAGED_BEGIN}\n"
+            "# incomplete\n"
+        )
+
+        plan = build_workspace_render_plan(
+            self.base_agents,
+            {"AGENTS.md": malformed},
+            ("agents",),
+        )
+
+        self.assertEqual("unchanged", plan.action_for("AGENTS.md").kind)
+        self.assertEqual("create", plan.action_for("AGENTS_temp.md").kind)
 
     def test_legacy_claude_template_is_migrated_as_agentbot_owned(self) -> None:
         legacy = (

@@ -71,7 +71,7 @@ class WorkspaceServiceTests(unittest.TestCase):
         self.assertEqual("custom", record.policy_mode)
         self.assertEqual(("agents", "claude"), record.targets)
 
-    def test_batch_continues_after_one_workspace_conflict(self) -> None:
+    def test_batch_continues_after_one_workspace_review_template(self) -> None:
         good = self._git_repo("good")
         conflict = self.root / "conflict"
         conflict.mkdir()
@@ -108,7 +108,7 @@ class WorkspaceServiceTests(unittest.TestCase):
         self.assertEqual(2, len(report.results))
         statuses = {result.path.name: result.status for result in report.results}
         self.assertEqual("preview", statuses["good"])
-        self.assertEqual("conflict", statuses["conflict"])
+        self.assertEqual("preview", statuses["conflict"])
 
     def test_recorded_git_workspace_that_loses_git_identity_fails(self) -> None:
         repo = self._git_repo("recorded")
@@ -149,8 +149,8 @@ class WorkspaceServiceTests(unittest.TestCase):
         self.assertEqual("conflict", result.status)
         self.assertIn("symlink", result.message)
 
-    def test_conflict_apply_does_not_register_or_change_user_file(self) -> None:
-        target = self.root / "conflict-apply"
+    def test_apply_preserves_user_file_and_writes_review_template(self) -> None:
+        target = self.root / "review-apply"
         target.mkdir()
         claude = target / "CLAUDE.md"
         claude.write_text("# User-owned\n", encoding="utf-8")
@@ -162,9 +162,40 @@ class WorkspaceServiceTests(unittest.TestCase):
             register=True,
         )
 
-        self.assertEqual("conflict", result.status)
+        self.assertEqual("applied", result.status)
         self.assertEqual("# User-owned\n", claude.read_text(encoding="utf-8"))
-        self.assertEqual((), self.workspace_service.store.load())
+        review = target / "CLAUDE_temp.md"
+        self.assertTrue(review.is_file())
+        self.assertIn("sha256=", review.read_text(encoding="utf-8"))
+        self.assertEqual(1, len(self.workspace_service.store.load()))
+
+    def test_apply_does_not_overwrite_an_edited_current_review_template(self) -> None:
+        target = self.root / "review-repeat"
+        target.mkdir()
+        claude = target / "CLAUDE.md"
+        claude.write_text("# User-owned\n", encoding="utf-8")
+
+        first = self.workspace_service.apply(
+            target,
+            profile_name=None,
+            targets=("claude",),
+            register=True,
+        )
+        self.assertEqual("applied", first.status)
+
+        review = target / "CLAUDE_temp.md"
+        review.write_text(review.read_text(encoding="utf-8") + "\nMy notes.\n", encoding="utf-8")
+
+        second = self.workspace_service.apply(
+            target,
+            profile_name=None,
+            targets=("claude",),
+            register=True,
+        )
+
+        self.assertEqual("applied", second.status)
+        self.assertIn("My notes.", review.read_text(encoding="utf-8"))
+        self.assertFalse((target / "CLAUDE_temp_1.md").exists())
 
 
 if __name__ == "__main__":

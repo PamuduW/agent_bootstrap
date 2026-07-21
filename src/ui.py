@@ -342,6 +342,7 @@ def print_reconciliation_report(result) -> None:
             ("removed skills", removed, str(len(result.removed_skills))),
         ],
         show_header=False,
+        wrap_details=True,
     )
     print()
 

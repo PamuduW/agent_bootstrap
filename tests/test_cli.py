@@ -138,6 +138,25 @@ class CliTests(unittest.TestCase):
         self.assertEqual(0, rc)
         self.assertEqual(1, stdout.count("  component              | detail"))
 
+    def test_reconciliation_report_shows_every_skill_in_each_delta(self) -> None:
+        from src.skill_reconcile import ReconcileResult
+        from src.ui import print_reconciliation_report
+
+        result = ReconcileResult(
+            "applied",
+            (),
+            tuple(f"removed-skill-{index}" for index in range(1, 8)),
+            tuple(f"added-skill-{index}" for index in range(1, 8)),
+            updated_skills=tuple(f"updated-skill-{index}" for index in range(1, 8)),
+        )
+        output = io.StringIO()
+        with patch("sys.stdout", output):
+            print_reconciliation_report(result)
+
+        rendered = output.getvalue()
+        for skill in (*result.updated_skills, *result.added_skills, *result.removed_skills):
+            self.assertIn(skill, rendered)
+
     def test_preview_result_uses_informational_color(self) -> None:
         import os
 

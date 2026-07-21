@@ -108,6 +108,27 @@ test_command_lib_documents_full_help_catalog() (
 	done
 )
 
+test_failed_dotfiles_launch_pauses_before_redraw() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local dispatches=0 pauses=0
+	MENU_SIMPLE_RESULT=''
+	menu_simple_run() {
+		if ((dispatches == 0)); then
+			MENU_SIMPLE_RESULT=dotfiles
+		else
+			MENU_SIMPLE_RESULT=quit
+		fi
+		dispatches=$((dispatches + 1))
+		return 0
+	}
+	sibling_dotfiles_launch() { return 23; }
+	ui_clear() { :; }
+	ui_pause() { pauses=$((pauses + 1)); }
+
+	agentbot_menu_loop
+	[[ "$dispatches" -eq 2 && "$pauses" -eq 1 ]]
+)
+
 test_command_lib_details_fit_narrow_terminal() (
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
 	local output line
@@ -340,6 +361,7 @@ if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'Agentbot menu exports TUI render mode to backend reports' test_menu_exports_tui_render_mode_to_backend
 	check 'Agentbot Command Lib matches the colored table contract' test_command_lib_matches_colored_table_contract
 	check 'Agentbot Command Lib documents the full command/config catalog' test_command_lib_documents_full_help_catalog
+	check 'failed Dotfiles launch pauses before the Agentbot menu redraws' test_failed_dotfiles_launch_pauses_before_redraw
 	check 'Agentbot Command Lib wraps details to the terminal width' test_command_lib_details_fit_narrow_terminal
 	check 'Agentbot input hints color the interactive key tokens' test_menu_hint_colors_key_tokens
 	check 'Workspaces uses the scrollable submenu title and breadcrumb contract' test_workspaces_menu_uses_scrollable_submenu_contract

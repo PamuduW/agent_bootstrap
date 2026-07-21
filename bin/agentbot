@@ -40,7 +40,7 @@ agentbot_run_dotfiles() { agentbot_die 'Dotfiles integration is not available un
 agentbot_run_backend() { "$AGENTBOT_HOME/install.sh" "$@"; }
 
 AGENTBOT_BOOT_OPTIONAL_FLAGS=(--claude --copilot --cursor)
-AGENTBOT_BOOT_DEFAULTS=(true true true)
+AGENTBOT_BOOT_DEFAULTS=(true false true)
 
 agentbot_boot() {
   local target='' profile='' selectors_seen=false arg i flag

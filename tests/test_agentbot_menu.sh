@@ -92,6 +92,7 @@ test_command_lib_documents_full_help_catalog() (
 	for needle in \
 		'--claude' \
 		'Include generated Claude output' \
+		'default: opt-in' \
 		'--profile NAME' \
 		'--targets LIST' \
 		'--dry-run' \

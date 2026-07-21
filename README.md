@@ -108,8 +108,9 @@ A folder copied into `~/.agents/skills/` is a valid **manual local skill**. `./i
 ## Workspace setup and repository scaffolding
 
 Set up the current directory. With no selectors, Agentbot creates or preserves
-the canonical `AGENTS.md`, `CLAUDE.md`, Copilot instructions, and the Cursor
-rule, then records the canonical folder or Git root in local XDG state:
+the canonical `AGENTS.md`, `CLAUDE.md`, and Cursor rule, then records the
+canonical folder or Git root in local XDG state. Copilot instructions are
+opt-in with `--copilot`:
 
 ```bash
 cd ~/Dev/my-project

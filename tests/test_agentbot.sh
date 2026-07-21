@@ -57,9 +57,14 @@ test_boot_selector_matrix() {
 	mkdir -p "$target"
 	XDG_CONFIG_HOME="$config" AGENTBOT_HOME="$ROOT" "$AGENTBOT" boot "$target" >/dev/null
 	[[ -f "$target/AGENTS.md" && -f "$target/CLAUDE.md" ]] || return 1
-	[[ -f "$target/.github/copilot-instructions.md" ]] || return 1
 	[[ -f "$target/.cursor/rules/agentbot-policy.mdc" ]] || return 1
-	python3 -c 'import json, sys; state=json.load(open(sys.argv[1])); item=state["workspaces"][0]; assert item["kind"] == "directory"; assert item["targets"] == ["agents", "claude", "copilot", "cursor"]' "$config/agentbot/workspaces.json" || return 1
+	[[ ! -e "$target/.github/copilot-instructions.md" ]] || return 1
+	python3 -c 'import json, sys; state=json.load(open(sys.argv[1])); item=state["workspaces"][0]; assert item["kind"] == "directory"; assert item["targets"] == ["agents", "claude", "cursor"]' "$config/agentbot/workspaces.json" || return 1
+
+	rm -rf "$target" "$config"
+	mkdir -p "$target"
+	XDG_CONFIG_HOME="$config" AGENTBOT_HOME="$ROOT" "$AGENTBOT" boot --copilot "$target" >/dev/null
+	[[ -f "$target/AGENTS.md" && -f "$target/.github/copilot-instructions.md" ]] || return 1
 
 	rm -rf "$target" "$config"
 	mkdir -p "$target"

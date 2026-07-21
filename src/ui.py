@@ -291,7 +291,14 @@ def print_skills_report(results: list, *, title: str) -> int:
     return 0
 
 
-def print_skills_update_report(*, linked: int, skipped: int = 0, updated: int = 0) -> int:
+def print_skills_update_report(
+    *,
+    linked: int,
+    skipped: int = 0,
+    updated: int = 0,
+    updated_skills: tuple[str, ...] = (),
+    upstream_deleted_skills: tuple[str, ...] = (),
+) -> int:
     print_section_block("── Refresh ──")
     bridge_detail = f"{linked} linked"
     if updated:
@@ -303,6 +310,16 @@ def print_skills_update_report(*, linked: int, skipped: int = 0, updated: int = 
         ("claude bridge", bridge_detail, "ok"),
         ("codex sync", "~/.codex/AGENTS.md + skills", "ok"),
     ]
+    if updated_skills:
+        rows.append(("updated skills", ", ".join(updated_skills), str(len(updated_skills))))
+    if upstream_deleted_skills:
+        rows.append(
+            (
+                "upstream deleted",
+                ", ".join(upstream_deleted_skills),
+                str(len(upstream_deleted_skills)),
+            )
+        )
     ok, check, miss = print_table(rows)
     print()
     print_rollup(ok=ok, check=check, miss=miss)
@@ -312,6 +329,7 @@ def print_skills_update_report(*, linked: int, skipped: int = 0, updated: int = 
 def print_reconciliation_report(result) -> None:
     """Render the final source-owned reconciliation outcome as a compact table."""
     changed = ", ".join(str(path) for path in result.changed_paths) or "none"
+    updated = ", ".join(result.updated_skills) or "none"
     added = ", ".join(result.added_skills) or "none"
     removed = ", ".join(result.removed_skills) or "none"
     print_section_block("── Reconciliation report ──")
@@ -319,6 +337,7 @@ def print_reconciliation_report(result) -> None:
         [
             ("status", "repository reconciliation", result.status),
             ("changed files", changed, str(len(result.changed_paths))),
+            ("updated skills", updated, str(len(result.updated_skills))),
             ("added skills", added, str(len(result.added_skills))),
             ("removed skills", removed, str(len(result.removed_skills))),
         ],

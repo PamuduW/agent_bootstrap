@@ -209,6 +209,26 @@ sources:
         self.assertEqual(["npx", "skills", "update", "-g", "-y"], command)
         self.assertEqual("update", result.source_id)
 
+    def test_parse_update_output_reports_updated_and_deleted_skills(self) -> None:
+        from src.skills_installer import parse_update_output
+
+        output = (
+            "\x1b[38;5;145mChecking skills from source: owner/repo\x1b[0m\n"
+            "\x1b[38;5;145mWarning:\x1b[0m The following skills from owner/repo appear to have been deleted upstream:\n"
+            "  \x1b[38;5;145m•\x1b[0m removed-skill\n"
+            "  \x1b[38;5;145m•\x1b[0m another-removed-skill\n"
+            "  \x1b[38;5;145m✓\x1b[0m Updated changed-skill\n"
+            "\x1b[38;5;145m✓ Updated 1 skill(s)\x1b[0m\n"
+        )
+
+        report = parse_update_output(output)
+
+        self.assertEqual(("changed-skill",), report.updated_skills)
+        self.assertEqual(
+            (("owner/repo", ("another-removed-skill", "removed-skill")),),
+            report.deleted_by_source,
+        )
+
     def test_list_installed_skills_reads_agents_home(self) -> None:
         from src.skills_installer import list_installed_skills
 

@@ -112,7 +112,7 @@ agentbot_main() {
     workspace|workspaces|resync) agentbot_run_backend "$command" "$@" ;;
     token) agentbot_run_token "$@" ;;
     dotfiles) agentbot_run_dotfiles "$@" ;;
-    update) agentbot_run_backend update "$@" ;;
+    update|upgrade) agentbot_run_backend "$command" "$@" ;;
     help|-h|--help) agentbot_usage ;;
     *) agentbot_die "unknown command: $command (run agentbot help)" ;;
   esac

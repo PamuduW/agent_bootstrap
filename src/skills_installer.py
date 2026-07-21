@@ -30,6 +30,24 @@ class InstallResult:
 
 
 @dataclass(frozen=True)
+class SkillsUpdateReport:
+    updated_skills: tuple[str, ...] = ()
+    deleted_by_source: tuple[tuple[str, tuple[str, ...]], ...] = ()
+
+    @property
+    def deleted_skills(self) -> tuple[str, ...]:
+        return tuple(
+            sorted(
+                {
+                    skill
+                    for _source, skills in self.deleted_by_source
+                    for skill in skills
+                }
+            )
+        )
+
+
+@dataclass(frozen=True)
 class InstallSummary:
     ok: int
     failed: int
@@ -52,6 +70,12 @@ DEFAULT_NPX = "npx"
 DEFAULT_NPX_TIMEOUT_SECONDS = 900
 NPX_TIMEOUT_ENV = "AGENTBOT_NPX_TIMEOUT_SECONDS"
 GITHUB_CLONE_TIMEOUT_SECONDS = 120
+_ANSI_ESCAPE_RE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+_UPDATE_LINE_RE = re.compile(r"^✓\s+Updated\s+(.+?)$")
+_DELETED_HEADER_RE = re.compile(
+    r"^Warning:\s+The following skills from (.+?) appear to have been deleted upstream:$"
+)
+_BULLET_RE = re.compile(r"^[•*-]\s+(.+?)$")
 
 
 def _npx_timeout_seconds() -> int:
@@ -69,6 +93,47 @@ def _npx_timeout_seconds() -> int:
             f"{NPX_TIMEOUT_ENV} must be a positive integer, got {raw_timeout!r}"
         )
     return timeout_seconds
+
+
+def parse_update_output(*outputs: str) -> SkillsUpdateReport:
+    """Extract the stable skill delta lines emitted by ``npx skills update``."""
+    updated: set[str] = set()
+    deleted: dict[str, set[str]] = {}
+    pending_source: str | None = None
+
+    for output in outputs:
+        for raw_line in output.splitlines():
+            line = _ANSI_ESCAPE_RE.sub("", raw_line).strip()
+            if not line:
+                continue
+
+            deleted_header = _DELETED_HEADER_RE.match(line)
+            if deleted_header:
+                pending_source = deleted_header.group(1).strip()
+                deleted.setdefault(pending_source, set())
+                continue
+
+            if pending_source is not None:
+                bullet = _BULLET_RE.match(line)
+                if bullet:
+                    deleted[pending_source].add(bullet.group(1).strip())
+                    continue
+                pending_source = None
+
+            update_line = _UPDATE_LINE_RE.match(line)
+            if update_line:
+                skill = update_line.group(1).strip()
+                if not re.fullmatch(r"\d+\s+skill\(s\)", skill, flags=re.IGNORECASE):
+                    updated.add(skill)
+
+    return SkillsUpdateReport(
+        updated_skills=tuple(sorted(updated)),
+        deleted_by_source=tuple(
+            (source, tuple(sorted(skills)))
+            for source, skills in sorted(deleted.items())
+            if skills
+        ),
+    )
 
 
 def _github_clone_url(repo: str) -> str | None:

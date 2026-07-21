@@ -7,7 +7,7 @@ AGENTBOT_COMMAND_KEYS=(
 	status install update token boot workspace workspaces resync command_lib doctor dotfiles
 )
 AGENTBOT_BACKEND_COMMAND_KEYS=(
-	install 'skills install' 'skills update' 'skills list' 'skills doctor'
+	install 'skills install' 'skills update' 'skills upgrade' 'skills list' 'skills doctor'
 	doctor update status global workspace workspaces resync
 )
 AGENTBOT_CONFIG_KEYS=(
@@ -19,7 +19,7 @@ AGENTBOT_SURFACE_KEYS=(canonical_sources rendered_outputs skill_store workspace_
 declare -A AGENTBOT_COMMAND_USAGE=(
 	[status]='agentbot status [--json]'
 	[install]='agentbot install'
-	[update]='agentbot update [--dry-run] [--yes]'
+	[update]='agentbot update|upgrade [--dry-run] [--yes]'
 	[token]='agentbot token'
 	[boot]='agentbot boot [--agents|--codex|--claude|--copilot|--cursor] [--profile NAME] [TARGET]'
 	[workspace]='agentbot workspace [--profile NAME] [--targets LIST] [--yes] PATH'
@@ -149,7 +149,8 @@ declare -A AGENTBOT_BACKEND_USAGE=(
 	['skills list']='./install.sh skills list'
 	['skills doctor']='./install.sh skills doctor'
 	[doctor]='./install.sh doctor'
-	[update]='./install.sh update [--dry-run] [--yes]'
+	[update]='./install.sh update|upgrade [--dry-run] [--yes]'
+	['skills upgrade']='./install.sh skills upgrade'
 	[status]='./install.sh status [--json]'
 	[global]='./install.sh global'
 	[workspace]='./install.sh workspace [--profile NAME] [--targets LIST] [--yes] PATH'
@@ -161,6 +162,7 @@ declare -A AGENTBOT_BACKEND_SUMMARY=(
 	[install]='Run the complete first-time Agentbot installation.'
 	['skills install']='Install enabled upstream skills from skills.sources.yaml.'
 	['skills update']='Refresh globally installed skills from the skill lock.'
+	['skills upgrade']='Alias for refreshing globally installed skills from the skill lock.'
 	['skills list']='List installed skills under the global skill store.'
 	['skills doctor']='Validate skill sources, tooling, and lock prerequisites.'
 	[doctor]='Validate the slim global baseline and installed skills.'
@@ -176,6 +178,7 @@ declare -A AGENTBOT_BACKEND_OPTIONS=(
 	[install]=$'(none)|The complete install command takes no options.|always'
 	['skills install']=$'(none)|Installs the enabled manifest entries.|always'
 	['skills update']=$'(none)|Refreshes the global skill store from the lock file.|always'
+	['skills upgrade']=$'(none)|Alias for refreshing the global skill store from the lock file.|always'
 	['skills list']=$'(none)|Lists installed skills without changing them.|always'
 	['skills doctor']=$'(none)|Validates skill prerequisites without changing them.|always'
 	[doctor]=$'(none)|Runs the slim Doctor checks.|always'

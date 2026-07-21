@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import stat
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Mapping
 
@@ -11,9 +12,12 @@ from .models import DoctorIssue
 from .paths import AgentbotPaths
 from .render import installed_skill_dirs, managed_skill_names, render_global_outputs
 from .skills_installer import (
+    InstallResult,
+    SkillsUpdateReport,
     doctor_skills,
     install_skills as run_skills_install,
     list_installed_skills,
+    parse_update_output,
     update_skills as run_skills_update,
 )
 from .skills_sources import load_skills_sources
@@ -63,8 +67,8 @@ class AgentbotService:
             return skills_rc
         return doctor_rc
 
-    def update_skills(self) -> None:
-        run_skills_update(self.paths)
+    def update_skills(self) -> InstallResult:
+        return run_skills_update(self.paths)
 
     def preview_workspace(
         self,
@@ -142,10 +146,69 @@ class AgentbotService:
             validate=validate,
         )
 
+    def _installed_skill_catalog(self, config, lock: dict) -> dict[str, list[str]]:
+        installed = set(self.list_skills())
+        catalog: dict[str, list[str]] = {}
+        for source in config.active_sources():
+            if source.skills == ["*"]:
+                owned = {
+                    name
+                    for name, entry in lock.get("skills", {}).items()
+                    if isinstance(entry, dict) and entry.get("source") == source.repo and name in installed
+                }
+                catalog[source.id] = sorted(owned)
+            else:
+                catalog[source.id] = sorted(installed & set(source.skills))
+        return catalog
+
+    def _catalog_after_upstream_deletions(self, report: SkillsUpdateReport):
+        if not report.deleted_by_source:
+            return None
+
+        config = load_skills_sources(self.paths.skills_sources_file)
+        lock: dict = {}
+        if self.paths.global_skill_lock.exists():
+            lock = json.loads(self.paths.global_skill_lock.read_text(encoding="utf-8"))
+        catalog = self._installed_skill_catalog(config, lock)
+        for source_label, deleted_skills in report.deleted_by_source:
+            source = next(
+                (
+                    candidate
+                    for candidate in config.active_sources()
+                    if candidate.id == source_label or candidate.repo == source_label
+                ),
+                None,
+            )
+            if source is None:
+                continue
+            deleted = set(deleted_skills)
+            catalog[source.id] = [
+                skill for skill in catalog.get(source.id, ()) if skill not in deleted
+            ]
+        return catalog
+
+    @staticmethod
+    def _confirm_reported_upstream_deletions(report: SkillsUpdateReport):
+        reported = set(report.deleted_skills)
+
+        def confirm(plan) -> bool:
+            removed = set(plan.wildcard_removals) | {
+                change.skill
+                for change in plan.manifest_changes
+                if change.action == "remove"
+            }
+            return bool(removed) and not plan.wildcard_additions and removed <= reported
+
+        return confirm
+
     def run_reconciliation_update(self, *, dry_run: bool = False, confirm: bool = False) -> ReconcileResult:
         """Refresh upstream pins, then reconcile source-owned runtime state."""
+        update_report = SkillsUpdateReport()
+        discovered = None
         if not dry_run:
-            self.update_skills()
+            update_result = self.update_skills()
+            update_report = parse_update_output(update_result.stdout, update_result.stderr)
+            discovered = self._catalog_after_upstream_deletions(update_report)
         def validate() -> None:
             errors = [
                 issue for issue in self.doctor_issues() + self.skills_doctor_issues()
@@ -157,14 +220,18 @@ class AgentbotService:
                     + "; ".join(issue.message for issue in errors)
                 )
 
+        reconcile_confirm: bool | Callable = confirm
+        if not confirm and update_report.deleted_by_source:
+            reconcile_confirm = self._confirm_reported_upstream_deletions(update_report)
         result = self.reconcile_skills(
-            confirm=confirm,
+            discovered=discovered,
+            confirm=reconcile_confirm,
             dry_run=dry_run,
             validate=None if dry_run else validate,
         )
         if result.status in {"applied", "applied-with-local-changes"}:
             self.refresh_agent_outputs()
-        return result
+        return replace(result, updated_skills=update_report.updated_skills)
 
     def refresh_agent_outputs(self) -> tuple[int, int, int]:
         linked, skipped, updated = self.apply_claude_bridge(print_summary=False)

@@ -52,6 +52,7 @@ class CliTests(unittest.TestCase):
             (Path("AGENTS.md"),),
             ("removed-skill",),
             ("added-skill",),
+            updated_skills=("updated-skill",),
         )
         service_type.return_value = service
 
@@ -61,6 +62,34 @@ class CliTests(unittest.TestCase):
         self.assertIn("Reconciliation report", stdout)
         self.assertIn("added-skill", stdout)
         self.assertIn("removed-skill", stdout)
+        self.assertIn("updated-skill", stdout)
+
+    @patch("src.cli.default_paths")
+    @patch("src.cli.AgentbotService")
+    def test_upgrade_is_update_alias_and_prints_skill_delta(self, service_type, _default_paths) -> None:
+        from src.skill_reconcile import ReconcileResult
+
+        service = MagicMock()
+        service.run_reconciliation_update.return_value = ReconcileResult(
+            "applied", (), ("removed-skill",), (), updated_skills=("updated-skill",)
+        )
+        service_type.return_value = service
+
+        rc, stdout, _stderr = self._run_main(["agentbot", "upgrade", "--yes"])
+
+        self.assertEqual(0, rc)
+        self.assertIn("Agentbot › Upgrade", stdout)
+        self.assertIn("updated-skill", stdout)
+        self.assertIn("removed-skill", stdout)
+        service.run_reconciliation_update.assert_called_once_with(dry_run=False, confirm=True)
+
+    def test_parser_accepts_upgrade_alias(self) -> None:
+        from src.cli import build_parser
+
+        args = build_parser().parse_args(["upgrade", "--dry-run"])
+
+        self.assertEqual("upgrade", args.command)
+        self.assertTrue(args.dry_run)
 
     @patch("src.cli.default_paths")
     @patch("src.cli.AgentbotService")

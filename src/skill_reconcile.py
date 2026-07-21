@@ -47,6 +47,7 @@ class ReconcileResult:
     added_skills: tuple[str, ...]
     backup_path: Path | None = None
     message: str = ""
+    updated_skills: tuple[str, ...] = ()
 
     @property
     def tracked_changes(self) -> bool:

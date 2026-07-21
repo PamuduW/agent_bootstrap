@@ -167,7 +167,7 @@ run_skills() {
 
   if cli_supports_skills; then
     case "$subcmd" in
-      install|update) github_token_child run_cli skills "$subcmd" "$@" ;;
+      install|update|upgrade) github_token_child run_cli skills "$subcmd" "$@" ;;
       *) run_cli skills "$subcmd" "$@" ;;
     esac
     return $?
@@ -178,7 +178,7 @@ run_skills() {
       "$SKILLS_INSTALL_SH" install
       refresh_agent_outputs_fallback
       ;;
-    update)
+    update|upgrade)
       "$SKILLS_INSTALL_SH" update
       refresh_agent_outputs_fallback
       ;;
@@ -306,6 +306,12 @@ run_update_prompt() {
 }
 
 run_update_backend() {
+  run_update_backend_as update "$@"
+}
+
+run_update_backend_as() {
+  local update_command="$1"
+  shift
   local confirm=no dry_run=false arg update_outcome update_reason
   for arg in "$@"; do
     case "$arg" in
@@ -338,7 +344,7 @@ run_update_backend() {
   if [[ "$dry_run" == true || "${AGENTBOT_UPDATE_SHOW_STATUS:-1}" == 1 ]]; then
     run_cli status
   fi
-  run_cli update "$@"
+  github_token_child run_cli "$update_command" "$@"
 }
 
 usage() {
@@ -348,12 +354,12 @@ Usage: ./install.sh <command> [args]
   Commands:
   install                Install Agentbot: skills, bridge, global render, doctor, link
   skills install         Install curated upstream skills from skills.sources.yaml
-  skills update          Refresh global skills from ~/.agents/.skill-lock.json
+  skills update|upgrade  Refresh global skills from ~/.agents/.skill-lock.json
   skills list            List installed skills
   skills doctor          Validate skills installer prerequisites
   doctor                 Run slim doctor (skills + global baseline)
-  update [--dry-run] [--yes]
-                         Repo-first skill reconciliation update
+  update|upgrade [--dry-run] [--yes]
+                         Repo-first skill reconciliation update/upgrade
   status [--json]        Show skills and global render status
   global                 Render global agent outputs
   workspace [--profile NAME] [--targets LIST] [--yes] PATH
@@ -396,14 +402,14 @@ main() {
     install)
       run_install
       ;;
-    update)
+    update|upgrade)
       check_deps
-      run_update_backend "${@:2}"
+      run_update_backend_as "$cmd" "${@:2}"
       ;;
     skills)
       check_deps
       if [[ $# -lt 2 ]]; then
-        die "usage: ./install.sh skills <install|update|list|doctor>"
+        die "usage: ./install.sh skills <install|update|upgrade|list|doctor>"
       fi
       run_skills "${2}" "${@:3}"
       ;;

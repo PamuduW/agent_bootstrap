@@ -73,8 +73,10 @@ Curated upstreams are listed in [`skills.sources.yaml`](skills.sources.yaml). In
 ```bash
 ./install.sh skills install   # idempotent install from manifest, then refresh Claude/Codex outputs
 ./install.sh skills update    # npx skills update -g + Claude bridge + Codex symlinks
+./install.sh skills upgrade   # alias for skills update
 ./install.sh update --dry-run # repo-first reconciliation preview
 ./install.sh update --yes     # confirmed repo-first reconciliation
+./install.sh upgrade --yes    # alias for the repo-first reconciliation
 ./install.sh skills list
 ./install.sh skills doctor
 ```
@@ -174,7 +176,7 @@ The public Agentbot command matrix is:
 agentbot                  # TTY menu; headless invocation fails with guidance
 agentbot status [--json]
 agentbot install
-agentbot update [--dry-run] [--yes]
+agentbot update|upgrade [--dry-run] [--yes]
 agentbot token
 agentbot boot [--claude] [--copilot] [--cursor] [--codex] [--profile NAME] [target]
 agentbot workspace [--profile NAME] [--targets LIST] [--yes] PATH
@@ -194,6 +196,12 @@ declined, or failed pull states stop before skills work. A confirmed
 reconciliation never runs `git add`, `git commit`, or `git push`; tracked
 manifest or policy changes are handed back as `applied-with-local-changes` for
 the user to review and commit or discard.
+
+The update report lists the individual skills that were updated and removed.
+When `npx skills` reports that a source repository deleted a skill, Agentbot
+automatically approves removal of that source-owned local skill from the global
+store and lock; unrelated reconciliation changes still use the normal
+confirmation flow.
 
 From the TTY menu, **Update** checks the repository first. If it is behind, a
 colored repository table is shown before the fast-forward pull prompt; after a

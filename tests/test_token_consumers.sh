@@ -151,6 +151,24 @@ test_python_skills_children() (
   grep -q $'^python3\t-m\tsrc\.cli\t--root\t[^\t]*\tskills\tupdate\tvalid=yes\tsource=saved$' "$TEST_COMMAND_LOG"
 )
 
+test_python_repo_update_child() (
+  reset_state
+  write_token_file "$(active_file)" "$(token saved)"
+  AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+  check_deps() { :; }
+  repo_update_run() {
+    printf -v "$3" '%s' current
+    printf -v "$4" '%s' current
+  }
+  run_update_backend --dry-run >/dev/null || return 1
+  grep -q $'^python3\t-m\tsrc\.cli\t--root\t[^\t]*\tstatus\tvalid=no\tsource=none$' "$TEST_COMMAND_LOG" || return 1
+  grep -q $'^python3\t-m\tsrc\.cli\t--root\t[^\t]*\tupdate\t--dry-run\tvalid=yes\tsource=saved$' "$TEST_COMMAND_LOG" || return 1
+  reset_state
+  write_token_file "$(active_file)" "$(token saved)"
+  run_update_backend_as upgrade --dry-run >/dev/null || return 1
+  grep -q $'^python3\t-m\tsrc\.cli\t--root\t[^\t]*\tupgrade\t--dry-run\tvalid=yes\tsource=saved$' "$TEST_COMMAND_LOG"
+)
+
 assert_readonly_skills_subcommand_unwrapped() {
   local subcmd="$1" err
   err="$TEST_ROOT/${subcmd}.err"
@@ -287,6 +305,7 @@ expect 'saved token reaches normal and quiet npx add children only' test_saved_a
 expect 'saved token reaches update probe and normal and quiet update children' test_saved_update_probe_normal_and_quiet
 expect 'npx add and update argv contract remains unchanged' test_npx_argv_contract
 expect 'install.sh skills install and update authenticate only Python children' test_python_skills_children
+expect 'install.sh repo update authenticates only the Python update child' test_python_repo_update_child
 expect 'install.sh skills list neither authenticates warns nor migrates' test_python_skills_list_unwrapped
 expect 'install.sh skills doctor neither authenticates warns nor migrates' test_python_skills_doctor_unwrapped
 expect 'explicit install authenticates the internal Python bootstrap child' test_python_install_backend_child

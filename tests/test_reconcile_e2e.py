@@ -60,6 +60,79 @@ class ReconcileE2ETests(unittest.TestCase):
             self.assertTrue((home / ".codex" / "skills" / "alpha").is_symlink())
             self.assertTrue((home / ".claude" / "skills" / "alpha").is_symlink())
 
+    def test_update_automatically_removes_upstream_deleted_owned_skill(self) -> None:
+        from src.paths import AgentbotPaths
+        from src.service import AgentbotService
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "repo"
+            home = Path(temporary) / "home"
+            fake_bin = Path(temporary) / "bin"
+            root.mkdir()
+            home.mkdir()
+            fake_bin.mkdir()
+            (root / "global").mkdir()
+            (root / "global" / "AGENTS.md").write_text("# baseline\n", encoding="utf-8")
+            (root / "skills.sources.yaml").write_text(
+                "version: 1\nagents: [codex]\nscope: global\nsources:\n"
+                "  - id: wildcard\n    repo: owner/repo\n    skills: all\n",
+                encoding="utf-8",
+            )
+            skills_home = home / ".agents" / "skills"
+            deleted_skill = skills_home / "removed-skill"
+            deleted_skill.mkdir(parents=True)
+            (deleted_skill / "SKILL.md").write_text("# removed\n", encoding="utf-8")
+            lock = home / ".agents" / ".skill-lock.json"
+            lock.parent.mkdir(parents=True, exist_ok=True)
+            lock.write_text(
+                json.dumps(
+                    {
+                        "version": 3,
+                        "skills": {
+                            "removed-skill": {
+                                "source": "owner/repo",
+                                "skillPath": "skills/removed-skill/SKILL.md",
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            fake_npx = fake_bin / "npx"
+            fake_npx.write_text(
+                "#!/usr/bin/env bash\n"
+                "printf '%s\\n' 'Warning: The following skills from owner/repo appear to have been deleted upstream:'\n"
+                "printf '%s\\n' '  • removed-skill'\n",
+                encoding="utf-8",
+            )
+            fake_npx.chmod(stat.S_IRWXU)
+            paths = AgentbotPaths(
+                root,
+                home / ".codex",
+                home / ".claude",
+                home / ".cursor",
+                home / ".config" / "agentbot",
+            )
+            with mock.patch.dict(
+                os.environ,
+                {"HOME": str(home), "PATH": f"{fake_bin}:{os.environ['PATH']}"},
+                clear=False,
+            ), mock.patch.object(
+                type(paths),
+                "agents_skills_home",
+                new_callable=lambda: property(lambda _self: skills_home),
+            ), mock.patch.object(
+                type(paths),
+                "global_skill_lock",
+                new_callable=lambda: property(lambda _self: lock),
+            ):
+                result = AgentbotService(paths).run_reconciliation_update()
+
+            self.assertEqual("applied", result.status)
+            self.assertEqual(("removed-skill",), result.removed_skills)
+            self.assertFalse(deleted_skill.exists())
+            self.assertNotIn("removed-skill", json.loads(lock.read_text(encoding="utf-8"))["skills"])
+
 
 if __name__ == "__main__":
     unittest.main()

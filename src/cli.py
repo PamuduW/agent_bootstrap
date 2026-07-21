@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .paths import AgentbotPaths, default_paths
 from .service import AgentbotService
-from .skills_installer import SkillsInstallError
+from .skills_installer import SkillsInstallError, parse_update_output
 from .ui import (
     print_doctor_summary,
     print_header,
@@ -55,12 +55,13 @@ def main() -> int:
             return 0
         if command == "doctor":
             return print_doctor(service)
-        if command == "update":
+        if command in {"update", "upgrade"}:
             result = service.run_reconciliation_update(
                 dry_run=bool(getattr(args, "dry_run", False)),
                 confirm=bool(getattr(args, "confirm", False)),
             )
-            print_header("Agentbot update", "Agentbot › Update")
+            title = command.capitalize()
+            print_header(f"Agentbot {command}", f"Agentbot › {title}")
             print(f"  {result.status}: {result.message or 'source-owned skills reconciled'}")
             for path in result.changed_paths:
                 print(f"  changed: {path}")
@@ -123,9 +124,13 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("--json", action="store_true", dest="status_json")
     subparsers.add_parser("global", help="Render global outputs")
     subparsers.add_parser("doctor", help="Validate skills and global baseline")
-    update = subparsers.add_parser("update", help="Reconcile source-owned skills after the repository gate")
-    update.add_argument("--dry-run", action="store_true", help="Preview reconciliation without writing")
-    update.add_argument("--yes", dest="confirm", action="store_true", help="Confirm source-owned changes")
+    for command in ("update", "upgrade"):
+        update = subparsers.add_parser(
+            command,
+            help="Reconcile source-owned skills after the repository gate",
+        )
+        update.add_argument("--dry-run", action="store_true", help="Preview reconciliation without writing")
+        update.add_argument("--yes", dest="confirm", action="store_true", help="Confirm source-owned changes")
 
     workspace = subparsers.add_parser("workspace", help="Preview or render one workspace")
     workspace.add_argument("--profile", help="Workspace profile name")
@@ -151,6 +156,10 @@ def build_parser() -> argparse.ArgumentParser:
     skills_sub.add_parser(
         "update",
         help="Refresh globally installed skills from ~/.agents/.skill-lock.json",
+    )
+    skills_sub.add_parser(
+        "upgrade",
+        help="Alias for updating globally installed skills",
     )
     skills_sub.add_parser("list", help="List installed skills under ~/.agents/skills")
     skills_sub.add_parser("doctor", help="Validate skills sources and tooling")
@@ -195,15 +204,23 @@ def handle_skills_command(service: AgentbotService, skills_command: str) -> int:
             print(f"  Error: {error}")
             return 1
         return skills_rc
-    if skills_command == "update":
-        print_header("Skills update", "Agentbot › Skills update")
+    if skills_command in {"update", "upgrade"}:
+        title = skills_command.capitalize()
+        print_header(f"Skills {skills_command}", f"Agentbot › Skills {title}")
         try:
-            service.update_skills()
+            result = service.update_skills()
+            update_report = parse_update_output(result.stdout, result.stderr)
             linked, skipped, updated = service.refresh_agent_outputs()
         except Exception as error:  # noqa: BLE001
             print(f"  Error: {error}")
             return 1
-        return print_skills_update_report(linked=linked, skipped=skipped, updated=updated)
+        return print_skills_update_report(
+            linked=linked,
+            skipped=skipped,
+            updated=updated,
+            updated_skills=update_report.updated_skills,
+            upstream_deleted_skills=update_report.deleted_skills,
+        )
     if skills_command == "list":
         skills = service.list_skills()
         if not skills:

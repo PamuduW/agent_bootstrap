@@ -45,11 +45,12 @@ test_dispatch_matrix() (
 	agentbot_main token; [[ $? -eq 12 ]] || exit 1
 	agentbot_main dotfiles; [[ $? -eq 13 ]] || exit 1
 	agentbot_main update; [[ $? -eq 14 ]] || exit 1
+	agentbot_main upgrade; [[ $? -eq 14 ]] || exit 1
 	agentbot_main workspace /tmp/project; [[ $? -eq 14 ]] || exit 1
 	agentbot_main workspaces; [[ $? -eq 14 ]] || exit 1
 	agentbot_main resync --all; [[ $? -eq 14 ]] || exit 1
 	set -e
-	[[ "$(<"$calls")" == $'menu\nbackend:status\nbackend:install\nbackend:doctor\ntoken\ndotfiles\nbackend:update\nbackend:workspace /tmp/project\nbackend:workspaces\nbackend:resync --all' ]]
+	[[ "$(<"$calls")" == $'menu\nbackend:status\nbackend:install\nbackend:doctor\ntoken\ndotfiles\nbackend:update\nbackend:upgrade\nbackend:workspace /tmp/project\nbackend:workspaces\nbackend:resync --all' ]]
 )
 
 test_boot_selector_matrix() {
@@ -132,7 +133,8 @@ test_agentbot_help_describes_full_command_options() {
 	[[ "$output" == *'--claude'* ]] || return 1
 	[[ "$output" == *'--targets LIST'* ]] || return 1
 	[[ "$output" == *'AGENTBOT_HOME'* ]] || return 1
-	[[ "$output" == *'GITHUB_TOKEN'* ]]
+	[[ "$output" == *'GITHUB_TOKEN'* ]] || return 1
+	[[ "$output" == *'agentbot update|upgrade'* ]]
 }
 
 check 'agentbot dispatcher exists and is executable' test_dispatcher_exists

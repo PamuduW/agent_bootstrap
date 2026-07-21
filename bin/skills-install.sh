@@ -204,7 +204,8 @@ Usage: $(basename "$0") <command>
 
 Commands:
   install   Install curated upstream skills from skills.sources.yaml
-  update    Refresh globally installed skills from ~/.agents/.skill-lock.json
+  update|upgrade
+            Refresh globally installed skills from ~/.agents/.skill-lock.json
   list      List installed skills under ~/.agents/skills
   doctor    Validate installer prerequisites
 EOF
@@ -218,7 +219,7 @@ main() {
     install)
       install_all
       ;;
-    update)
+    update|upgrade)
       update_all
       ;;
     list)

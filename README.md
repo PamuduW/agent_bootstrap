@@ -197,6 +197,12 @@ reconciliation never runs `git add`, `git commit`, or `git push`; tracked
 manifest or policy changes are handed back as `applied-with-local-changes` for
 the user to review and commit or discard.
 
+Repository origin validation accepts the canonical Agentbot GitHub URLs and
+global `url.*.insteadOf` aliases only when the resolved URL is that exact
+repository. The reciprocal Dotfiles bridge applies the same rule to the
+Dotfiles repository. Other hosts, paths, and credential-bearing URLs remain
+rejected.
+
 The update report lists the individual skills that were updated and removed.
 When `npx skills` reports that a source repository deleted a skill, Agentbot
 automatically approves removal of that source-owned local skill from the global

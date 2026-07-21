@@ -14,8 +14,37 @@ sibling_dotfiles_repo_url() {
 }
 
 sibling_dotfiles_origin_allowed() {
-	case "$1" in
-	git@github.com:PamuduW/dotfiles.git|https://github.com/PamuduW/dotfiles.git) return 0 ;;
+	local origin="$1" rewrite_rules="${2:-}"
+	local key target prefix matched_prefix='' matched_target='' resolved
+
+	case "$origin" in
+	*://*@*) return 1 ;;
+	git@github.com:PamuduW/dotfiles.git|https://github.com/PamuduW/dotfiles.git)
+		return 0
+		;;
+	esac
+
+	while IFS=$' \t' read -r key target; do
+		[[ "$key" == url.*.insteadof ]] || continue
+		prefix="${key#url.}"
+		prefix="${prefix%.insteadof}"
+		[[ -n "$prefix" ]] || continue
+		case "$origin" in
+			"$prefix"*)
+				if ((${#prefix} > ${#matched_prefix})); then
+					matched_prefix="$prefix"
+					matched_target="$target"
+				fi
+				;;
+		esac
+	done <<<"$rewrite_rules"
+
+	[[ -n "$matched_prefix" ]] || return 1
+	resolved="${matched_target}${origin#"$matched_prefix"}"
+	case "$resolved" in
+	git@github.com:PamuduW/dotfiles.git|https://github.com/PamuduW/dotfiles.git)
+		return 0
+		;;
 	*) return 1 ;;
 	esac
 }
@@ -30,10 +59,14 @@ sibling_dotfiles_validate() {
 		printf 'Dotfiles origin is unavailable: %s\n' "$home" >&2
 		return 1
 	}
-	sibling_dotfiles_origin_allowed "$origin" || {
-		printf 'Dotfiles origin is not allowlisted: %s\n' "$origin" >&2
-		return 1
-	}
+	if ! sibling_dotfiles_origin_allowed "$origin"; then
+		local rewrite_rules
+		rewrite_rules="$(git config --global --get-regexp '^url\..*\.insteadof$' 2>/dev/null || true)"
+		sibling_dotfiles_origin_allowed "$origin" "$rewrite_rules" || {
+			printf 'Dotfiles origin is not allowlisted: %s\n' "$origin" >&2
+			return 1
+		}
+	fi
 }
 
 sibling_dotfiles_confirm() {

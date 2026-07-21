@@ -16,6 +16,38 @@ _repo_update_upstream() {
   [[ -n "$upstream" ]]
 }
 
+_repo_update_origin_allowed() {
+  local origin="$1" rewrite_rules="${2:-}"
+  local key target prefix matched_prefix='' matched_target='' resolved
+
+  case "$origin" in
+    *://*@*) return 1 ;;
+    git@github.com:PamuduW/agent_bootstrap.git|https://github.com/PamuduW/agent_bootstrap.git) return 0 ;;
+  esac
+
+  while IFS=$' \t' read -r key target; do
+    [[ "$key" == url.*.insteadof ]] || continue
+    prefix="${key#url.}"
+    prefix="${prefix%.insteadof}"
+    [[ -n "$prefix" ]] || continue
+    case "$origin" in
+      "$prefix"*)
+        if (( ${#prefix} > ${#matched_prefix} )); then
+          matched_prefix="$prefix"
+          matched_target="$target"
+        fi
+        ;;
+    esac
+  done <<<"$rewrite_rules"
+
+  [[ -n "$matched_prefix" ]] || return 1
+  resolved="${matched_target}${origin#"$matched_prefix"}"
+  case "$resolved" in
+    git@github.com:PamuduW/agent_bootstrap.git|https://github.com/PamuduW/agent_bootstrap.git) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 repo_update_classify() {
   local repo="$1" state_name="$2" reason_name="$3"
   local status_output branch upstream counts ahead behind classified_state classified_reason
@@ -57,7 +89,7 @@ repo_update_classify() {
 
 repo_update_run() {
   local repo="$1" decision_fn="$2" outcome_name="$3" reason_name="$4"
-  local worktree bare origin state reason
+  local worktree bare origin state reason rewrite_rules
 
   _repo_update_set_result "$outcome_name" "$reason_name" stopped invalid-repository
   REPO_UPDATE_STATE=stopped
@@ -73,10 +105,13 @@ repo_update_run() {
     _repo_update_set_result "$outcome_name" "$reason_name" stopped invalid-origin
     return 0
   }
-  case "$origin" in
-    'git@github.com:PamuduW/agent_bootstrap.git'|'https://github.com/PamuduW/agent_bootstrap.git') ;;
-    *) _repo_update_set_result "$outcome_name" "$reason_name" stopped invalid-origin; return 0 ;;
-  esac
+  if ! _repo_update_origin_allowed "$origin"; then
+    rewrite_rules="$(git config --global --get-regexp '^url\..*\.insteadof$' 2>/dev/null || true)"
+    _repo_update_origin_allowed "$origin" "$rewrite_rules" || {
+      _repo_update_set_result "$outcome_name" "$reason_name" stopped invalid-origin
+      return 0
+    }
+  fi
 
   if ! _repo_update_upstream "$repo"; then
     _repo_update_set_result "$outcome_name" "$reason_name" stopped no-upstream

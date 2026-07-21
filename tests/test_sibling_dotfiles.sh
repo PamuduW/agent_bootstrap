@@ -25,6 +25,50 @@ test_existing_allowed_launch() {
 	grep -Fq $'sibling\tcaller=agentbot' "$TEST_SIBLING_LOG"
 }
 
+install_alias_git_fake() {
+	cat >"$TEST_FAKE_BIN/git" <<'FAKE'
+#!/usr/bin/env bash
+set -u
+source "${TEST_HARNESS_LIB:?}"
+_harness_append_sanitized "$TEST_COMMAND_LOG" git "$@"
+args=("$@")
+if [[ "${args[0]:-}" == -C ]]; then
+	args=("${args[@]:2}")
+fi
+if [[ "${args[*]}" == 'remote get-url origin' ]]; then
+	printf '%s\n' "${FAKE_DOTFILES_ORIGIN:?}"
+	exit 0
+fi
+if [[ "${args[*]}" == 'config --global --get-regexp ^url\..*\.insteadof$' ]]; then
+	printf '%s\n' 'url.git@github-personal:.insteadof git@github.com:'
+	exit 0
+fi
+exit 97
+FAKE
+	chmod 700 "$TEST_FAKE_BIN/git"
+}
+
+test_configured_alias_allowed() {
+	prepare_existing
+	FAKE_DOTFILES_ORIGIN='git@github-personal:PamuduW/dotfiles.git'
+	export FAKE_DOTFILES_ORIGIN
+	install_alias_git_fake
+	sibling_dotfiles_launch >/dev/null
+	grep -Fq $'sibling\tcaller=agentbot' "$TEST_SIBLING_LOG"
+}
+
+test_configured_alias_wrong_path_rejected() {
+	prepare_existing
+	FAKE_DOTFILES_ORIGIN='git@github-personal:Other/dotfiles.git'
+	export FAKE_DOTFILES_ORIGIN
+	install_alias_git_fake
+	set +e
+	sibling_dotfiles_launch >/dev/null 2>&1
+	local rc=$?
+	set -e
+	[[ "$rc" -ne 0 && ! -s "$TEST_SIBLING_LOG" ]]
+}
+
 test_invalid_origin_stops() {
 	prepare_existing 'https://credential@github.com/PamuduW/dotfiles.git'
 	set +e
@@ -110,6 +154,8 @@ FAKE
 }
 
 check 'existing allowlisted Dotfiles launches as a child' test_existing_allowed_launch
+check 'configured SSH alias resolving to Dotfiles is allowed' test_configured_alias_allowed
+check 'configured SSH alias resolving to another path is rejected' test_configured_alias_wrong_path_rejected
 check 'wrong or token-bearing Dotfiles origin is rejected' test_invalid_origin_stops
 check 'declining a missing Dotfiles clone does not run Git clone' test_missing_decline_does_not_clone
 check 'approved missing Dotfiles clone is validated then launched' test_missing_approved_clones_and_launches

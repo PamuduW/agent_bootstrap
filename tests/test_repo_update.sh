@@ -26,9 +26,18 @@ case "$cmd" in
     case "$scenario" in
       invalid-origin) printf 'https://github.com/other/repo.git\n' ;;
       token-origin) printf 'https://credential@github.com/PamuduW/agent_bootstrap.git\n' ;;
+      alias-origin|alias-wrong-path)
+        alias_owner='Other'
+        [[ "$scenario" == alias-origin ]] && alias_owner='PamuduW'
+        printf 'git@github-personal:%s/agent_bootstrap.git\n' "$alias_owner"
+        ;;
       absent-origin) exit 2 ;;
       *) printf 'https://github.com/PamuduW/agent_bootstrap.git\n' ;;
     esac ;;
+  'config --global --get-regexp ^url\..*\.insteadof$')
+    [[ "$scenario" == alias-origin || "$scenario" == alias-wrong-path ]] &&
+      printf '%s\n' 'url.git@github-personal:.insteadof git@github.com:'
+    ;;
   'rev-parse --abbrev-ref --symbolic-full-name @{upstream}') [[ "$scenario" == no-upstream ]] && exit 1; printf 'origin/main\n' ;;
   'fetch --prune') [[ "$scenario" == fetch-failed ]] && exit 29; : ;;
   'status --porcelain') [[ "$scenario" == status-failed ]] && exit 43; [[ "$scenario" == dirty ]] && printf '?? local-change\n'; : ;;
@@ -81,6 +90,17 @@ test_invalid_repo_and_origin() {
     case "$scenario" in invalid-repository) [[ "$REASON" == invalid-repository ]] ;; *) [[ "$REASON" == invalid-origin ]] ;; esac || return 1
     ! grep -q $'\tfetch\t--prune$' "$TEST_COMMAND_LOG" || return 1
   done
+}
+
+test_configured_alias_origin_is_allowed() {
+  run_case alias-origin
+  [[ "$OUTCOME/$REASON" == current/current ]] && ! grep -q $'\tpull\t--ff-only$' "$TEST_COMMAND_LOG"
+}
+
+test_configured_alias_wrong_path_is_rejected() {
+  run_case alias-wrong-path
+  [[ "$OUTCOME/$REASON" == stopped/invalid-origin ]] &&
+    ! grep -q $'\tfetch\t--prune$' "$TEST_COMMAND_LOG"
 }
 
 test_classify_output_parameter_table() {
@@ -189,6 +209,8 @@ expect 'diverged stops without decision or pull' test_diverged
 expect 'fetch failure stops before classification' test_fetch_failed
 expect 'malformed counts stop with invalid-counts' test_invalid_counts
 expect 'invalid repository and origin stop before fetch' test_invalid_repo_and_origin
+expect 'configured SSH alias resolving to Agentbot is accepted' test_configured_alias_origin_is_allowed
+expect 'configured SSH alias resolving to another path is rejected' test_configured_alias_wrong_path_is_rejected
 expect 'classifier writes exact state and reason output parameters for every state' test_classify_output_parameter_table
 expect 'classifier converts failed status probe to machine-stopped invalid-counts' test_classify_status_failure_is_machine_stopped
 expect 'Git sequence is validate origin upstream fetch classify pull' test_git_ordering

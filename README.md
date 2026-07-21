@@ -171,18 +171,22 @@ The public Agentbot command matrix is:
 
 ```text
 agentbot                  # TTY menu; headless invocation fails with guidance
-agentbot status
+agentbot status [--json]
 agentbot install
 agentbot update [--dry-run] [--yes]
 agentbot token
 agentbot boot [--claude] [--copilot] [--cursor] [--codex] [--profile NAME] [target]
 agentbot workspace [--profile NAME] [--targets LIST] [--yes] PATH
 agentbot workspaces
-agentbot resync [--all | PATH ...] [--yes]
+agentbot resync [--all | PATH ...] [--yes | --dry-run]
 agentbot doctor
 agentbot dotfiles
 agentbot help
 ```
+
+The interactive **Command Lib**, `agentbot help`, and the bootstrap help all
+show the complete supported command, option, configuration, output, and
+integration reference. They are read-only and use the same catalog.
 
 `agentbot update` is repo-first: dirty, detached, diverged, missing-upstream,
 declined, or failed pull states stop before skills work. A confirmed

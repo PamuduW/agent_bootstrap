@@ -352,13 +352,14 @@ Usage: ./install.sh <command> [args]
   skills list            List installed skills
   skills doctor          Validate skills installer prerequisites
   doctor                 Run slim doctor (skills + global baseline)
-  update [--dry-run]     Repo-first skill reconciliation update
-  status                 Show skills and global render status
+  update [--dry-run] [--yes]
+                         Repo-first skill reconciliation update
+  status [--json]        Show skills and global render status
   global                 Render global agent outputs
-  workspace [options] PATH
+  workspace [--profile NAME] [--targets LIST] [--yes] PATH
                          Preview or render one workspace
   workspaces             List locally registered workspaces
-  resync [--all | PATH ...] [--yes]
+  resync [--all | PATH ...] [--yes | --dry-run]
                          Preview or refresh registered workspaces
   help                   Show this help
 

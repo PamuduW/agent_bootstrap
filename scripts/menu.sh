@@ -5,6 +5,10 @@ _AGENTBOT_MENU_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$_AGENTBOT_MENU_DIR/lib/menu_core.sh"
 # shellcheck disable=SC1091
+source "$_AGENTBOT_MENU_DIR/lib/command_catalog.sh"
+# shellcheck disable=SC1091
+source "$_AGENTBOT_MENU_DIR/lib/command_help.sh"
+# shellcheck disable=SC1091
 source "$_AGENTBOT_MENU_DIR/lib/github_token.sh"
 # shellcheck disable=SC1091
 source "$_AGENTBOT_MENU_DIR/lib/sibling_dotfiles.sh"

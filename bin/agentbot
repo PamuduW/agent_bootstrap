@@ -12,6 +12,11 @@ else
 fi
 export AGENTBOT_HOME
 
+# shellcheck source=/dev/null
+source "$AGENTBOT_HOME/scripts/lib/command_catalog.sh"
+# shellcheck source=/dev/null
+source "$AGENTBOT_HOME/scripts/lib/command_help.sh"
+
 agentbot_die() { printf '[err] %s\n' "$*" >&2; return 1; }
 agentbot_info() { printf '[info] %s\n' "$*"; }
 
@@ -91,27 +96,7 @@ agentbot_boot() {
 }
 
 agentbot_usage() {
-  cat <<'EOF'
-Usage: agentbot <command> [options]
-
-Commands:
-  status                         Show Agentbot status
-  install                        Run the explicit Agentbot install
-  token                          Open token configuration (future seam)
-  boot [--claude] [--copilot] [--cursor] [--codex] [--profile NAME] [TARGET]
-                                 Create/preserve AGENTS and selected outputs
-  workspace [--profile NAME] [--targets LIST] [--yes] PATH
-                                 Preview or render one workspace
-  workspaces                     List locally registered workspaces
-  resync [--all | PATH ...] [--yes]
-                                 Preview or refresh registered workspaces
-  doctor                         Run Agentbot doctor
-  update [--dry-run] [--yes]     Repo-first skill reconciliation update
-  dotfiles                       Open Dotfiles integration (future seam)
-  help                           Show this help
-
-Set up the current directory with: agentbot boot
-EOF
+	agentbot_command_help_render_plain "${COLUMNS:-100}"
 }
 
 agentbot_main() {

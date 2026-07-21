@@ -84,6 +84,41 @@ test_command_lib_matches_colored_table_contract() (
 	[[ "$output" == *$'\033[33mmutating\033[0m'* ]]
 )
 
+test_command_lib_documents_full_help_catalog() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local output
+	output="$(AGENTBOT_MENU_COLS=100 agentbot_menu_command_lib)"
+	agentbot_command_catalog_validate
+	for needle in \
+		'--claude' \
+		'Include generated Claude output' \
+		'--profile NAME' \
+		'--targets LIST' \
+		'--dry-run' \
+		'AGENTBOT_HOME' \
+		'XDG_CONFIG_HOME' \
+		'GITHUB_TOKEN' \
+		'AGENTS.md' \
+		'Dotfiles integration'; do
+		[[ "$output" == *"$needle"* ]] || {
+			printf 'missing Command Lib detail: %s\n' "$needle" >&2
+			return 1
+		}
+	done
+)
+
+test_command_lib_details_fit_narrow_terminal() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local output line
+	output="$(NO_COLOR=1 AGENTBOT_MENU_COLS=48 agentbot_menu_command_lib)"
+	while IFS= read -r line; do
+		(( ${#line} <= 48 )) || {
+			printf 'line exceeds 48 columns (%d): %s\n' "${#line}" "$line" >&2
+			return 1
+		}
+	done <<<"$output"
+)
+
 test_menu_hint_colors_key_tokens() (
 	unset NO_COLOR
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
@@ -303,6 +338,8 @@ if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'Agentbot menu redraws in place without clearing on cursor movement' test_menu_uses_in_place_redraw_contract
 	check 'Agentbot menu exports TUI render mode to backend reports' test_menu_exports_tui_render_mode_to_backend
 	check 'Agentbot Command Lib matches the colored table contract' test_command_lib_matches_colored_table_contract
+	check 'Agentbot Command Lib documents the full command/config catalog' test_command_lib_documents_full_help_catalog
+	check 'Agentbot Command Lib wraps details to the terminal width' test_command_lib_details_fit_narrow_terminal
 	check 'Agentbot input hints color the interactive key tokens' test_menu_hint_colors_key_tokens
 	check 'Workspaces uses the scrollable submenu title and breadcrumb contract' test_workspaces_menu_uses_scrollable_submenu_contract
 	check 'Agentbot pauses use the shared blank-line contract' test_pause_has_global_blank_line_contract
@@ -321,6 +358,8 @@ else
 	fail 'Agentbot menu redraws in place without clearing on cursor movement'
 	fail 'Agentbot menu exports TUI render mode to backend reports'
 	fail 'Agentbot Command Lib matches the colored table contract'
+	fail 'Agentbot Command Lib documents the full command/config catalog'
+	fail 'Agentbot Command Lib wraps details to the terminal width'
 	fail 'Agentbot input hints color the interactive key tokens'
 	fail 'Agentbot pauses use the shared blank-line contract'
 	fail 'Agentbot menu dispatches actions in order and returns on Quit'

@@ -121,6 +121,15 @@ test_environment_and_no_old_binary() {
 	[[ "$output" == *'agentbot boot'* && "$output" != *link-agentboot* ]]
 }
 
+test_agentbot_help_describes_full_command_options() {
+	local output
+	output="$(NO_COLOR=1 AGENTBOT_HOME="$ROOT" AGENTBOT_TTY=0 "$AGENTBOT" help)"
+	[[ "$output" == *'--claude'* ]] || return 1
+	[[ "$output" == *'--targets LIST'* ]] || return 1
+	[[ "$output" == *'AGENTBOT_HOME'* ]] || return 1
+	[[ "$output" == *'GITHUB_TOKEN'* ]]
+}
+
 check 'agentbot dispatcher exists and is executable' test_dispatcher_exists
 if [[ -x "$AGENTBOT" ]]; then
 	check 'headless no-arg fails with explicit guidance' test_headless_no_arg_guidance
@@ -132,6 +141,7 @@ if [[ -x "$AGENTBOT" ]]; then
 	check 'explicit install links agentbot and cleans owned old link' test_install_link_and_owned_cleanup
 	check 'foreign and regular old paths are preserved' test_foreign_old_paths_are_preserved
 	check 'help and executable expose no old public surface' test_environment_and_no_old_binary
+	check 'agentbot help describes full command options and configuration' test_agentbot_help_describes_full_command_options
 else
 	fail 'headless no-arg fails with explicit guidance'
 	fail 'symlink invocation resolves the Agentbot repository root'
@@ -141,6 +151,7 @@ else
 	fail 'explicit install links agentbot and cleans owned old link'
 	fail 'foreign and regular old paths are preserved'
 	fail 'help and executable expose no old public surface'
+	fail 'agentbot help describes full command options and configuration'
 fi
 
 printf '\nRan %d Agentbot test(s); %d failure(s).\n' "$((passed + failed))" "$failed"

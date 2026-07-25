@@ -213,6 +213,49 @@ class CliTests(unittest.TestCase):
         self.assertIn("reproducible", rendered)
         self.assertNotIn("...", output.getvalue())
 
+    def test_doctor_highlights_manual_skill_names_without_shifting_columns(self) -> None:
+        import os
+
+        from src.models import DoctorIssue
+        from src.ui import print_doctor_summary, strip_ansi
+
+        issues = [
+            DoctorIssue(
+                "warning",
+                "reproducibility",
+                "Manual skill 'writing-clearly-and-concisely' is outside the global lock",
+            ),
+            DoctorIssue("warning", "token", "saved token path 'example' needs attention"),
+        ]
+        output = io.StringIO()
+        with patch.dict(os.environ, {"FORCE_COLOR": "1"}, clear=False):
+            os.environ.pop("NO_COLOR", None)
+            with patch("sys.stdout", output):
+                print_doctor_summary(issues)
+
+        rendered = output.getvalue()
+        self.assertIn(
+            "\033[1m\033[36mwriting-clearly-and-concisely\033[0m",
+            rendered,
+        )
+        self.assertEqual(1, rendered.count("\033[1m\033[36m"))
+        highlighted_line = next(
+            line for line in rendered.splitlines() if "writing-clearly-and-concisely" in line
+        )
+        separators = [
+            index
+            for index, char in enumerate(strip_ansi(highlighted_line))
+            if char == "|"
+        ]
+        self.assertEqual([25, 68], separators)
+
+        plain_output = io.StringIO()
+        with patch.dict(os.environ, {"NO_COLOR": "1"}, clear=False):
+            with patch("sys.stdout", plain_output):
+                print_doctor_summary(issues)
+        self.assertNotIn("\033[", plain_output.getvalue())
+        self.assertIn("'writing-clearly-and-concisely'", plain_output.getvalue())
+
     def test_parser_and_paths_use_agentbot_product_contract(self) -> None:
         import os
         import tempfile

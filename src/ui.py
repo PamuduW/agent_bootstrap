@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import textwrap
+from collections.abc import Callable
 from pathlib import Path
 
 BOLD = "\033[1m"
@@ -20,6 +21,7 @@ DETAIL_W = 40
 RESULT_W = 10
 
 ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+MANUAL_SKILL_NAME = re.compile(r"(?<=Manual skill ')[^']+(?=')")
 
 
 def use_color() -> bool:
@@ -89,6 +91,14 @@ def color_result(result: str) -> str:
     return result
 
 
+def highlight_manual_skill_name(detail: str, line: str) -> str:
+    match = MANUAL_SKILL_NAME.search(strip_ansi(detail))
+    if match is None:
+        return line
+    skill_name = match.group(0)
+    return line.replace(skill_name, _c(skill_name, BOLD + CYAN))
+
+
 def print_table_columns(*, headers: tuple[str, str, str] = ("component", "detail", "result")) -> None:
     h0, h1, h2 = headers
     print(f"  {_c(f'{h0:<{LABEL_W}} | {h1:<{DETAIL_W}} | {h2}', BOLD)}")
@@ -103,6 +113,7 @@ def print_table(
     headers: tuple[str, str, str] = ("component", "detail", "result"),
     show_header: bool = True,
     wrap_details: bool = False,
+    detail_highlighter: Callable[[str, str], str] | None = None,
 ) -> tuple[int, int, int]:
     ok_count = check_count = miss_count = 0
     if show_header:
@@ -124,11 +135,14 @@ def print_table(
             detail_lines = [detail if len(detail) <= DETAIL_W else f"{detail[: DETAIL_W - 3]}..."]
 
         for line_number, detail_fit in enumerate(detail_lines):
+            detail_padded = f"{detail_fit:<{DETAIL_W}}"
+            if detail_highlighter is not None:
+                detail_padded = detail_highlighter(detail, detail_padded)
             if line_number == 0:
-                print(f"  {label:<{LABEL_W}} | {detail_fit:<{DETAIL_W}} | ", end="")
+                print(f"  {label:<{LABEL_W}} | {detail_padded} | ", end="")
                 print(color_result(result))
             else:
-                print(f"  {'':<{LABEL_W}} | {detail_fit:<{DETAIL_W}} |")
+                print(f"  {'':<{LABEL_W}} | {detail_padded} |")
         key = result.strip().lower()
         if key in {"ok", "installed", "configured", "linked", "up to date", "current"}:
             ok_count += 1
@@ -244,7 +258,11 @@ def print_doctor_summary(issues: list) -> int:
             warnings += 1
         result = "error" if level == "error" else "check"
         rows.append((issue.scope, issue.message, result))
-    _ok, check, miss = print_table(rows, wrap_details=True)
+    _ok, check, miss = print_table(
+        rows,
+        wrap_details=True,
+        detail_highlighter=highlight_manual_skill_name,
+    )
     print()
     print(f"  {errors} error(s), {warnings} warning(s).")
     print_rollup(ok=0, check=check, miss=miss)

@@ -3,15 +3,16 @@
 This directory holds **pre-slim `agent_bootstrap` assets** moved during the 2026-07-09 rework. It is **not part of the runtime install path** — `./install.sh`, `npx skills`, `bin/agentbot`, and slim bootstrap flows do not read from here.
 
 All archive Markdown indexes, roadmaps, and historical notes live in this
-`archive/docs/` directory. The archive root keeps the JSON/YAML/environment
-configuration and the separate memory/template payloads they describe.
+`archive/docs/` directory. The archive root keeps the remaining
+JSON/YAML/environment configuration and template payloads they describe.
 
 **Archive documentation:**
 
 | File | Role |
 |------|------|
 | [stuff.md](./stuff.md) | Deferred capability map + restore pointers |
-| [stuff3.md](./stuff3.md) | **Implementation phases** (Phases 0–2 and 5 complete; Phases 3–4 deferred) |
+| [stuff3.md](./stuff3.md) | **Implementation phases** (Phases 0–2 and 5 complete; Phase 4 next; Phase 3 deferred) |
+| [legacy-memory-vault-design.md](./legacy-memory-vault-design.md) | Sanitized historical note; not an active memory store |
 | [future.md](./future.md) | Deferred AgentOS feature notes |
 | [LOCKFILE-NOTES.md](./LOCKFILE-NOTES.md) | Historical lockfile strategy |
 
@@ -34,7 +35,7 @@ Moved from repo root with `git mv` (except `exports/`, which was gitignored and 
 
 | Original path | Archive path | Notes |
 |---------------|--------------|-------|
-| `memory-vault/` | `archive/memory-vault/` | Obsidian-compatible human memory store |
+| `memory-vault/` | *(removed in Phase 4 Slice 4M)* | Public memory prototype; see [legacy-memory-vault-design.md](./legacy-memory-vault-design.md) |
 | `future/` | `archive/docs/future.md` | Deferred AgentOS / harness phases |
 | `agentos.yaml` | `archive/agentos.yaml` | v4 Lite profiles and export targets |
 | `templates/` | `archive/templates/` | Per-repo AGENTS.md overlay template for workspace render |
@@ -81,7 +82,7 @@ Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 
 | Workspace render + templates | **Live (Phase 2)** | `agentos.yaml`, `src/workspace_render.py`, `base/` |
 | Local registration / tracked workspaces | **Live (Phase 2)** | `src/workspace_state.py`, `src/workspace_service.py` |
 | `agentos.yaml` profiles | **Live (Phase 2)** | `agentos.yaml`, `src/workspace_profiles.py` |
-| Obsidian memory vault | **Archived** | `archive/memory-vault/` |
+| Durable memory design | **Next (Phase 4)** | Workspace `temp/mem/`; public prototype removed |
 | Deferred AgentOS / harness phases | **Archived** | `archive/docs/future.md`, `archive/docs/` |
 | Graphify skill integration | **On-demand / live** | Official Graphify CLI plus `agentbot graphify setup`; not a manifest source |
 | `obsidian-memory` skill source | **Disabled** | `skills.sources.yaml` (`enabled: false`) |
@@ -95,7 +96,7 @@ Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 
 | Render all registered workspaces | **Live Phase 2**: `src/workspace_state.py`, `src/workspace_service.py` |
 | Package catalog / import-local | `archive/catalog/` |
 | MCP filter / render into `.cursor/mcp.json` | `archive/mcp/`, `catalog/packages.json` |
-| Memory vault workflows | `archive/memory-vault/` |
+| Memory vault workflows | Workspace `temp/mem/`; implementation begins after the Phase 4 migration gate |
 | Agentbot workspace exports (Copilot + Cursor rules) | `src/workspace_render.py` — live Phase 2 |
 | `agentos.yaml` profiles | `agentos.yaml` |
 
@@ -108,7 +109,7 @@ Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 
 See [stuff.md](./stuff.md) and [stuff3.md](./stuff3.md). Summary:
 
 1. **Pick scope** — catalog, discovery, state, full render, and ui are coupled.
-2. **Config/docs** — copy from `archive/` (`catalog/`, `mcp/`, `templates/`, `agentos.yaml`, `memory-vault/`).
+2. **Config/docs** — copy from `archive/` (`catalog/`, `mcp/`, `templates/`, `agentos.yaml`); use the Phase 4 design in workspace `temp/mem/` for the private memory workflow.
 3. **Code** — restore from git (pre-2026-07-10 archive layout or `git show <commit>:archive/src/...`).
 4. **Re-wire** — `src/cli.py`, `install.sh`, `service.py`; archived CLI subcommands.
 5. **Env** — copy `archive/.env.example` if MCP servers need credentials.

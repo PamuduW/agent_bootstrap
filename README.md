@@ -12,11 +12,13 @@ Deferred features and the phased expansion plan live in [`archive/docs/`](archiv
 
 ## Current roadmap status
 
-Phases 0, 1, 2, and 5 are complete. Phases 3 and 4 remain deferred. The live
-surface includes the standalone Agentbot menu, profile-driven workspace
-rendering, local workspace registration/resync, global baseline rendering,
-curated skills management, the Dotfiles sibling bridge, and the optional
-Graphify CLI/skill integration. The detailed, implementation-aware roadmap is
+Phases 0, 1, 2, and 5 are complete. Phase 4 is the next workstream; its public
+memory retirement gate is complete in the working tree and pending review.
+Phase 3 remains deferred.
+The live surface includes the standalone Agentbot menu, profile-driven
+workspace rendering, local workspace registration/resync, global baseline
+rendering, curated skills management, the Dotfiles sibling bridge, and the
+optional Graphify CLI/skill integration. The detailed, implementation-aware roadmap is
 [`archive/docs/stuff3.md`](archive/docs/stuff3.md).
 
 The supported menu entrypoints are `./install.sh` on a controlling TTY and

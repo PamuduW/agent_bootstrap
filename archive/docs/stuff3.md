@@ -2,8 +2,9 @@
 
 **Status:** Phases 0, 1, 2, and 5 are complete and verified against the live
 repositories (2026-07-27); supporting documentation was reconciled on
-2026-07-28. Phases 3 and 4 remain deferred. Phase 5 branches
-directly from the completed Phase 2 foundation.
+2026-07-28. Phase 4 is the next workstream; its Slice 4M migration gate is
+complete in the working tree and pending review/merge. Phase 3 remains
+deferred. Phase 5 branches directly from the completed Phase 2 foundation.
 
 This is a living roadmap. The runtime source and operational documentation are
 the authority; this file records the delivered contracts and the future
@@ -26,7 +27,7 @@ must use Agentbot and agentbot.
 | Curated skills | skills.sources.yaml and install.sh skills ... | Live |
 | Dotfiles integration | sibling dotfiles Agentbot bridge | Live |
 | Package catalog and MCP bundles | archive/catalog/, archive/mcp/ | Phase 3 (deferred) |
-| Durable memory | archive/memory-vault/ and disabled memory sources | Phase 4 (deferred) |
+| Durable memory | workspace `temp/mem/` design plus sanitized legacy note | Next (Phase 4; Slice 4M migration gate) |
 | Graphify CLI and assistant integration | sibling dotfiles component plus Agentbot integration | Live (Phase 5) |
 
 Agentbot is the installed product and public command. agent_bootstrap remains
@@ -47,9 +48,8 @@ Phase 2: profiles + managed workspace render + local resync ✅
     | \--> Phase 5: optional Graphify CLI + assistant integration ✅
     |
     +----> Phase 3: package catalog + profile-filtered MCP bundles (deferred)
-              |
-              v
-           Phase 4: durable memory (deferred)
+    |
+    +----> Phase 4: durable memory (next: Slice 4M migration gate)
 ```
 
 ## Phase 0 — slim bootstrap ✅
@@ -195,14 +195,23 @@ Planned work:
 Phase 3 must extend the Phase 2 renderer; it must not create a second unrelated
 configuration system.
 
-## Phase 4 — durable memory (deferred)
+## Phase 4 — durable memory (next: Slice 4M migration gate)
 
 **Goal:** Add human-approved durable project knowledge only when the current
 Markdown policy surface is no longer sufficient.
 
-Planned work:
+Current gate status:
 
-- restore selected memory-vault workflows with user approval before writes;
+- [x] remove the public `archive/memory-vault/` prototype from the current
+  branch;
+- [x] retain only a sanitized historical note under `archive/docs/`;
+- [x] keep the private-memory design and implementation contracts in workspace
+  `temp/mem/`;
+- [ ] review and merge the migration gate before implementation slices begin.
+
+Later planned work:
+
+- implement selected private-memory workflows with user approval before writes;
 - keep memory local, reviewable, and separate from generated repository policy;
 - keep obsidian-memory disabled until its source layout and provenance are
   explicitly designed.
@@ -266,8 +275,8 @@ CLI ownership, assistant integration, or Agentbot's canonical policy ownership.
   installed and versioned by the official Graphify CLI, not by an unrelated
   Git skill source.
 
-Phase 5 is independent of the deferred package-catalog, MCP, and durable-memory
-work. Completing it does not advance or implicitly enable Phases 3 or 4.
+Phase 5 was independent of the package-catalog and MCP work. Its completion did
+not implement Phase 4; the Phase 4 migration gate is now the next workstream.
 
 ## Explicitly out of scope
 
@@ -287,3 +296,4 @@ work. Completing it does not advance or implicitly enable Phases 3 or 4.
 | 2026-07-18 | Marked Phase 2 complete after implementing profiles, renderer, local state, CLI, boot registration, menu, and validation |
 | 2026-07-27 | Deferred Phases 3–4 and delivered Phase 5 as the independent Graphify integration phase |
 | 2026-07-28 | Reconciled README, archive indexes, and Phase 4 design notes with the live Phase 5 boundary |
+| 2026-07-28 | Selected Phase 4 as the next workstream and applied Slice 4M public-memory retirement in the working tree; review remains pending |

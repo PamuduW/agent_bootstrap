@@ -6,14 +6,15 @@ Nothing here is read by `./install.sh`, `npx skills`, or `agentbot` at runtime.
 
 **Implementation roadmap:** [stuff3.md](./stuff3.md) — phased build plan for restoring deferred features.
 
-**Current status (2026-07-28):** Phases 0–2 and 5 are complete; Phases 3–4
-remain deferred. The live system is
+**Current status (2026-07-28):** Phases 0–2 and 5 are complete. Phase 4 is
+the next workstream; its public-memory migration gate is complete in the
+working tree and pending review before implementation. Phase 3 remains
+deferred. The live system is
 the standalone Agentbot menu, profile-driven workspace rendering, local
 registration/resync, global baseline rendering, curated skills management, and
 the Dotfiles sibling bridge, with an optional Graphify CLI and assistant
-integration. Catalog/MCP and durable-memory capabilities remain deferred; this
-file records the archive map, not a promise to restore the old implementation
-unchanged.
+integration. Catalog/MCP remains deferred; the active Phase 4 design is in the
+workspace `temp/mem/` notes, not in this archive.
 
 ---
 
@@ -22,12 +23,13 @@ unchanged.
 | Path | Why keep |
 |------|----------|
 | **[stuff.md](./stuff.md)** | This file — deferred map and restore pointers |
-| **[stuff3.md](./stuff3.md)** | Implementation phases (Phases 0–2 and 5 complete; Phases 3–4 deferred) |
+| **[stuff3.md](./stuff3.md)** | Implementation phases (Phases 0–2 and 5 complete; Phase 4 next; Phase 3 deferred) |
+| **[legacy-memory-vault-design.md](./legacy-memory-vault-design.md)** | Sanitized history of the retired public prototype |
 | **[README.md](./README.md)** | Move log (Tier 1/2) and pack → bootstrap matrix |
 | **[LOCKFILE-NOTES.md](./LOCKFILE-NOTES.md)** | Global vs project lockfile history |
 | **[archive/docs/](./)** | Roadmap and deferred-capability notes (`stuff.md`, `stuff3.md`, `future.md`) |
 | **[future.md](./future.md)** | AgentOS roadmap items still deferred |
-| **[memory-vault/](../memory-vault/)** | Human Obsidian-style memory (draft → you approve) |
+| **Phase 4 design** | Workspace [`temp/mem/`](../../../temp/mem/); private memory is not stored in this repository |
 | **[agentos.yaml](../agentos.yaml)** | v4 Lite export profiles reference |
 | **[catalog/packages.json](../catalog/packages.json)** | Package catalog schema + entries for future MCP restore |
 | **[mcp/mcp.json](../mcp/mcp.json)** | MCP server list for future workspace render |
@@ -46,7 +48,8 @@ Removed **2026-07-10** to keep archive lean. None of this was on the runtime pat
 | `archive/tests/test_bootstrap_engine.py` | Catalog/workspace render tests | git history |
 | `archive/exports/` | Empty generated-output placeholder | Not needed |
 
-**Do not delete** the JSON/YAML/markdown rows in the “keep” table unless you are sure you will never restore catalog, MCP, workspace render, or memory vault.
+**Do not delete** the remaining JSON/YAML/markdown rows in the “keep” table
+unless you are sure you will never restore catalog, MCP, or workspace render.
 
 ---
 
@@ -77,7 +80,7 @@ Removed **2026-07-10** to keep archive lean. None of this was on the runtime pat
 | **MCP bundle render** | Filter the master MCP list per profile/workspace and write `.cursor/mcp.json` (and similar) automatically. | `../mcp/mcp.json` + catalog; render code in **git**. Phase 3. |
 | **Agentbot workspace exports** | Generate Claude, Copilot, and Cursor compatibility files from one canonical source. | **Live Phase 2**; MCP files remain Phase 3. |
 | **`agentos.yaml` profiles** | Declarative map of allowed workspace output targets and safe policy. | **Live Phase 2**: `../agentos.yaml` |
-| **Obsidian memory vault** | Git-tracked markdown for durable context (decisions, lessons, preferences) — agents draft, you commit. | `../memory-vault/`. Phase 4. |
+| **Durable memory** | Private, approval-gated Markdown vault designed outside this repository. | Workspace [`temp/mem/`](../../../temp/mem/); Phase 4 next. |
 | **CLI commands** | Workspace preview/apply/list/resync are live; catalog-era `all`, `interactive`, `import-local`, `remove-managed`, and `delete-local` remain deferred. | `../src/cli.py`, `../install.sh`; catalog commands stay archived. |
 
 Upstream skills only — no in-repo vendored pack. Live path: `skills.sources.yaml` + `npx skills -g`.
@@ -103,7 +106,7 @@ material remains recoverable from Git history.
 |------|-----------|--------|
 | 1 | Per-repo `AGENTS.md` plus selected compatibility surfaces via `agentbot boot` | **Live — Phases 1–2 complete** |
 | 2 | Global `npx skills` | **Live** |
-| 3 | Obsidian vault | **Phase 4** (`../memory-vault/`) |
+| 3 | Private WSLg Obsidian vault | **Next — Phase 4** (workspace [`temp/mem/`](../../../temp/mem/)) |
 | 4 | Hermes `MEMORY.md` + SQLite FTS (home server) | **Deferred** — Proxmox + Phase 7.3 |
 | 5 | Graphify on-demand (large infra repos) | **Live — Phase 5** ([stuff3.md](./stuff3.md)) |
 | 6 | Mem0 / Graphiti / GraphRAG | **Deferred** |
@@ -127,8 +130,8 @@ LIVE (slim)                 ARCHIVE (docs/config)        GIT HISTORY (code)     
 npx skills                  future.md + stuff3.md        catalog.py             Hermes / Proxmox
 agentbot bootstrap          agentos.yaml                 discovery.py           Mem0 / Graphiti
 Graphify CLI + skill        packages.json + mcp.json     state.py, ui.py         Graphify hooks
-global render               memory-vault/                render.py (full)
-Claude bridge               templates/
+global render               templates/                   render.py (full)
+Claude bridge
 doctor
 ```
 

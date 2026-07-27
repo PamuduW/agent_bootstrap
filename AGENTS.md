@@ -174,7 +174,7 @@ repo as a small CLI plus shell entrypoint, not a full config plane.
 | `${XDG_CONFIG_HOME:-$HOME/.config}/agentbot/workspaces.json` | Private local workspace registry; never Git-tracked. |
 | `global/AGENTS.md` | Authored machine baseline rendered to managed agent homes. |
 | `tests/` | Python and shell regression suites. |
-| `archive/` | Deferred catalog, MCP, and memory work; do not restore modules without re-wiring imports. |
+| `archive/` | Deferred catalog/MCP material and sanitized historical notes; Phase 4 design lives in the workspace `temp/mem/` notes. |
 
 **Commands:**
 

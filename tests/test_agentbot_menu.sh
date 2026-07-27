@@ -23,8 +23,9 @@ test_menu_snapshot() {
 	[[ "$output" == *'=== Agentbot ==='* ]] || return 1
 	[[ "$output" == *$'\033[1m\033[38;5;208m=== Agentbot ===\033[0m'* ]] || return 1
 	[[ "$output" == *'Agentbot'* ]] || return 1
-	[[ "$output" == *'1. Check status'* && "$output" == *'10. Quit'* ]] || return 1
-	[[ "$output" == *$'10. Quit\n\n'* ]] || return 1
+	[[ "$output" == *'1. Check status'* && "$output" == *'11. Quit'* ]] || return 1
+	[[ "$output" == *$'11. Quit\n\n'* ]] || return 1
+	[[ "$output" == *'Graphify'* ]] || return 1
 	[[ "$output" == *'Workspaces'* ]] || return 1
 	[[ "$output" == *'Check the installed Agentbot components and baseline.'* ]] || return 1
 }
@@ -178,7 +179,7 @@ test_dispatch_order_and_return() (
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
 	local calls="$TEST_ROOT/menu.calls"
 	: >"$calls"
-	MENU_TEST_CHOICES=(status install update token boot workspaces command_lib doctor dotfiles quit)
+	MENU_TEST_CHOICES=(status install update token boot workspaces command_lib doctor graphify dotfiles quit)
 	MENU_TEST_INDEX=0
 	menu_simple_run() {
 		local choice="${MENU_TEST_CHOICES[$MENU_TEST_INDEX]}"
@@ -195,9 +196,58 @@ test_dispatch_order_and_return() (
 	agentbot_menu_workspaces() { printf 'workspaces\n' >>"$calls"; }
 	agentbot_menu_command_lib() { printf 'command_lib\n' >>"$calls"; }
 	agentbot_menu_doctor() { printf 'doctor\n' >>"$calls"; }
+	agentbot_menu_graphify() { printf 'graphify\n' >>"$calls"; }
 	agentbot_menu_dotfiles() { printf 'dotfiles\n' >>"$calls"; }
 	agentbot_menu_loop
-	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\npause\nboot\npause\nworkspaces\ncommand_lib\npause\ndoctor\npause\ndotfiles' ]]
+	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\npause\nboot\npause\nworkspaces\ncommand_lib\npause\ndoctor\npause\ngraphify\npause\ndotfiles' ]]
+)
+
+test_graphify_menu_actions_use_backend_and_confirm_setup() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local calls="$TEST_ROOT/graphify-menu.calls" choice_index=0 choice
+	: >"$calls"
+	local choices=(status setup back)
+	menu_simple_run() {
+		choice="${choices[$choice_index]}"
+		choice_index=$((choice_index + 1))
+		if [[ "$choice" == back ]]; then
+			MENU_SIMPLE_RESULT=''
+			return 1
+		fi
+		MENU_SIMPLE_RESULT="$choice"
+		return 0
+	}
+	ui_clear() { :; }
+	ui_pause() { printf 'pause\n' >>"$calls"; }
+	agentbot_menu_graphify_confirm() { return 0; }
+	agentbot_menu_graphify_cli_available() { return 0; }
+	agentbot_run_backend() { printf 'backend:%s\n' "$*" >>"$calls"; }
+	agentbot_menu_graphify
+	[[ "$(<"$calls")" == $'backend:graphify status\npause\nbackend:graphify status\nbackend:graphify setup\npause' ]]
+)
+
+test_graphify_menu_missing_cli_never_invokes_setup() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local calls="$TEST_ROOT/graphify-menu-missing.calls"
+	: >"$calls"
+	MENU_TEST_CHOICES=(setup back)
+	MENU_TEST_INDEX=0
+	menu_simple_run() {
+		local choice="${MENU_TEST_CHOICES[$MENU_TEST_INDEX]}"
+		MENU_TEST_INDEX=$((MENU_TEST_INDEX + 1))
+		if [[ "$choice" == back ]]; then
+			MENU_SIMPLE_RESULT=''
+			return 1
+		fi
+		MENU_SIMPLE_RESULT="$choice"
+		return 0
+	}
+	ui_clear() { :; }
+	ui_pause() { :; }
+	agentbot_menu_graphify_cli_available() { return 1; }
+	agentbot_run_backend() { printf 'backend:%s\n' "$*" >>"$calls"; }
+	agentbot_menu_graphify
+	[[ "$(<"$calls")" == 'backend:graphify status' ]]
 )
 
 test_main_menu_rebuilds_after_workspaces_returns() (
@@ -221,7 +271,7 @@ test_main_menu_rebuilds_after_workspaces_returns() (
 	ui_clear() { :; }
 	ui_pause() { :; }
 	agentbot_menu_loop
-	[[ "$(<"$capture")" == 'Agentbot|Agentbot|Check status Install Agentbot Update Configure GitHub token Repo setup (agentbot) Workspaces Command Lib Doctor Dotfiles Quit' ]]
+	[[ "$(<"$capture")" == 'Agentbot|Agentbot|Check status Install Agentbot Update Configure GitHub token Repo setup (agentbot) Workspaces Command Lib Doctor Graphify Dotfiles Quit' ]]
 )
 
 test_workspaces_menu_actions() (
@@ -367,6 +417,8 @@ if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'Workspaces uses the scrollable submenu title and breadcrumb contract' test_workspaces_menu_uses_scrollable_submenu_contract
 	check 'Agentbot pauses use the shared blank-line contract' test_pause_has_global_blank_line_contract
 	check 'Agentbot menu dispatches actions in order and returns on Quit' test_dispatch_order_and_return
+	check 'Graphify submenu dispatches status and confirmed setup' test_graphify_menu_actions_use_backend_and_confirm_setup
+	check 'Graphify submenu stops at the status handoff when the CLI is missing' test_graphify_menu_missing_cli_never_invokes_setup
 	check 'Agentbot menu rebuilds after returning from Workspaces' test_main_menu_rebuilds_after_workspaces_returns
 	check 'Workspaces menu exposes actions and keeps apply confirmation safe' test_workspaces_menu_actions
 	check 'declined Workspaces apply never invokes --yes' test_workspaces_menu_apply_decline_is_safe

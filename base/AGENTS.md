@@ -56,6 +56,20 @@ repository.
 - Do not assume a skill written for a different harness works in the active one.
 - Follow the active harness's skill discovery and invocation mechanism.
 
+## Optional Graphify evidence
+
+- Use the installed Graphify skill for repository-wide relationship,
+  architecture, or impact questions only when the active harness exposes the
+  skill and `graphify-out/graph.json` exists and is readable.
+- Prefer a scoped Graphify query before a broad repository scan, then inspect
+  primary source files for claims that affect code changes.
+- Fall back to `rg`, direct file reads, and normal repository analysis when the
+  graph is absent, stale, incomplete, or the query fails.
+- Never install Graphify, build or purge a graph, add hooks, enable strict
+  mode, or commit graph output without an explicit request.
+- Treat Graphify output as derived evidence, not as a replacement for current
+  source and tests.
+
 ## Delegation and planning
 
 - Delegation is opt-in. Use it only when the user explicitly requests it or

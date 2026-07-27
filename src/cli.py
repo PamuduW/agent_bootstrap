@@ -11,6 +11,7 @@ from .service import AgentbotService
 from .skills_installer import SkillsInstallError, parse_update_output
 from .ui import (
     print_doctor_summary,
+    print_graphify_status,
     print_header,
     print_reconciliation_report,
     print_skills_report,
@@ -55,6 +56,17 @@ def main() -> int:
             return 0
         if command == "doctor":
             return print_doctor(service)
+        if command == "graphify":
+            graphify_command = getattr(args, "graphify_command", None) or "status"
+            status = (
+                service.setup_graphify()
+                if graphify_command == "setup"
+                else service.graphify_status()
+            )
+            print_graphify_status(status)
+            if graphify_command == "status":
+                return 1 if status.state == "broken" else 0
+            return 0 if status.state in {"ready", "conflict", "stale"} else 1
         if command in {"update", "upgrade"}:
             result = service.run_reconciliation_update(
                 dry_run=bool(getattr(args, "dry_run", False)),
@@ -124,6 +136,10 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("--json", action="store_true", dest="status_json")
     subparsers.add_parser("global", help="Render global outputs")
     subparsers.add_parser("doctor", help="Validate skills and global baseline")
+    graphify = subparsers.add_parser("graphify", help="Inspect or set up Graphify integration")
+    graphify_sub = graphify.add_subparsers(dest="graphify_command")
+    graphify_sub.add_parser("status", help="Show Graphify CLI and skill state")
+    graphify_sub.add_parser("setup", help="Install or refresh the generic Agent Skills copy")
     for command in ("update", "upgrade"):
         update = subparsers.add_parser(
             command,

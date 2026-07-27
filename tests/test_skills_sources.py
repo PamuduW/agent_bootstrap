@@ -32,8 +32,7 @@ class SkillsSourcesTests(unittest.TestCase):
         self.assertEqual("obra/superpowers", superpowers.repo)
         self.assertIn("brainstorming", superpowers.skills)
 
-        graphify = next(source for source in config.sources if source.id == "graphify")
-        self.assertFalse(graphify.enabled)
+        self.assertFalse(any(source.id == "graphify" for source in config.sources))
 
     def test_load_skills_sources_allows_multiple_all_skill_sources(self) -> None:
         from src.skills_sources import validate_skills_sources

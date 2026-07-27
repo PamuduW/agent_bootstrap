@@ -91,6 +91,92 @@ class CliTests(unittest.TestCase):
         self.assertEqual("upgrade", args.command)
         self.assertTrue(args.dry_run)
 
+    def test_parser_accepts_graphify_status_and_setup(self) -> None:
+        from src.cli import build_parser
+
+        status = build_parser().parse_args(["graphify", "status"])
+        setup = build_parser().parse_args(["graphify", "setup"])
+
+        self.assertEqual("graphify", status.command)
+        self.assertEqual("status", status.graphify_command)
+        self.assertEqual("setup", setup.graphify_command)
+
+    @patch("src.cli.default_paths")
+    @patch("src.cli.AgentbotService")
+    def test_graphify_status_is_read_only_and_prints_state(self, service_type, _default_paths) -> None:
+        from pathlib import Path
+        from src.graphify import GraphifyStatus
+
+        service = MagicMock()
+        service.graphify_status.return_value = GraphifyStatus(
+            "cli-only",
+            None,
+            None,
+            Path("/tmp/.agents/skills/graphify/SKILL.md"),
+            None,
+            "missing",
+            "missing",
+            "Graphify CLI is installed; the Agent Skills integration is not set up.",
+        )
+        service_type.return_value = service
+
+        rc, stdout, _stderr = self._run_main(["agentbot", "graphify", "status"])
+
+        self.assertEqual(0, rc)
+        self.assertIn("Agentbot › Graphify", stdout)
+        self.assertIn("cli-only", stdout)
+        service.graphify_status.assert_called_once_with()
+        service.setup_graphify.assert_not_called()
+
+    @patch("src.cli.default_paths")
+    @patch("src.cli.AgentbotService")
+    def test_graphify_setup_returns_success_for_ready_state(self, service_type, _default_paths) -> None:
+        from pathlib import Path
+        from src.graphify import GraphifyStatus
+
+        service = MagicMock()
+        service.setup_graphify.return_value = GraphifyStatus(
+            "ready",
+            Path("/usr/local/bin/graphify"),
+            "graphify 1.2.3",
+            Path("/tmp/.agents/skills/graphify/SKILL.md"),
+            "1.2.3",
+            "linked",
+            "linked",
+            "Graphify CLI and Agent Skills integration are ready.",
+        )
+        service_type.return_value = service
+
+        rc, stdout, _stderr = self._run_main(["agentbot", "graphify", "setup"])
+
+        self.assertEqual(0, rc)
+        self.assertIn("ready", stdout)
+        service.setup_graphify.assert_called_once_with()
+
+    @patch("src.cli.default_paths")
+    @patch("src.cli.AgentbotService")
+    def test_graphify_setup_fails_cleanly_when_cli_is_missing(self, service_type, _default_paths) -> None:
+        from pathlib import Path
+        from src.graphify import GraphifyStatus
+
+        service = MagicMock()
+        service.setup_graphify.return_value = GraphifyStatus(
+            "not-installed",
+            None,
+            None,
+            Path("/tmp/.agents/skills/graphify/SKILL.md"),
+            None,
+            "missing",
+            "missing",
+            "Graphify CLI and Agent Skills integration are not installed. Install it from Dotfiles > Install Dotfiles > Graphify CLI, or run: uv tool install graphifyy",
+        )
+        service_type.return_value = service
+
+        rc, stdout, _stderr = self._run_main(["agentbot", "graphify", "setup"])
+
+        self.assertEqual(1, rc)
+        self.assertIn("uv tool install graphifyy", stdout)
+
     @patch("src.cli.default_paths")
     @patch("src.cli.AgentbotService")
     def test_status_and_update_use_hierarchical_breadcrumbs(self, service_type, _default_paths) -> None:

@@ -4,6 +4,7 @@ Personal AI-agent tooling installer. The Git repository and clone directory rema
 `agent_bootstrap`; the installed product and command are Agentbot / `agentbot`.
 
 - **Skills** — curated upstreams in [`skills.sources.yaml`](skills.sources.yaml), installed globally via [`npx skills`](https://www.npmjs.com/package/skills)
+- **Optional Graphify** — Dotfiles owns the `graphifyy` CLI; Agentbot owns the skill-only assistant setup
 - **agentbot boot** — register a folder or Git repo and render `AGENTS.md` plus selected agent surfaces from [`base/`](base/)
 - **Global baseline** — machine-level policy in [`global/AGENTS.md`](global/AGENTS.md), rendered to agent home dirs
 
@@ -107,6 +108,33 @@ GitHub skill sources are shallow-cloned locally with a two-minute bound before `
 
 A folder copied into `~/.agents/skills/` is a valid **manual local skill**. `./install.sh global` (and both skill install/update commands) links every valid local skill into Codex and Claude without replacing conflicting user-owned links. Manual skills remain distinct from managed installs: `doctor` and `status` report them as available-but-not-reproducible until their repository and selected skill names are added to `skills.sources.yaml` and installed through `npx skills`, which records them in the global lock.
 
+### Optional Graphify integration
+
+Graphify is opt-in. Select the `graphify_cli` component in the sibling
+Dotfiles installer first; Agentbot does not install the Python package as part
+of `./install.sh install` and does not enable Graphify implicitly.
+
+Use the Agentbot command or menu after the CLI is available:
+
+```bash
+agentbot graphify status
+agentbot graphify setup
+```
+
+`status` is read-only. `setup` requires the `graphify` executable and invokes
+only Graphify's generic skill-only command,
+`graphify install --platform agents`. If the CLI is missing, Agentbot reports
+the Dotfiles route and the manual `uv tool install graphifyy` command rather
+than installing it itself.
+
+The canonical integration is `~/.agents/skills/graphify/`, including its
+`.graphify_version` stamp. Agentbot refreshes its existing Codex/global link
+and Claude bridge from that canonical copy. Cursor and other assistants use the
+generic Agent Skills location where they support it; setup does not create
+project rules, rewrite `AGENTS.md`, install hooks, enable strict mode, or build
+or purge a project graph. Graphify output remains derived evidence, not a
+replacement for current source files and tests.
+
 ## Workspace setup and repository scaffolding
 
 Set up the current directory. With no selectors, Agentbot creates or preserves
@@ -183,6 +211,7 @@ agentbot workspace [--profile NAME] [--targets LIST] [--yes] PATH
 agentbot workspaces
 agentbot resync [--all | PATH ...] [--yes | --dry-run]
 agentbot doctor
+agentbot graphify status|setup
 agentbot dotfiles
 agentbot help
 ```

@@ -367,6 +367,7 @@ Usage: ./install.sh <command> [args]
   workspaces             List locally registered workspaces
   resync [--all | PATH ...] [--yes | --dry-run]
                          Preview or refresh registered workspaces
+  graphify status|setup  Inspect or set up the optional Graphify Agent Skills integration
   help                   Show this help
 
 Run agentbot boot in a repository to create/preserve AGENTS.md and selected outputs.
@@ -425,6 +426,9 @@ main() {
       ;;
     workspace|workspaces|resync)
       run_cli "$cmd" "${@:2}"
+      ;;
+    graphify)
+      run_cli graphify "${@:2}"
       ;;
     all|interactive|import-local|remove-managed|delete-local)
       die "${cmd} is archived — see archive/docs/README.md"

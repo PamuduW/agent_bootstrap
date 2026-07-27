@@ -1,8 +1,10 @@
 import io
+import os
 import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 
 class DoctorSeverityTests(unittest.TestCase):
@@ -42,6 +44,79 @@ class DoctorSeverityTests(unittest.TestCase):
                 DoctorIssue(level="error", scope="global", message="missing baseline"),
             ])
         self.assertEqual(1, rc)
+
+    def test_official_graphify_skill_uses_graphify_scope_instead_of_manual_warning(self) -> None:
+        from src.paths import AgentbotPaths
+        from src.service import AgentbotService
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home = root / "home"
+            (root / "global").mkdir()
+            (root / "global" / "AGENTS.md").write_text("# baseline\n", encoding="utf-8")
+            graphify = home / ".agents" / "skills" / "graphify"
+            graphify.mkdir(parents=True)
+            (graphify / "SKILL.md").write_text("# graphify\n", encoding="utf-8")
+            (graphify / ".graphify_version").write_text("1.2.3\n", encoding="utf-8")
+            paths = AgentbotPaths(root, root / "codex", root / "claude", root / "cursor")
+
+            with patch.dict(os.environ, {"HOME": str(home)}, clear=False):
+                issues = AgentbotService(paths).doctor_issues()
+
+            self.assertTrue(any(issue.scope == "graphify" for issue in issues))
+            self.assertFalse(any("Manual skill 'graphify'" in issue.message for issue in issues))
+
+    def test_unstamped_graphify_directory_keeps_manual_skill_warning(self) -> None:
+        from src.paths import AgentbotPaths
+        from src.service import AgentbotService
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home = root / "home"
+            (root / "global").mkdir()
+            (root / "global" / "AGENTS.md").write_text("# baseline\n", encoding="utf-8")
+            manual = home / ".agents" / "skills" / "graphify"
+            manual.mkdir(parents=True)
+            (manual / "SKILL.md").write_text("# user skill\n", encoding="utf-8")
+            paths = AgentbotPaths(root, root / "codex", root / "claude", root / "cursor")
+
+            with patch.dict(os.environ, {"HOME": str(home)}, clear=False):
+                issues = AgentbotService(paths).doctor_issues()
+
+            self.assertTrue(any("Manual skill 'graphify'" in issue.message for issue in issues))
+
+    def test_broken_official_graphify_state_is_an_error(self) -> None:
+        from src.graphify import GraphifyStatus
+        from src.paths import AgentbotPaths
+        from src.service import AgentbotService
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home = root / "home"
+            (root / "global").mkdir()
+            (root / "global" / "AGENTS.md").write_text("# baseline\n", encoding="utf-8")
+            paths = AgentbotPaths(root, root / "codex", root / "claude", root / "cursor")
+            service = AgentbotService(paths)
+            graphify = home / ".agents/skills/graphify"
+            graphify.mkdir(parents=True)
+            (graphify / "SKILL.md").write_text("# graphify\n", encoding="utf-8")
+            (graphify / ".graphify_version").write_text("1.2.3\n", encoding="utf-8")
+            status = GraphifyStatus(
+                "broken",
+                None,
+                None,
+                graphify / "SKILL.md",
+                None,
+                "missing",
+                "missing",
+                "Graphify skill setup failed: subprocess failed",
+            )
+            with patch.dict(os.environ, {"HOME": str(home)}, clear=False), patch.object(
+                service, "graphify_status", return_value=status
+            ):
+                issues = service.doctor_issues()
+
+            self.assertTrue(any(issue.level == "error" and issue.scope == "graphify" for issue in issues))
 
 
 if __name__ == "__main__":

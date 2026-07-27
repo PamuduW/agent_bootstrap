@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Callable, Mapping
 
 from .claude_bridge import bridge_claude_skills as link_claude_skills
+from .graphify import GraphifyIntegration, GraphifyStatus
 from .models import DoctorIssue
 from .paths import AgentbotPaths
 from .render import installed_skill_dirs, managed_skill_names, render_global_outputs
@@ -205,6 +206,7 @@ class AgentbotService:
         """Refresh upstream pins, then reconcile source-owned runtime state."""
         update_report = SkillsUpdateReport()
         discovered = None
+        graphify_preview = self.graphify_status() if dry_run else None
         if not dry_run:
             update_result = self.update_skills()
             update_report = parse_update_output(update_result.stdout, update_result.stderr)
@@ -229,14 +231,69 @@ class AgentbotService:
             dry_run=dry_run,
             validate=None if dry_run else validate,
         )
+        if graphify_preview is not None:
+            preview_message = self._graphify_update_preview_message(graphify_preview)
+            message = f"{result.message}; {preview_message}" if result.message else preview_message
+            result = replace(result, message=message)
+        graphify_status = None
         if result.status in {"applied", "applied-with-local-changes"}:
+            # Refresh an already-enabled Graphify skill before the single
+            # global/bridge render. A CLI alone never enables Graphify.
+            graphify_status = self.refresh_graphify_if_enabled(refresh_outputs=False)
             self.refresh_agent_outputs()
-        return replace(result, updated_skills=update_report.updated_skills)
+        message = result.message
+        if (
+            graphify_status is not None
+            and graphify_status.skill_path.is_file()
+            and graphify_status.state != "ready"
+        ):
+            detail = f"Graphify: {graphify_status.message}"
+            message = f"{message}; {detail}" if message else detail
+        return replace(
+            result,
+            updated_skills=update_report.updated_skills,
+            message=message,
+        )
+
+    @staticmethod
+    def _graphify_update_preview_message(status: GraphifyStatus) -> str:
+        if not status.skill_path.is_file():
+            return "Graphify: integration is not enabled; no action would run."
+        if status.cli_path is None:
+            return (
+                "Graphify: the existing skill would need a CLI refresh, but the CLI is missing; "
+                "install it with `uv tool install graphifyy` or through Dotfiles."
+            )
+        return "Graphify: the already-enabled Agent Skills integration would be refreshed after reconciliation."
 
     def refresh_agent_outputs(self) -> tuple[int, int, int]:
         linked, skipped, updated = self.apply_claude_bridge(print_summary=False)
         self.render_global()
         return linked, skipped, updated
+
+    def graphify_status(self) -> GraphifyStatus:
+        return GraphifyIntegration(self.paths).status()
+
+    def setup_graphify(self) -> GraphifyStatus:
+        status = GraphifyIntegration(self.paths).setup()
+        if status.cli_path is not None and status.skill_path.is_file() and status.state != "broken":
+            self.refresh_agent_outputs()
+            return GraphifyIntegration(self.paths).status()
+        return status
+
+    def refresh_graphify_if_enabled(self, *, refresh_outputs: bool = True) -> GraphifyStatus:
+        integration = GraphifyIntegration(self.paths)
+        if not integration.skill_path.is_file():
+            return integration.status()
+        status = integration.setup()
+        if (
+            refresh_outputs
+            and status.cli_path is not None
+            and status.skill_path.is_file()
+            and status.state != "broken"
+        ):
+            self.refresh_agent_outputs()
+        return status
 
     def list_skills(self) -> list[str]:
         return list_installed_skills(self.paths)
@@ -271,6 +328,19 @@ class AgentbotService:
         declared_names = self._manifest_declared_skill_names()
         managed_dirs = {skill_dir.name: skill_dir for skill_dir in installed_skill_dirs(self.paths)}
         codex_skills = self.paths.codex_home / "skills"
+        graphify = GraphifyIntegration(self.paths)
+        graphify_status = self.graphify_status()
+        graphify_official = graphify.version_path.is_file()
+
+        if graphify_official and graphify_status.state != "ready":
+            level = "error" if graphify_status.state == "broken" else "warning"
+            issues.append(
+                DoctorIssue(
+                    level=level,
+                    scope="graphify",
+                    message=self._graphify_doctor_message(graphify_status),
+                )
+            )
 
         for name in managed_names:
             source = self.paths.agents_skills_home / name
@@ -311,6 +381,8 @@ class AgentbotService:
                     or source.name in declared_names
                 ):
                     continue
+                if source.name == "graphify" and (source / ".graphify_version").is_file():
+                    continue
                 target = codex_skills / source.name
                 if not target.is_symlink() or not target.exists() or target.resolve() != source.resolve():
                     issues.append(
@@ -336,6 +408,24 @@ class AgentbotService:
                     )
 
         return issues
+
+    @staticmethod
+    def _graphify_doctor_message(status: GraphifyStatus) -> str:
+        if status.state == "skill-without-cli":
+            return (
+                f"{status.message} Install it through Dotfiles or run: uv tool install graphifyy"
+            )
+        if status.state == "stale":
+            return f"{status.message} Run `agentbot graphify setup` to refresh the skill."
+        if status.state == "conflict":
+            targets = [
+                label
+                for label, target_state in (("Codex", status.codex_state), ("Claude", status.claude_state))
+                if target_state == "conflict"
+            ]
+            target_text = ", ".join(targets) or "an assistant"
+            return f"{status.message} Preserved conflicting {target_text} target(s)."
+        return status.message
 
     def _manifest_declared_skill_names(self) -> set[str]:
         """Return explicit manifest names before lock provenance is applied.

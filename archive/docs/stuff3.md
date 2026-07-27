@@ -1,9 +1,8 @@
 # Agentbot expansion roadmap
 
-**Status:** Phases 0, 1, and 2 are complete and verified against the live
-repositories (2026-07-18). Phases 3 and 4 remain deferred. Phase 5 is the next
-approved implementation phase and branches directly from the completed Phase 2
-foundation.
+**Status:** Phases 0, 1, 2, and 5 are complete and verified against the live
+repositories (2026-07-27). Phases 3 and 4 remain deferred. Phase 5 branches
+directly from the completed Phase 2 foundation.
 
 This is a living roadmap. The runtime source and operational documentation are
 the authority; this file records the delivered contracts and the future
@@ -27,7 +26,7 @@ must use Agentbot and agentbot.
 | Dotfiles integration | sibling dotfiles Agentbot bridge | Live |
 | Package catalog and MCP bundles | archive/catalog/, archive/mcp/ | Phase 3 (deferred) |
 | Durable memory | archive/memory-vault/ and disabled memory sources | Phase 4 (deferred) |
-| Graphify CLI and assistant integration | sibling dotfiles component plus Agentbot integration | Phase 5 (next) |
+| Graphify CLI and assistant integration | sibling dotfiles component plus Agentbot integration | Live (Phase 5) |
 
 Agentbot is the installed product and public command. agent_bootstrap remains
 the Git repository and clone directory. AGENTBOT_TUI is the active TUI
@@ -44,7 +43,7 @@ Phase 1: standalone Agentbot menu + Dotfiles bridge + unified boot ✅
     v
 Phase 2: profiles + managed workspace render + local resync ✅
     |\
-    | \--> Phase 5: optional Graphify CLI + assistant integration (next)
+    | \--> Phase 5: optional Graphify CLI + assistant integration ✅
     |
     +----> Phase 3: package catalog + profile-filtered MCP bundles (deferred)
               |
@@ -209,7 +208,7 @@ Planned work:
 
 Do not start with a vector database or an always-on laptop service.
 
-## Phase 5 — optional Graphify integration (next)
+## Phase 5 — optional Graphify integration ✅
 
 **Goal:** Make Graphify an explicit, removable setup choice without confusing
 CLI ownership, assistant integration, or Agentbot's canonical policy ownership.
@@ -225,7 +224,7 @@ CLI ownership, assistant integration, or Agentbot's canonical policy ownership.
 - Agentbot remains the only owner of its canonical `base/AGENTS.md` and
   `global/AGENTS.md` policy sources.
 
-### Planned behavior
+### Delivered behavior
 
 1. Add a default-off `graphify_cli` component to the Dotfiles component picker.
    Selecting it installs Graphify with `uv tool install graphifyy`; an existing
@@ -285,4 +284,4 @@ work. Completing it does not advance or implicitly enable Phases 3 or 4.
 | 2026-07-11 | Initial phase map created after the slim-bootstrap rework |
 | 2026-07-18 | Reconciled Phases 0–1 with live Agentbot naming and entrypoints |
 | 2026-07-18 | Marked Phase 2 complete after implementing profiles, renderer, local state, CLI, boot registration, menu, and validation |
-| 2026-07-27 | Deferred Phases 3–4 and added Phase 5 as the next independent Graphify integration phase |
+| 2026-07-27 | Deferred Phases 3–4 and delivered Phase 5 as the independent Graphify integration phase |

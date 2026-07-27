@@ -269,6 +269,24 @@ def print_doctor_summary(issues: list) -> int:
     return 1 if errors else 0
 
 
+def print_graphify_status(status) -> None:
+    """Render the Graphify integration state without performing repairs."""
+    print_header("Graphify", "Agentbot › Graphify")
+    cli_detail = str(status.cli_path) if status.cli_path else "not installed"
+    skill_detail = str(status.skill_path)
+    rows = [
+        ("State", status.state, status.state),
+        ("CLI", cli_detail, "ok" if status.cli_path else "missing"),
+        ("CLI version", status.cli_version or "—", "ok" if status.cli_version else "check"),
+        ("Agent Skills", skill_detail, "ok" if status.skill_path.is_file() else "missing"),
+        ("Codex", status.codex_state, "ok" if status.codex_state == "linked" else "check"),
+        ("Claude", status.claude_state, "ok" if status.claude_state == "linked" else "check"),
+    ]
+    print_table(rows)
+    print()
+    print(f"  {status.message}")
+
+
 def print_skills_report(results: list, *, title: str) -> int:
     from .skills_installer import InstallResult, summarize_install_results
 

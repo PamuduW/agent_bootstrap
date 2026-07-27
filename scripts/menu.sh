@@ -29,6 +29,8 @@ source "$_AGENTBOT_MENU_DIR/menus/command_lib.sh"
 # shellcheck disable=SC1091
 source "$_AGENTBOT_MENU_DIR/menus/doctor.sh"
 # shellcheck disable=SC1091
+source "$_AGENTBOT_MENU_DIR/menus/graphify.sh"
+# shellcheck disable=SC1091
 source "$_AGENTBOT_MENU_DIR/menus/dotfiles.sh"
 
 # shellcheck disable=SC2034
@@ -44,10 +46,11 @@ _agentbot_menu_setup() {
 		'Workspaces'
 		'Command Lib'
 		'Doctor'
+		'Graphify'
 		'Dotfiles'
 		'Quit'
 	)
-	MENU_SIMPLE_KEYS=(status install update token boot workspaces command_lib doctor dotfiles quit)
+	MENU_SIMPLE_KEYS=(status install update token boot workspaces command_lib doctor graphify dotfiles quit)
 	MENU_SIMPLE_DESCS=(
 		$'Check the installed Agentbot components and baseline.\nRead-only status; no updates or writes are performed.'
 		$'Install skills, refresh rendered outputs, run Doctor, and link agentbot.\nUse the explicit install action when changes are intended.'
@@ -57,6 +60,7 @@ _agentbot_menu_setup() {
 		$'List, preview, and resync locally registered workspaces.\nApply actions require explicit confirmation.'
 		$'Show Agentbot commands and whether they read or mutate state.\nUse this as the local command reference.'
 		$'Validate skills, rendered outputs, links, and configuration.\nWarnings and errors are reported by the backend.'
+		$'Inspect or set up the optional Graphify Agent Skills integration.\nInstall the CLI from Dotfiles first; setup only manages the generic skill.'
 		$'Open the sibling Dotfiles installer.\nUnavailable until the reciprocal bridge slice is installed.'
 		$'Exit the Agentbot menu.\nReturn to the calling process.'
 	)
@@ -70,9 +74,10 @@ _agentbot_menu_setup() {
 			'Workspaces'
 			'Command Lib'
 			'Doctor'
+			'Graphify'
 			'Quit'
 		)
-		MENU_SIMPLE_KEYS=(status install update token boot workspaces command_lib doctor quit)
+		MENU_SIMPLE_KEYS=(status install update token boot workspaces command_lib doctor graphify quit)
 		MENU_SIMPLE_DESCS=(
 			"${MENU_SIMPLE_DESCS[0]}"
 			"${MENU_SIMPLE_DESCS[1]}"
@@ -82,7 +87,8 @@ _agentbot_menu_setup() {
 			"${MENU_SIMPLE_DESCS[5]}"
 			"${MENU_SIMPLE_DESCS[6]}"
 			"${MENU_SIMPLE_DESCS[7]}"
-			"${MENU_SIMPLE_DESCS[9]}"
+			"${MENU_SIMPLE_DESCS[8]}"
+			"${MENU_SIMPLE_DESCS[10]}"
 		)
 	fi
 }
@@ -98,6 +104,7 @@ agentbot_menu_dispatch() {
 	workspaces) agentbot_menu_workspaces || rc=$? ;;
 	command_lib) agentbot_menu_command_lib || rc=$? ;;
 	doctor) agentbot_menu_doctor || rc=$? ;;
+	graphify) agentbot_menu_graphify || rc=$? ;;
 	dotfiles) agentbot_menu_dotfiles || rc=$? ;;
 	*) printf 'Unknown Agentbot menu action: %s\n' "$choice" >&2; rc=2 ;;
 	esac

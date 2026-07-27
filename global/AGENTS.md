@@ -22,6 +22,20 @@ file durable, provider-neutral, and limited to rules that apply across projects.
 - Never claim that a capability, skill, model route, delegated workflow, or
   external action was used when the active harness could not perform it.
 
+## Optional Graphify evidence
+
+- Use the installed Graphify skill for repository-wide relationship,
+  architecture, or impact questions only when the active harness exposes the
+  skill and `graphify-out/graph.json` exists and is readable.
+- Prefer a scoped Graphify query before a broad repository scan, then inspect
+  primary source files for claims that affect code changes.
+- Fall back to `rg`, direct file reads, and normal repository analysis when the
+  graph is absent, stale, incomplete, or the query fails.
+- Never install Graphify, build or purge a graph, add hooks, enable strict
+  mode, or commit graph output without an explicit request.
+- Treat Graphify output as derived evidence, not as a replacement for current
+  source and tests.
+
 ## Working discipline
 
 - Read the complete request and referenced material before acting.

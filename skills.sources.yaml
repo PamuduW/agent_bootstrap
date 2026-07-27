@@ -61,12 +61,6 @@ sources:
     repo: PamuduW/agent_bootstrap_skills
     skills: all
 
-  - id: graphify
-    repo: safishamsi/graphify
-    skills:
-      - graphify
-    enabled: false  # not advertised in base templates; upstream has no Agent Skills SKILL.md layout yet
-
   - id: obsidian-memory
     repo: AdamTylerLynch/obsidian-agent-memory-skills
     skills: []

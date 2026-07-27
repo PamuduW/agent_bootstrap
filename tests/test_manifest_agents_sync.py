@@ -33,6 +33,33 @@ class ManifestAgentsSyncTests(unittest.TestCase):
         )
         self.assertEqual(base_baseline, root_baseline)
 
+    def test_canonical_policies_define_the_safe_graphify_gate(self) -> None:
+        required = (
+            "graphify-out/graph.json",
+            "active harness exposes",
+            "Fall back to `rg`",
+            "Never install Graphify",
+            "derived evidence",
+        )
+        for path in (
+            self.repo_root / "base" / "AGENTS.md",
+            self.repo_root / "global" / "AGENTS.md",
+            self.repo_root / "AGENTS.md",
+        ):
+            content = path.read_text(encoding="utf-8")
+            for phrase in required:
+                self.assertIn(phrase, content, msg=f"{phrase!r} missing from {path}")
+
+    def test_graphify_policy_is_not_added_to_unmarked_user_files(self) -> None:
+        from src.workspace_render import build_workspace_render_plan
+
+        plan = build_workspace_render_plan(
+            "# AGENTS.md\n\n## Project\n\n# User policy\n",
+            {"AGENTS.md": "# User-owned policy\n"},
+            ("agents",),
+        )
+        self.assertNotIn("graphify-out/graph.json", plan.action_for("AGENTS.md").content or "")
+
 
 if __name__ == "__main__":
     unittest.main()

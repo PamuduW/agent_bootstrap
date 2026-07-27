@@ -110,6 +110,7 @@ agentbot_main() {
     status|install|doctor) agentbot_run_backend "$command" "$@" ;;
     boot) agentbot_boot "$@" ;;
     workspace|workspaces|resync) agentbot_run_backend "$command" "$@" ;;
+    graphify) agentbot_run_backend graphify "$@" ;;
     token) agentbot_run_token "$@" ;;
     dotfiles) agentbot_run_dotfiles "$@" ;;
     update|upgrade) agentbot_run_backend "$command" "$@" ;;

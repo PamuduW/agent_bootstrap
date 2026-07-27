@@ -44,13 +44,24 @@ test_dispatch_matrix() (
 	agentbot_main doctor; [[ $? -eq 14 ]] || exit 1
 	agentbot_main token; [[ $? -eq 12 ]] || exit 1
 	agentbot_main dotfiles; [[ $? -eq 13 ]] || exit 1
+	agentbot_main graphify status; [[ $? -eq 14 ]] || exit 1
 	agentbot_main update; [[ $? -eq 14 ]] || exit 1
 	agentbot_main upgrade; [[ $? -eq 14 ]] || exit 1
 	agentbot_main workspace /tmp/project; [[ $? -eq 14 ]] || exit 1
 	agentbot_main workspaces; [[ $? -eq 14 ]] || exit 1
 	agentbot_main resync --all; [[ $? -eq 14 ]] || exit 1
 	set -e
-	[[ "$(<"$calls")" == $'menu\nbackend:status\nbackend:install\nbackend:doctor\ntoken\ndotfiles\nbackend:update\nbackend:upgrade\nbackend:workspace /tmp/project\nbackend:workspaces\nbackend:resync --all' ]]
+	[[ "$(<"$calls")" == $'menu\nbackend:status\nbackend:install\nbackend:doctor\ntoken\ndotfiles\nbackend:graphify status\nbackend:update\nbackend:upgrade\nbackend:workspace /tmp/project\nbackend:workspaces\nbackend:resync --all' ]]
+)
+
+test_install_graphify_dispatch_does_not_require_full_skill_dependencies() (
+	AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+	local calls="$TEST_ROOT/install-graphify.calls"
+	: >"$calls"
+	check_deps() { return 91; }
+	run_cli() { printf '%s\n' "$*" >>"$calls"; }
+	main graphify status
+	[[ "$(<"$calls")" == 'graphify status' ]]
 )
 
 test_boot_selector_matrix() {
@@ -142,6 +153,7 @@ if [[ -x "$AGENTBOT" ]]; then
 	check 'headless no-arg fails with explicit guidance' test_headless_no_arg_guidance
 	check 'symlink invocation resolves the Agentbot repository root' test_symlink_invocation_resolves_repository_root
 	check 'dispatcher routes exact backend and future seams' test_dispatch_matrix
+	check 'install.sh routes Graphify without requiring Node/npx' test_install_graphify_dispatch_does_not_require_full_skill_dependencies
 	check 'boot selectors register folders and keep AGENTS canonical' test_boot_selector_matrix
 	check 'boot without a target registers the current directory' test_boot_without_target_registers_pwd
 	check 'boot rejects invalid inputs before partial writes' test_boot_validation_is_atomic

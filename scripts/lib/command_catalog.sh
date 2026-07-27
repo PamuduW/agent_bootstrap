@@ -4,11 +4,11 @@
 # Authoritative public Agentbot command, configuration, and surface catalog.
 
 AGENTBOT_COMMAND_KEYS=(
-	status install update token boot workspace workspaces resync command_lib doctor dotfiles
+	status install update token boot workspace workspaces resync command_lib doctor graphify dotfiles
 )
 AGENTBOT_BACKEND_COMMAND_KEYS=(
 	install 'skills install' 'skills update' 'skills upgrade' 'skills list' 'skills doctor'
-	doctor update status global workspace workspaces resync
+	doctor update status global graphify workspace workspaces resync
 )
 AGENTBOT_CONFIG_KEYS=(
 	AGENTBOT_HOME XDG_CONFIG_HOME GITHUB_TOKEN AGENTBOT_TUI AGENTBOT_QUIET
@@ -27,6 +27,7 @@ declare -A AGENTBOT_COMMAND_USAGE=(
 	[resync]='agentbot resync [--all | PATH ...] [--yes|--dry-run]'
 	[command_lib]='Agentbot menu: Command Lib'
 	[doctor]='agentbot doctor'
+	[graphify]='agentbot graphify status|setup'
 	[dotfiles]='agentbot dotfiles'
 )
 
@@ -41,6 +42,7 @@ declare -A AGENTBOT_COMMAND_CLASS=(
 	[resync]='mutating'
 	[command_lib]='read-only'
 	[doctor]='read-only'
+	[graphify]='mutating'
 	[dotfiles]='mutating'
 )
 
@@ -55,6 +57,7 @@ declare -A AGENTBOT_COMMAND_ENTRYPOINT=(
 	[resync]='Agentbot wrapper -> Python workspace engine'
 	[command_lib]='Agentbot menu reference'
 	[doctor]='agentbot wrapper -> ./install.sh doctor'
+	[graphify]='agentbot wrapper -> ./install.sh graphify'
 	[dotfiles]='Agentbot -> sibling Dotfiles bridge seam'
 )
 
@@ -69,6 +72,7 @@ declare -A AGENTBOT_COMMAND_SUMMARY=(
 	[resync]='Preview or refresh registered workspaces.'
 	[command_lib]='Show this complete command and configuration reference.'
 	[doctor]='Validate skills, rendered outputs, links, and configuration.'
+	[graphify]='Inspect or set up the optional Graphify Agent Skills integration.'
 	[dotfiles]='Open the sibling Dotfiles installer when the bridge is available.'
 )
 
@@ -83,6 +87,7 @@ declare -A AGENTBOT_COMMAND_OPTIONS=(
 	[resync]=$'--all|Include every enabled registered workspace.|mutually exclusive with PATH\n--yes|Apply Agentbot-managed changes.|preview by default\n--dry-run|Preview without writing; mutually exclusive with --yes.|preview by default\nPATH ...|Refresh only the listed registered workspaces.|required unless --all'
 	[command_lib]=$'(none)|The Command Lib is read-only and takes no options.|always'
 	[doctor]=$'(none)|Doctor reads state and reports issues; it takes no options.|always'
+	[graphify]=$'status|Read Graphify CLI, skill, and assistant-link state without writing.|default\nsetup|Run Graphify\'s generic Agent Skills installer and refresh Agentbot outputs.|explicit'
 	[dotfiles]=$'(none)|The bridge opens the sibling installer when that integration is installed.|always'
 )
 
@@ -97,6 +102,7 @@ declare -A AGENTBOT_COMMAND_DEFAULTS=(
 	[resync]='Requires --all or at least one registered PATH; preview is safe by default.'
 	[command_lib]='Prints the complete catalog without changing state.'
 	[doctor]='Reports issues without repairing them.'
+	[graphify]='Status is read-only; setup requires the Graphify CLI and only installs the generic Agent Skills copy.'
 	[dotfiles]='Requires a resolvable sibling Dotfiles installer.'
 )
 
@@ -111,6 +117,7 @@ declare -A AGENTBOT_COMMAND_EFFECTS=(
 	[resync]='Preview reads registered targets; --yes may update their managed files and registry.'
 	[command_lib]='Performs no external command, file, network, or installer action.'
 	[doctor]='Reads installed skills, rendered outputs, links, and configuration.'
+	[graphify]='Status reads local Graphify state; setup may write ~/.agents/skills/graphify and refresh managed links.'
 	[dotfiles]='May leave Agentbot and launch the sibling Dotfiles menu; availability is checked first.'
 )
 
@@ -125,6 +132,7 @@ declare -A AGENTBOT_COMMAND_EXAMPLES=(
 	[resync]='agentbot resync --all --dry-run'
 	[command_lib]='Select Command Lib from the Agentbot menu'
 	[doctor]='agentbot doctor'
+	[graphify]='agentbot graphify status'
 	[dotfiles]='agentbot dotfiles'
 )
 
@@ -139,6 +147,7 @@ declare -A AGENTBOT_COMMAND_RELATED=(
 	[resync]='Use workspace for one path or workspaces to inspect the registry.'
 	[command_lib]='The same catalog is available through agentbot help.'
 	[doctor]='Use status for a non-diagnostic snapshot.'
+	[graphify]='Install the optional CLI through Dotfiles first; setup does not install Graphify or create project rules.'
 	[dotfiles]='The reciprocal entry is exposed by the Dotfiles Agents menu.'
 )
 
@@ -153,6 +162,7 @@ declare -A AGENTBOT_BACKEND_USAGE=(
 	['skills upgrade']='./install.sh skills upgrade'
 	[status]='./install.sh status [--json]'
 	[global]='./install.sh global'
+	[graphify]='./install.sh graphify status|setup'
 	[workspace]='./install.sh workspace [--profile NAME] [--targets LIST] [--yes] PATH'
 	[workspaces]='./install.sh workspaces'
 	[resync]='./install.sh resync [--all | PATH ...] [--yes|--dry-run]'
@@ -169,6 +179,7 @@ declare -A AGENTBOT_BACKEND_SUMMARY=(
 	[update]='Run repository-first source-owned skill reconciliation.'
 	[status]='Show skill and global-render status.'
 	[global]='Render global agent outputs from canonical sources.'
+	[graphify]='Inspect or set up the optional Graphify Agent Skills integration.'
 	[workspace]='Preview or apply one workspace through the Python engine.'
 	[workspaces]='List locally registered workspaces.'
 	[resync]='Preview or apply registered workspace refreshes.'
@@ -185,6 +196,7 @@ declare -A AGENTBOT_BACKEND_OPTIONS=(
 	[update]=$'--dry-run|Preview reconciliation without writing.|off\n--yes|Confirm source-owned changes.|off'
 	[status]=$'--json|Emit machine-readable status from the Python workspace engine.|off'
 	[global]=$'(none)|Renders global outputs from canonical sources.|always'
+	[graphify]=$'status|Read Graphify state without writing.|default\nsetup|Install or refresh the generic Agent Skills copy.|explicit'
 	[workspace]=$'--profile NAME|Select a workspace profile.|unset\n--targets LIST|Select comma-separated outputs; codex aliases agents.|all enabled outputs\n--yes|Apply and register instead of previewing.|preview only\nPATH|Workspace directory.|required'
 	[workspaces]=$'(none)|Lists registered workspaces.|always'
 	[resync]=$'--all|Include all enabled registered workspaces.|mutually exclusive with PATH\n--yes|Apply managed changes.|preview by default\n--dry-run|Preview without writing.|preview by default\nPATH ...|Explicit registered workspace paths.|required unless --all'

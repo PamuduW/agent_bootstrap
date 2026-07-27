@@ -206,7 +206,7 @@ test_graphify_menu_actions_use_backend_and_confirm_setup() (
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
 	local calls="$TEST_ROOT/graphify-menu.calls" choice_index=0 choice
 	: >"$calls"
-	local choices=(status setup back)
+	local choices=(status commands setup back)
 	menu_simple_run() {
 		choice="${choices[$choice_index]}"
 		choice_index=$((choice_index + 1))
@@ -220,10 +220,38 @@ test_graphify_menu_actions_use_backend_and_confirm_setup() (
 	ui_clear() { :; }
 	ui_pause() { printf 'pause\n' >>"$calls"; }
 	agentbot_menu_graphify_confirm() { return 0; }
+	agentbot_menu_graphify_commands() { printf 'commands\n' >>"$calls"; }
 	agentbot_menu_graphify_cli_available() { return 0; }
 	agentbot_run_backend() { printf 'backend:%s\n' "$*" >>"$calls"; }
 	agentbot_menu_graphify
-	[[ "$(<"$calls")" == $'backend:graphify status\npause\nbackend:graphify status\nbackend:graphify setup\npause' ]]
+	[[ "$(<"$calls")" == $'backend:graphify status\npause\ncommands\npause\nbackend:graphify status\nbackend:graphify setup\npause' ]]
+)
+
+test_graphify_commands_are_read_only_and_document_platform_forms() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local output rc
+	set +e
+	output="$(AGENTBOT_MENU_COLS=100 agentbot_menu_graphify_dispatch commands 2>&1)"
+	rc=$?
+	set -e
+	[[ "$rc" -eq 0 ]] || return 1
+	for needle in \
+		'Graphify Commands' \
+		'Claude/Cursor: /graphify .' \
+		"Codex: \$graphify ." \
+		'graphify update .' \
+		'graphify query "what connects auth to the database?"' \
+		'graphify install --platform agents' \
+		'graphify claude install' \
+		'graphify agents install' \
+		'graphify codex install' \
+		'graphify cursor install' \
+		'Agentbot does not run'; do
+		[[ "$output" == *"$needle"* ]] || {
+			printf 'missing Graphify command detail: %s\n' "$needle" >&2
+			return 1
+		}
+	done
 )
 
 test_graphify_menu_missing_cli_never_invokes_setup() (
@@ -418,6 +446,7 @@ if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'Agentbot pauses use the shared blank-line contract' test_pause_has_global_blank_line_contract
 	check 'Agentbot menu dispatches actions in order and returns on Quit' test_dispatch_order_and_return
 	check 'Graphify submenu dispatches status and confirmed setup' test_graphify_menu_actions_use_backend_and_confirm_setup
+	check 'Graphify Commands is a read-only platform-aware reference' test_graphify_commands_are_read_only_and_document_platform_forms
 	check 'Graphify submenu stops at the status handoff when the CLI is missing' test_graphify_menu_missing_cli_never_invokes_setup
 	check 'Agentbot menu rebuilds after returning from Workspaces' test_main_menu_rebuilds_after_workspaces_returns
 	check 'Workspaces menu exposes actions and keeps apply confirmation safe' test_workspaces_menu_actions

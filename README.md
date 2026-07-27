@@ -137,6 +137,22 @@ project rules, rewrite `AGENTS.md`, install hooks, enable strict mode, or build
 or purge a project graph. Graphify output remains derived evidence, not a
 replacement for current source files and tests.
 
+When a project has an Agentbot-rendered `AGENTS.md` and a readable
+`graphify-out/graph.json` at that project's root, a supported assistant can use
+the installed Graphify skill's query-first path automatically. This is
+project-local: a graph in another repository is not selected implicitly, and a
+missing or stale graph falls back to normal source inspection. Use the
+assistant-specific form shown by the installed skill (`/graphify` for Claude or
+Cursor; `$graphify` for Codex) and the shell CLI form (`graphify extract .`,
+`graphify update .`, or `graphify query ...`) only in a terminal.
+
+The TUI's **Agentbot → Graphify → Commands** item is a read-only quick
+reference for those forms and the [official Graphify command reference](https://github.com/Graphify-Labs/graphify#common-commands).
+It also shows the explicit platform setup commands. Agentbot does **not** run
+`graphify claude install`, `graphify agents install`, `graphify codex install`,
+or `graphify cursor install`; those commands can edit project instruction files
+or hooks and remain opt-in.
+
 `agentbot update` refreshes Graphify only when the canonical Graphify skill is
 already enabled. `agentbot update --dry-run` reports that intended action but
 does not invoke Graphify or enable it.

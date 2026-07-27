@@ -61,6 +61,8 @@ repository.
 - Use the installed Graphify skill for repository-wide relationship,
   architecture, or impact questions only when the active harness exposes the
   skill and `graphify-out/graph.json` exists and is readable.
+- Treat `graphify-out/graph.json` as belonging to the current project root;
+  do not implicitly use a graph from a sibling or unrelated repository.
 - Prefer a scoped Graphify query before a broad repository scan, then inspect
   primary source files for claims that affect code changes.
 - Fall back to `rg`, direct file reads, and normal repository analysis when the

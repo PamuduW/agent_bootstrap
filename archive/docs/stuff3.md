@@ -246,7 +246,9 @@ CLI ownership, assistant integration, or Agentbot's canonical policy ownership.
    ownership.
 3. Add a Graphify submenu and matching non-interactive command to Agentbot.
    Status is read-only. Setup first checks for the CLI and gives a direct
-   Dotfiles/manual install instruction when it is absent.
+   Dotfiles/manual install instruction when it is absent. The submenu also has
+   a read-only `Commands` reference for assistant and shell forms, sourced from
+   Graphify's official [common command reference](https://github.com/Graphify-Labs/graphify#common-commands).
 4. Setup runs the skill-only command
    `graphify install --platform agents`, then refreshes Agentbot's existing
    assistant links and global outputs. This makes the canonical skill available
@@ -257,15 +259,21 @@ CLI ownership, assistant integration, or Agentbot's canonical policy ownership.
 6. Add short conditional Graphify guidance to the canonical base and global
    policies. Agents use Graphify only when the skill and a usable
    `graphify-out/graph.json` exist, and fall back to normal source inspection
-   when they do not.
+   when they do not. The graph is scoped to the current project root; sibling
+   repositories are not implicitly searched.
 
 ### Safety and non-goals
 
 - Do not run bare `graphify install`; it defaults to one platform rather than
   the generic Agent Skills location.
-- Do not run `graphify agents install`, `graphify codex install`, or similar
-  always-on setup commands because they can modify project instruction files or
-  hooks.
+- Do not run `graphify claude install`, `graphify agents install`,
+  `graphify codex install`, `graphify cursor install`, or similar always-on
+  setup commands because they can modify project instruction files or hooks.
+- The official assistant forms are `/graphify <path>` for Claude/Cursor and
+  `$graphify <path>` for Codex. The headless shell equivalents use an explicit
+  subcommand such as `graphify extract .`, `graphify update .`, or
+  `graphify query "..."`; do not document a bare shell `graphify .` as a
+  general CLI build command.
 - Do not scrape or dummy-install upstream `AGENTS.md` text into Agentbot
   templates. Agentbot owns a small reviewed policy block; version-specific
   operating detail stays in Graphify's installed skill.

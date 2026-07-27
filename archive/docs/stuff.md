@@ -6,12 +6,14 @@ Nothing here is read by `./install.sh`, `npx skills`, or `agentbot` at runtime.
 
 **Implementation roadmap:** [stuff3.md](./stuff3.md) — phased build plan for restoring deferred features.
 
-**Current status (2026-07-18):** Phases 0–2 are complete. The live system is
+**Current status (2026-07-28):** Phases 0–2 and 5 are complete; Phases 3–4
+remain deferred. The live system is
 the standalone Agentbot menu, profile-driven workspace rendering, local
 registration/resync, global baseline rendering, curated skills management, and
-the Dotfiles sibling bridge. Catalog/MCP and durable-memory capabilities remain
-deferred; this file records the archive map, not a promise to restore the old
-implementation unchanged.
+the Dotfiles sibling bridge, with an optional Graphify CLI and assistant
+integration. Catalog/MCP and durable-memory capabilities remain deferred; this
+file records the archive map, not a promise to restore the old implementation
+unchanged.
 
 ---
 
@@ -20,7 +22,7 @@ implementation unchanged.
 | Path | Why keep |
 |------|----------|
 | **[stuff.md](./stuff.md)** | This file — deferred map and restore pointers |
-| **[stuff3.md](./stuff3.md)** | Implementation phases (Phase 0–2 complete; Phases 3–4 deferred) |
+| **[stuff3.md](./stuff3.md)** | Implementation phases (Phases 0–2 and 5 complete; Phases 3–4 deferred) |
 | **[README.md](./README.md)** | Move log (Tier 1/2) and pack → bootstrap matrix |
 | **[LOCKFILE-NOTES.md](./LOCKFILE-NOTES.md)** | Global vs project lockfile history |
 | **[archive/docs/](./)** | Roadmap and deferred-capability notes (`stuff.md`, `stuff3.md`, `future.md`) |
@@ -58,6 +60,7 @@ Removed **2026-07-10** to keep archive lean. None of this was on the runtime pat
 | `agentbot` bootstrap | `bin/agentbot`, `base/` |
 | Workspace render and resync | `src/workspace_*.py`, `agentos.yaml`, `scripts/menus/workspaces.sh` |
 | Global baseline | `global/AGENTS.md` → `~/.codex/`, `~/.claude/` |
+| Optional Graphify integration | sibling `dotfiles` `graphify_cli` component, `src/graphify.py`, and `agentbot graphify` |
 | Slim CLI | `src/` (`python3 -m src.cli`) |
 | Doctor / status | `install.sh` |
 
@@ -79,12 +82,12 @@ Removed **2026-07-10** to keep archive lean. None of this was on the runtime pat
 
 Upstream skills only — no in-repo vendored pack. Live path: `skills.sources.yaml` + `npx skills -g`.
 
-### Disabled in manifest (not in archive)
+### External or disabled integrations (not managed by the curated manifest)
 
 | Skill source | Reason |
 |--------------|--------|
-| `graphify` | `enabled: false` — upstream layout not ready |
-| `obsidian-memory` | `enabled: false` |
+| Graphify | Live on demand through the official CLI and `agentbot graphify setup`; intentionally not a Git skill source |
+| `obsidian-memory` | Disabled; source layout and provenance remain unresolved |
 
 ---
 
@@ -102,14 +105,14 @@ material remains recoverable from Git history.
 | 2 | Global `npx skills` | **Live** |
 | 3 | Obsidian vault | **Phase 4** (`../memory-vault/`) |
 | 4 | Hermes `MEMORY.md` + SQLite FTS (home server) | **Deferred** — Proxmox + Phase 7.3 |
-| 5 | Graphify on-demand (large infra repos) | **Phase 4** ([stuff3.md](./stuff3.md)) |
+| 5 | Graphify on-demand (large infra repos) | **Live — Phase 5** ([stuff3.md](./stuff3.md)) |
 | 6 | Mem0 / Graphiti / GraphRAG | **Deferred** |
 
 **Later phases (do not build on laptop now):**
 
 - **7.2** — opencode, OpenRouter, planner → worker → reviewer
 - **7.3** — Proxmox, Hermes daemon, Telegram/Discord gateway
-- **7.4** — Graphify hooks, Mem0 MCP, Graphiti/GraphRAG
+- **7.4** — Graphify hooks, Mem0 MCP, Graphiti/GraphRAG (the standalone Graphify CLI integration is already live in Phase 5)
 - **AgentOS extras** — full taxonomy, `agentos tui`, ingest pipeline, OpenClaw file set (`SOUL.md`, …)
 
 **Control plane:** Hermes on Proxmox — out of scope until config + work planes are stable.
@@ -122,10 +125,11 @@ material remains recoverable from Git history.
 LIVE (slim)                 ARCHIVE (docs/config)        GIT HISTORY (code)     FUTURE (not built)
 ───────────                 ─────────────────────        ──────────────────     ────────────────
 npx skills                  future.md + stuff3.md        catalog.py             Hermes / Proxmox
-agentbot bootstrap          agentos.yaml                 discovery.py           Graphify / Mem0
-global render               packages.json + mcp.json     state.py, ui.py
-Claude bridge               memory-vault/                render.py (full)
-doctor                      templates/
+agentbot bootstrap          agentos.yaml                 discovery.py           Mem0 / Graphiti
+Graphify CLI + skill        packages.json + mcp.json     state.py, ui.py         Graphify hooks
+global render               memory-vault/                render.py (full)
+Claude bridge               templates/
+doctor
 ```
 
 ---

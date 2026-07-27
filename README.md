@@ -12,11 +12,11 @@ Deferred features and the phased expansion plan live in [`archive/docs/`](archiv
 
 ## Current roadmap status
 
-Phase 0, Phase 1, and the Phase 2 workspace pipeline are complete. The live
+Phases 0, 1, 2, and 5 are complete. Phases 3 and 4 remain deferred. The live
 surface includes the standalone Agentbot menu, profile-driven workspace
 rendering, local workspace registration/resync, global baseline rendering,
-curated skills management, and the Dotfiles sibling bridge. The detailed,
-implementation-aware roadmap is
+curated skills management, the Dotfiles sibling bridge, and the optional
+Graphify CLI/skill integration. The detailed, implementation-aware roadmap is
 [`archive/docs/stuff3.md`](archive/docs/stuff3.md).
 
 The supported menu entrypoints are `./install.sh` on a controlling TTY and
@@ -134,6 +134,10 @@ generic Agent Skills location where they support it; setup does not create
 project rules, rewrite `AGENTS.md`, install hooks, enable strict mode, or build
 or purge a project graph. Graphify output remains derived evidence, not a
 replacement for current source files and tests.
+
+`agentbot update` refreshes Graphify only when the canonical Graphify skill is
+already enabled. `agentbot update --dry-run` reports that intended action but
+does not invoke Graphify or enable it.
 
 ## Workspace setup and repository scaffolding
 

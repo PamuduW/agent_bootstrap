@@ -11,7 +11,7 @@ configuration and the separate memory/template payloads they describe.
 | File | Role |
 |------|------|
 | [stuff.md](./stuff.md) | Deferred capability map + restore pointers |
-| [stuff3.md](./stuff3.md) | **Implementation phases** (Phase 0–2 complete; Phases 3–4 deferred) |
+| [stuff3.md](./stuff3.md) | **Implementation phases** (Phases 0–2 and 5 complete; Phases 3–4 deferred) |
 | [future.md](./future.md) | Deferred AgentOS feature notes |
 | [LOCKFILE-NOTES.md](./LOCKFILE-NOTES.md) | Historical lockfile strategy |
 
@@ -83,7 +83,7 @@ Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 
 | `agentos.yaml` profiles | **Live (Phase 2)** | `agentos.yaml`, `src/workspace_profiles.py` |
 | Obsidian memory vault | **Archived** | `archive/memory-vault/` |
 | Deferred AgentOS / harness phases | **Archived** | `archive/docs/future.md`, `archive/docs/` |
-| `graphify` skill source | **Disabled** | `skills.sources.yaml` (`enabled: false`) |
+| Graphify skill integration | **On-demand / live** | Official Graphify CLI plus `agentbot graphify setup`; not a manifest source |
 | `obsidian-memory` skill source | **Disabled** | `skills.sources.yaml` (`enabled: false`) |
 
 ## Archived and deferred use cases

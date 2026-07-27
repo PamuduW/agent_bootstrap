@@ -23,7 +23,10 @@ Curated sources were installed with `npx skills add … -g -y` (global scope), m
 | `ShaishavMaisuria/research-paper-lifecycle-skills` | OK |
 | `Akindu23/my-agent-skills` | OK |
 
-Disabled sources in `skills.sources.yaml` were skipped (`graphify`, `obsidian-memory`).
+At the time of this historical snapshot, disabled sources in
+`skills.sources.yaml` were skipped (`graphify`, `obsidian-memory`). Graphify is
+now installed outside the curated manifest by its official CLI and is exposed
+through `agentbot graphify setup`; it must not be added to the project lockfile.
 
 **Installer bugs observed in `bin/skills-install.sh`:**
 

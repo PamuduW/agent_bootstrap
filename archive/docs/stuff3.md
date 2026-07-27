@@ -1,7 +1,8 @@
 # Agentbot expansion roadmap
 
 **Status:** Phases 0, 1, 2, and 5 are complete and verified against the live
-repositories (2026-07-27). Phases 3 and 4 remain deferred. Phase 5 branches
+repositories (2026-07-27); supporting documentation was reconciled on
+2026-07-28. Phases 3 and 4 remain deferred. Phase 5 branches
 directly from the completed Phase 2 foundation.
 
 This is a living roadmap. The runtime source and operational documentation are
@@ -285,3 +286,4 @@ work. Completing it does not advance or implicitly enable Phases 3 or 4.
 | 2026-07-18 | Reconciled Phases 0–1 with live Agentbot naming and entrypoints |
 | 2026-07-18 | Marked Phase 2 complete after implementing profiles, renderer, local state, CLI, boot registration, menu, and validation |
 | 2026-07-27 | Deferred Phases 3–4 and delivered Phase 5 as the independent Graphify integration phase |
+| 2026-07-28 | Reconciled README, archive indexes, and Phase 4 design notes with the live Phase 5 boundary |

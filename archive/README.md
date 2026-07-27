@@ -7,7 +7,6 @@ This directory holds **pre-slim `agent_bootstrap` assets** moved during the 2026
 | File | Role |
 |------|------|
 | [stuff.md](./docs/stuff.md) | Deferred capability map + restore pointers |
-| [stuff2.md](./docs/stuff2.md) | Day-to-day impact of deferred features |
 | [stuff3.md](./docs/stuff3.md) | **Implementation phases** (Phase 0–2 complete; Phases 3–4 deferred) |
 
 **Docs-only policy (2026-07-10):** Python modules and tests were removed from `archive/`; recover them from **git history** when restoring. Config (JSON/YAML) and markdown stay here.
@@ -29,8 +28,6 @@ Moved from repo root with `git mv` (except `exports/`, which was gitignored and 
 | `agentos.yaml` | `archive/agentos.yaml` | v4 Lite profiles and export targets |
 | `templates/` | `archive/templates/` | Per-repo AGENTS.md overlay template for workspace render |
 | `exports/` | `archive/exports/` | Generated outputs (was gitignored) |
-| `docs/openclaw-plan.md` | `archive/docs/openclaw-plan.md` | OpenClaw adapter planning |
-| `docs/harness-architecture.md` | `archive/docs/harness-architecture.md` | Three-plane harness architecture |
 
 Top-level `docs/` and `skills/` were removed after the moves (empty). Restore from this directory or from git history.
 

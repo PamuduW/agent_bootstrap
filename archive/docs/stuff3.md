@@ -1,7 +1,9 @@
 # Agentbot expansion roadmap
 
 **Status:** Phases 0, 1, and 2 are complete and verified against the live
-repositories (2026-07-18). Phases 3 and 4 remain deferred.
+repositories (2026-07-18). Phases 3 and 4 remain deferred. Phase 5 is the next
+approved implementation phase and branches directly from the completed Phase 2
+foundation.
 
 This is a living roadmap. The runtime source and operational documentation are
 the authority; this file records the delivered contracts and the future
@@ -23,8 +25,9 @@ must use Agentbot and agentbot.
 | Global machine baseline | global/AGENTS.md and install.sh global | Live |
 | Curated skills | skills.sources.yaml and install.sh skills ... | Live |
 | Dotfiles integration | sibling dotfiles Agentbot bridge | Live |
-| Package catalog and MCP bundles | archive/catalog/, archive/mcp/ | Phase 3 |
-| Durable memory and Graphify | archive/memory-vault/ and disabled sources | Phase 4 |
+| Package catalog and MCP bundles | archive/catalog/, archive/mcp/ | Phase 3 (deferred) |
+| Durable memory | archive/memory-vault/ and disabled memory sources | Phase 4 (deferred) |
+| Graphify CLI and assistant integration | sibling dotfiles component plus Agentbot integration | Phase 5 (next) |
 
 Agentbot is the installed product and public command. agent_bootstrap remains
 the Git repository and clone directory. AGENTBOT_TUI is the active TUI
@@ -40,12 +43,13 @@ Phase 1: standalone Agentbot menu + Dotfiles bridge + unified boot ✅
     |
     v
 Phase 2: profiles + managed workspace render + local resync ✅
+    |\
+    | \--> Phase 5: optional Graphify CLI + assistant integration (next)
     |
-    v
-Phase 3: package catalog + profile-filtered MCP bundles
-    |
-    v
-Phase 4: durable memory + optional Graphify workflows
+    +----> Phase 3: package catalog + profile-filtered MCP bundles (deferred)
+              |
+              v
+           Phase 4: durable memory (deferred)
 ```
 
 ## Phase 0 — slim bootstrap ✅
@@ -191,7 +195,7 @@ Planned work:
 Phase 3 must extend the Phase 2 renderer; it must not create a second unrelated
 configuration system.
 
-## Phase 4 — durable memory and optional Graphify
+## Phase 4 — durable memory (deferred)
 
 **Goal:** Add human-approved durable project knowledge only when the current
 Markdown policy surface is no longer sufficient.
@@ -200,12 +204,70 @@ Planned work:
 
 - restore selected memory-vault workflows with user approval before writes;
 - keep memory local, reviewable, and separate from generated repository policy;
-- use Graphify only for large repositories where Markdown navigation and rg are
-  no longer sufficient;
-- keep graphify and obsidian-memory disabled until their source layouts and
-  provenance are explicitly designed.
+- keep obsidian-memory disabled until its source layout and provenance are
+  explicitly designed.
 
 Do not start with a vector database or an always-on laptop service.
+
+## Phase 5 — optional Graphify integration (next)
+
+**Goal:** Make Graphify an explicit, removable setup choice without confusing
+CLI ownership, assistant integration, or Agentbot's canonical policy ownership.
+
+### Ownership boundary
+
+- Dotfiles owns installation and updates of the `graphifyy` Python package,
+  exposed as the `graphify` CLI.
+- Agentbot owns registration of the Graphify skill and its exposure to supported
+  assistants.
+- Graphify owns its generated `SKILL.md`, references, and
+  `.graphify_version` stamp under the generic Agent Skills directory.
+- Agentbot remains the only owner of its canonical `base/AGENTS.md` and
+  `global/AGENTS.md` policy sources.
+
+### Planned behavior
+
+1. Add a default-off `graphify_cli` component to the Dotfiles component picker.
+   Selecting it installs Graphify with `uv tool install graphifyy`; an existing
+   non-uv Graphify installation is reported and preserved rather than silently
+   replaced.
+2. Add Graphify to the existing `dotfiles update` flow. Update only a uv-owned
+   `graphifyy` tool with `uv tool upgrade graphifyy`; report external
+   installations as unmanaged and provide a manual command instead of taking
+   ownership.
+3. Add a Graphify submenu and matching non-interactive command to Agentbot.
+   Status is read-only. Setup first checks for the CLI and gives a direct
+   Dotfiles/manual install instruction when it is absent.
+4. Setup runs the skill-only command
+   `graphify install --platform agents`, then refreshes Agentbot's existing
+   assistant links and global outputs. This makes the canonical skill available
+   from `~/.agents/skills/graphify/` without allowing Graphify to edit a
+   repository policy file.
+5. Agentbot Update refreshes the Graphify skill only when Graphify integration
+   is already present. It never enables Graphify as a side effect.
+6. Add short conditional Graphify guidance to the canonical base and global
+   policies. Agents use Graphify only when the skill and a usable
+   `graphify-out/graph.json` exist, and fall back to normal source inspection
+   when they do not.
+
+### Safety and non-goals
+
+- Do not run bare `graphify install`; it defaults to one platform rather than
+  the generic Agent Skills location.
+- Do not run `graphify agents install`, `graphify codex install`, or similar
+  always-on setup commands because they can modify project instruction files or
+  hooks.
+- Do not scrape or dummy-install upstream `AGENTS.md` text into Agentbot
+  templates. Agentbot owns a small reviewed policy block; version-specific
+  operating detail stays in Graphify's installed skill.
+- Do not automatically build graphs, install Git hooks, enable strict mode,
+  purge generated data, stage files, commit, or push.
+- Do not add Graphify to the curated `npx skills` manifest. Its skill is
+  installed and versioned by the official Graphify CLI, not by an unrelated
+  Git skill source.
+
+Phase 5 is independent of the deferred package-catalog, MCP, and durable-memory
+work. Completing it does not advance or implicitly enable Phases 3 or 4.
 
 ## Explicitly out of scope
 
@@ -223,3 +285,4 @@ Do not start with a vector database or an always-on laptop service.
 | 2026-07-11 | Initial phase map created after the slim-bootstrap rework |
 | 2026-07-18 | Reconciled Phases 0–1 with live Agentbot naming and entrypoints |
 | 2026-07-18 | Marked Phase 2 complete after implementing profiles, renderer, local state, CLI, boot registration, menu, and validation |
+| 2026-07-27 | Deferred Phases 3–4 and added Phase 5 as the next independent Graphify integration phase |

@@ -169,7 +169,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _archived_command_error(command: str) -> int:
     print(
-        f"Error: '{command}' is archived. See archive/README.md for catalog, "
+        f"Error: '{command}' is archived. See archive/docs/README.md for catalog, "
         "MCP, and interactive control-plane features.",
         file=sys.stderr,
     )

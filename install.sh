@@ -372,7 +372,7 @@ Usage: ./install.sh <command> [args]
 Run agentbot boot in a repository to create/preserve AGENTS.md and selected outputs.
 With no arguments a usable controlling TTY is required for the Agentbot menu.
 
-Archived commands (see archive/README.md): all, interactive, import-local,
+Archived commands (see archive/docs/README.md): all, interactive, import-local,
 remove-managed, delete-local.
 
 Legacy flags (backward compatible):
@@ -389,7 +389,7 @@ main() {
     --status) set -- status "${@:2}" ;;
     --global) set -- global "${@:2}" ;;
     --workspace|--all)
-      die "workspace/all render is archived — see archive/README.md"
+      die "workspace/all render is archived — see archive/docs/README.md"
       ;;
   esac
 
@@ -427,7 +427,7 @@ main() {
       run_cli "$cmd" "${@:2}"
       ;;
     all|interactive|import-local|remove-managed|delete-local)
-      die "${cmd} is archived — see archive/README.md"
+      die "${cmd} is archived — see archive/docs/README.md"
       ;;
     -h|--help|help)
       usage

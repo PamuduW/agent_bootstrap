@@ -19,12 +19,12 @@ implementation unchanged.
 
 | Path | Why keep |
 |------|----------|
-| **[docs/stuff.md](./stuff.md)** | This file — deferred map and restore pointers |
-| **[docs/stuff3.md](./stuff3.md)** | Implementation phases (Phase 0–2 complete; Phases 3–4 deferred) |
-| **[README.md](../README.md)** | Move log (Tier 1/2) and pack → bootstrap matrix |
-| **[LOCKFILE-NOTES.md](../LOCKFILE-NOTES.md)** | Global vs project lockfile history |
-| **[docs/](./)** | Roadmap and deferred-capability notes (`stuff.md`, `stuff3.md`) |
-| **[future/README.md](../future/README.md)** | AgentOS roadmap items still deferred |
+| **[stuff.md](./stuff.md)** | This file — deferred map and restore pointers |
+| **[stuff3.md](./stuff3.md)** | Implementation phases (Phase 0–2 complete; Phases 3–4 deferred) |
+| **[README.md](./README.md)** | Move log (Tier 1/2) and pack → bootstrap matrix |
+| **[LOCKFILE-NOTES.md](./LOCKFILE-NOTES.md)** | Global vs project lockfile history |
+| **[archive/docs/](./)** | Roadmap and deferred-capability notes (`stuff.md`, `stuff3.md`, `future.md`) |
+| **[future.md](./future.md)** | AgentOS roadmap items still deferred |
 | **[memory-vault/](../memory-vault/)** | Human Obsidian-style memory (draft → you approve) |
 | **[agentos.yaml](../agentos.yaml)** | v4 Lite export profiles reference |
 | **[catalog/packages.json](../catalog/packages.json)** | Package catalog schema + entries for future MCP restore |
@@ -90,7 +90,9 @@ Upstream skills only — no in-repo vendored pack. Live path: `skills.sources.ya
 
 ## Deferred — future phases (docs only, not built)
 
-From `docs/harness-architecture.md` and `future/README.md`.
+Based on the former harness-architecture and future-phase notes. The retained
+roadmap is [`future.md`](./future.md); the removed implementation/design
+material remains recoverable from Git history.
 
 **Memory tiers** — add only when the previous tier hurts:
 
@@ -119,7 +121,7 @@ From `docs/harness-architecture.md` and `future/README.md`.
 ```text
 LIVE (slim)                 ARCHIVE (docs/config)        GIT HISTORY (code)     FUTURE (not built)
 ───────────                 ─────────────────────        ──────────────────     ────────────────
-npx skills                  harness-architecture.md      catalog.py             Hermes / Proxmox
+npx skills                  future.md + stuff3.md        catalog.py             Hermes / Proxmox
 agentbot bootstrap          agentos.yaml                 discovery.py           Graphify / Mem0
 global render               packages.json + mcp.json     state.py, ui.py
 Claude bridge               memory-vault/                render.py (full)

@@ -2,20 +2,31 @@
 
 This directory holds **pre-slim `agent_bootstrap` assets** moved during the 2026-07-09 rework. It is **not part of the runtime install path** — `./install.sh`, `npx skills`, `bin/agentbot`, and slim bootstrap flows do not read from here.
 
-**Docs (archive/docs/):**
+All archive Markdown indexes, roadmaps, and historical notes live in this
+`archive/docs/` directory. The archive root keeps the JSON/YAML/environment
+configuration and the separate memory/template payloads they describe.
+
+**Archive documentation:**
 
 | File | Role |
 |------|------|
-| [stuff.md](./docs/stuff.md) | Deferred capability map + restore pointers |
-| [stuff3.md](./docs/stuff3.md) | **Implementation phases** (Phase 0–2 complete; Phases 3–4 deferred) |
+| [stuff.md](./stuff.md) | Deferred capability map + restore pointers |
+| [stuff3.md](./stuff3.md) | **Implementation phases** (Phase 0–2 complete; Phases 3–4 deferred) |
+| [future.md](./future.md) | Deferred AgentOS feature notes |
+| [LOCKFILE-NOTES.md](./LOCKFILE-NOTES.md) | Historical lockfile strategy |
 
-**Docs-only policy (2026-07-10):** Python modules and tests were removed from `archive/`; recover them from **git history** when restoring. Config (JSON/YAML) and markdown stay here.
+**Docs-only policy (2026-07-10):** Python modules and tests were removed from
+`archive/`; recover them from **git history** when restoring. Configuration
+(JSON/YAML) remains under `archive/`; Markdown documentation stays in this
+directory.
 
-Restore from this folder for **design and config**; restore **code** from git. See [stuff.md § If you restore](./docs/stuff.md#if-you-restore-a-deferred-feature).
+Restore **design** from this folder and **configuration** from the archive root
+and its payload directories; restore **code** from git. See [stuff.md § If you
+restore](./stuff.md#if-you-restore-a-deferred-feature).
 
 ## Pre-slim snapshot
 
-Tier 1/2 move tables below record what left the repo root on 2026-07-09. See [stuff.md](./docs/stuff.md) for the deferred map and [stuff3.md](./docs/stuff3.md) for the build phases.
+Tier 1/2 move tables below record what left the repo root on 2026-07-09. See [stuff.md](./stuff.md) for the deferred map and [stuff3.md](./stuff3.md) for the build phases.
 
 ## Tier 1 moves (Phase 2 — 2026-07-09)
 
@@ -24,7 +35,7 @@ Moved from repo root with `git mv` (except `exports/`, which was gitignored and 
 | Original path | Archive path | Notes |
 |---------------|--------------|-------|
 | `memory-vault/` | `archive/memory-vault/` | Obsidian-compatible human memory store |
-| `future/` | `archive/future/` | Deferred AgentOS / harness phases |
+| `future/` | `archive/docs/future.md` | Deferred AgentOS / harness phases |
 | `agentos.yaml` | `archive/agentos.yaml` | v4 Lite profiles and export targets |
 | `templates/` | `archive/templates/` | Per-repo AGENTS.md overlay template for workspace render |
 | `exports/` | `archive/exports/` | Generated outputs (was gitignored) |
@@ -71,7 +82,7 @@ Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 
 | Local registration / tracked workspaces | **Live (Phase 2)** | `src/workspace_state.py`, `src/workspace_service.py` |
 | `agentos.yaml` profiles | **Live (Phase 2)** | `agentos.yaml`, `src/workspace_profiles.py` |
 | Obsidian memory vault | **Archived** | `archive/memory-vault/` |
-| Deferred AgentOS / harness phases | **Archived** | `archive/future/`, `archive/docs/` |
+| Deferred AgentOS / harness phases | **Archived** | `archive/docs/future.md`, `archive/docs/` |
 | `graphify` skill source | **Disabled** | `skills.sources.yaml` (`enabled: false`) |
 | `obsidian-memory` skill source | **Disabled** | `skills.sources.yaml` (`enabled: false`) |
 
@@ -94,7 +105,7 @@ Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 
 
 ## Restore notes
 
-See [stuff.md](./docs/stuff.md) and [stuff3.md](./docs/stuff3.md). Summary:
+See [stuff.md](./stuff.md) and [stuff3.md](./stuff3.md). Summary:
 
 1. **Pick scope** — catalog, discovery, state, full render, and ui are coupled.
 2. **Config/docs** — copy from `archive/` (`catalog/`, `mcp/`, `templates/`, `agentos.yaml`, `memory-vault/`).

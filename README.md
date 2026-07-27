@@ -7,7 +7,7 @@ Personal AI-agent tooling installer. The Git repository and clone directory rema
 - **agentbot boot** — register a folder or Git repo and render `AGENTS.md` plus selected agent surfaces from [`base/`](base/)
 - **Global baseline** — machine-level policy in [`global/AGENTS.md`](global/AGENTS.md), rendered to agent home dirs
 
-Deferred features and the phased expansion plan live in [`archive/`](archive/README.md) ([stuff3.md](archive/docs/stuff3.md)).
+Deferred features and the phased expansion plan live in [`archive/docs/`](archive/docs/README.md) ([stuff3.md](archive/docs/stuff3.md)).
 
 ## Current roadmap status
 
@@ -97,7 +97,7 @@ inventory is available with `agentbot skills list` (or
 
 Do not copy the global lock into the repo by hand (schemas differ). **Future:** populate `skills-lock.json` from the manifest for CI/reproducible project-scoped installs.
 
-See [`archive/LOCKFILE-NOTES.md`](archive/LOCKFILE-NOTES.md) for historical notes.
+See [`archive/docs/LOCKFILE-NOTES.md`](archive/docs/LOCKFILE-NOTES.md) for historical notes.
 
 To add a skill: add an entry under `sources` in `skills.sources.yaml`, then run `./install.sh skills install` (not `update`).
 
@@ -229,7 +229,7 @@ agent_bootstrap/
 ├── global/AGENTS.md      # machine-level baseline (authored)
 ├── src/                  # slim Python CLI (cli.py, service.py, …)
 ├── tests/
-└── archive/              # deferred capabilities — docs/stuff*.md, see archive/README.md
+└── archive/              # deferred capabilities — documentation is under archive/docs/
 ```
 
 ## Tests
@@ -244,4 +244,4 @@ bash tests/test_agentbot.sh
 Deferred capabilities are documented in [`archive/docs/stuff.md`](archive/docs/stuff.md); the build roadmap is [`archive/docs/stuff3.md`](archive/docs/stuff3.md).
 
 Legacy pre-slim code is recoverable from Git history; the retained design and
-configuration references are documented in [`archive/README.md`](archive/README.md).
+configuration references are documented in [`archive/docs/README.md`](archive/docs/README.md).

@@ -4,7 +4,13 @@ import json
 from pathlib import Path
 
 from .claude_bridge import run_claude_bridge
-from .claude_statusline import install_claude_statusline
+from .claude_statusline import (
+    STATUSLINE_SCRIPT_NAME,
+    inspect_claude_statusline,
+    install_claude_statusline,
+    statusline_destination,
+    statusline_source,
+)
 from .paths import AgentbotPaths
 from .skills_sources import load_skills_sources
 from .workspace_render import (
@@ -41,6 +47,133 @@ def render_global_outputs(paths: AgentbotPaths) -> None:
     _render_global_output(paths.claude_home / "AGENTS.md", merged)
     install_claude_statusline(paths)
     run_claude_bridge(paths)
+
+
+def plan_global_resync_actions(paths: AgentbotPaths) -> tuple[RenderAction, ...]:
+    """Preview managed global home outputs (Codex/Claude AGENTS + statusline)."""
+    if not paths.global_agents.is_file():
+        return (
+            RenderAction(
+                "global/AGENTS.md",
+                "conflict",
+                None,
+                f"missing global baseline: {paths.global_agents}",
+            ),
+        )
+
+    desired = merge_instruction_text(paths.global_agents, None)
+    actions: list[RenderAction] = [
+        _plan_global_instruction_action(
+            _display_managed_path(paths, paths.codex_home / "AGENTS.md"),
+            paths.codex_home / "AGENTS.md",
+            desired,
+        ),
+        _plan_global_instruction_action(
+            _display_managed_path(paths, paths.claude_home / "AGENTS.md"),
+            paths.claude_home / "AGENTS.md",
+            desired,
+        ),
+        _plan_global_instruction_action(
+            _display_managed_path(paths, paths.claude_home / "CLAUDE.md"),
+            paths.claude_home / "CLAUDE.md",
+            desired,
+        ),
+        _plan_statusline_action(paths),
+    ]
+    return tuple(actions)
+
+
+def resync_global_outputs(paths: AgentbotPaths, *, apply: bool) -> tuple[RenderAction, ...]:
+    """Preview or refresh managed global Codex/Claude outputs and statusline."""
+    planned = plan_global_resync_actions(paths)
+    if not apply:
+        return planned
+    if any(action.kind == "conflict" and action.relative_path == "global/AGENTS.md" for action in planned):
+        return planned
+    render_global_outputs(paths)
+    applied: list[RenderAction] = []
+    for action in planned:
+        if action.kind in {"create", "update"}:
+            applied.append(
+                RenderAction(
+                    action.relative_path,
+                    action.kind,
+                    None,
+                    action.detail.replace("would ", "", 1)
+                    if action.detail.startswith("would ")
+                    else action.detail,
+                )
+            )
+        else:
+            applied.append(action)
+    return tuple(applied)
+
+
+def _display_managed_path(paths: AgentbotPaths, path: Path) -> str:
+    for home, prefix in (
+        (paths.codex_home, "~/.codex"),
+        (paths.claude_home, "~/.claude"),
+    ):
+        try:
+            relative = path.resolve().relative_to(home.resolve())
+            return f"{prefix}/{relative.as_posix()}"
+        except ValueError:
+            continue
+    return _display_home_path(path)
+
+
+def _display_home_path(path: Path) -> str:
+    home = Path.home()
+    try:
+        return f"~/{path.resolve().relative_to(home).as_posix()}"
+    except ValueError:
+        return str(path)
+
+
+def _plan_global_instruction_action(label: str, destination: Path, desired: str) -> RenderAction:
+    existing = destination.read_text(encoding="utf-8") if destination.is_file() else None
+    if existing is None:
+        return RenderAction(label, "create", desired, f"would create managed {label}")
+    if GENERATED_AGENTS_HEADER in existing:
+        if existing == desired:
+            return RenderAction(label, "unchanged", None, f"managed {label} is current")
+        return RenderAction(label, "update", desired, f"would refresh managed {label}")
+    return RenderAction(
+        label,
+        "unchanged",
+        None,
+        f"preserving user-owned {label}; review template may be refreshed on apply",
+    )
+
+
+def _plan_statusline_action(paths: AgentbotPaths) -> RenderAction:
+    label = _display_managed_path(paths, statusline_destination(paths))
+    source = statusline_source(paths)
+    state = inspect_claude_statusline(paths)
+    if not state.source_exists:
+        return RenderAction(
+            label,
+            "conflict",
+            None,
+            f"missing managed statusline source: {source}",
+        )
+    if not state.installed:
+        return RenderAction(label, "create", None, f"would install {STATUSLINE_SCRIPT_NAME}")
+    if state.managed and not state.in_sync:
+        return RenderAction(label, "update", None, f"would refresh {STATUSLINE_SCRIPT_NAME}")
+    if not state.managed:
+        return RenderAction(label, "unchanged", None, f"preserving user-owned {STATUSLINE_SCRIPT_NAME}")
+    if not state.settings_wired:
+        return RenderAction(
+            label,
+            "update",
+            None,
+            f"would wire statusLine for {STATUSLINE_SCRIPT_NAME}",
+        )
+    detail = f"managed {STATUSLINE_SCRIPT_NAME} is current"
+    if not state.jq_available:
+        detail += " (jq missing)"
+    return RenderAction(label, "unchanged", None, detail)
 
 
 def _render_global_output(destination: Path, desired: str) -> None:

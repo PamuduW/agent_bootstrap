@@ -175,7 +175,7 @@ repo as a small CLI plus shell entrypoint, not a full config plane.
 | `base/` | Canonical project-policy templates; keep its managed baseline synchronized with this file. |
 | `${XDG_CONFIG_HOME:-$HOME/.config}/agentbot/workspaces.json` | Private local workspace registry; never Git-tracked. |
 | `global/AGENTS.md` | Authored machine baseline rendered to managed agent homes. |
-| `global/claude/statusline-command.sh` | Managed Claude Code status line installed to `~/.claude/statusline-command.sh` during global render, update refresh, and Doctor/Status checks. |
+| `global/claude/statusline-command.sh` | Managed Claude Code status line installed to `~/.claude/statusline-command.sh` during global render, update refresh, workspace resync, and Doctor/Status checks. |
 | `tests/` | Python and shell regression suites. |
 | `archive/` | Deferred catalog/MCP material and sanitized historical notes; Phase 4 design lives in the workspace `temp/mem/` notes. |
 

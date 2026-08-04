@@ -208,7 +208,8 @@ files under `~/.codex` and `~/.claude`. Global render also installs the managed
 Claude Code status line script at `~/.claude/statusline-command.sh` (from
 `global/claude/statusline-command.sh`) and merges a `statusLine` entry into
 `~/.claude/settings.json` when that slot is free. `./install.sh update`,
-`./install.sh global`, and Doctor/Status all check or refresh that install.
+`./install.sh global`, workspace resync, and Doctor/Status all check or refresh
+that install together with managed global AGENTS/CLAUDE outputs.
 
 Re-link after moving the clone by running `./install.sh install` explicitly.
 

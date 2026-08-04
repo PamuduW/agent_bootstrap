@@ -12,7 +12,7 @@ from .claude_statusline import doctor_claude_statusline, inspect_claude_statusli
 from .graphify import GraphifyIntegration, GraphifyStatus
 from .models import DoctorIssue
 from .paths import AgentbotPaths
-from .render import installed_skill_dirs, managed_skill_names, render_global_outputs
+from .render import installed_skill_dirs, managed_skill_names, render_global_outputs, resync_global_outputs
 from .skills_installer import (
     InstallResult,
     SkillsUpdateReport,
@@ -106,7 +106,9 @@ class AgentbotService:
         apply: bool,
         paths: tuple[Path, ...] = (),
     ) -> WorkspaceReport:
-        return self.workspace_service.resync(apply=apply, paths=paths)
+        report = self.workspace_service.resync(apply=apply, paths=paths)
+        global_actions = resync_global_outputs(self.paths, apply=apply)
+        return WorkspaceReport(results=report.results, global_actions=global_actions)
 
     def list_workspaces(self) -> tuple[WorkspaceRecord, ...]:
         return self.workspace_service.store.load()

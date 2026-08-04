@@ -437,6 +437,17 @@ def print_workspace_resync_report(report) -> None:
         print("  No registered workspaces.")
     print()
 
+    global_actions = getattr(report, "global_actions", ()) or ()
+    print_section_block("── Global ──")
+    if global_actions:
+        global_rows = [
+            (action.relative_path, action.detail, action.kind) for action in global_actions
+        ]
+        print_table(global_rows, show_header=False, wrap_details=True)
+    else:
+        print("  No global outputs planned.")
+    print()
+
 
 def print_workspace_list(records) -> None:
     print_header("Workspaces", "Agentbot › Workspaces")

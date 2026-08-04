@@ -41,6 +41,7 @@ class WorkspaceResult:
 @dataclass(frozen=True)
 class WorkspaceReport:
     results: tuple[WorkspaceResult, ...]
+    global_actions: tuple[RenderAction, ...] = ()
 
 
 class WorkspaceConflict(ValueError):

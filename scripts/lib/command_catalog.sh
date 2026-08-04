@@ -69,7 +69,7 @@ declare -A AGENTBOT_COMMAND_SUMMARY=(
 	[boot]='Create or preserve agent policy files in a target repository.'
 	[workspace]='Preview or render one registered workspace.'
 	[workspaces]='List locally registered workspaces.'
-	[resync]='Preview or refresh registered workspaces.'
+	[resync]='Preview or refresh registered workspaces and managed global Codex/Claude outputs.'
 	[command_lib]='Show this complete command and configuration reference.'
 	[doctor]='Validate skills, rendered outputs, links, and configuration.'
 	[graphify]='Inspect or set up the optional Graphify Agent Skills integration.'
@@ -182,7 +182,7 @@ declare -A AGENTBOT_BACKEND_SUMMARY=(
 	[graphify]='Inspect or set up the optional Graphify Agent Skills integration.'
 	[workspace]='Preview or apply one workspace through the Python engine.'
 	[workspaces]='List locally registered workspaces.'
-	[resync]='Preview or apply registered workspace refreshes.'
+	[resync]='Preview or apply registered workspace refreshes plus managed global Codex/Claude outputs.'
 )
 
 declare -A AGENTBOT_BACKEND_OPTIONS=(

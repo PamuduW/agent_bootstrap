@@ -47,8 +47,8 @@ agentbot_menu_workspaces() {
 	MENU_SIMPLE_KEYS=(list preview apply setup)
 	MENU_SIMPLE_DESCS=(
 		$'Read the private local workspace registry.\nNo repository or state changes are performed.'
-		$'Preview managed changes for every enabled workspace.\nNo files are written.'
-		$'Apply managed changes to every enabled workspace.\nConfirmation is required before mutation.'
+		$'Preview managed changes for every enabled workspace plus global Codex/Claude outputs.\nNo files are written.'
+		$'Apply managed workspace changes and refresh global AGENTS/CLAUDE/statusline outputs.\nConfirmation is required before mutation.'
 		$'Render and register the current folder or Git root.\nWrites only with the explicit setup action.'
 	)
 

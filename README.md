@@ -204,7 +204,10 @@ written into projects or tracked by Git. Cursor's generated rule is
 
 Templates: [`base/AGENTS.md`](base/AGENTS.md), [`base/CLAUDE.md`](base/CLAUDE.md). Machine baseline stays in `global/AGENTS.md`.
 The same preserved-original and review-copy behavior applies to the rendered
-files under `~/.codex` and `~/.claude`.
+files under `~/.codex` and `~/.claude`. Global render also installs the managed
+Claude Code status line script at `~/.claude/statusline-command.sh` (from
+`global/claude/statusline-command.sh`) and merges a `statusLine` entry into
+`~/.claude/settings.json` when that slot is free.
 
 Re-link after moving the clone by running `./install.sh install` explicitly.
 

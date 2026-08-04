@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from .claude_bridge import run_claude_bridge
+from .claude_statusline import install_claude_statusline
 from .paths import AgentbotPaths
 from .skills_sources import load_skills_sources
 from .workspace_render import (
@@ -38,6 +39,7 @@ def render_global_outputs(paths: AgentbotPaths) -> None:
     paths.claude_home.mkdir(parents=True, exist_ok=True)
     _render_global_output(paths.claude_home / "CLAUDE.md", merged)
     _render_global_output(paths.claude_home / "AGENTS.md", merged)
+    install_claude_statusline(paths)
     run_claude_bridge(paths)
 
 

@@ -25,6 +25,11 @@ class ReconcileE2ETests(unittest.TestCase):
             fake_bin.mkdir()
             (root / "global").mkdir()
             (root / "global" / "AGENTS.md").write_text("# baseline\n", encoding="utf-8")
+            (root / "global" / "claude").mkdir()
+            (root / "global" / "claude" / "statusline-command.sh").write_text(
+                "#!/bin/bash\n# Managed by Agentbot.\necho statusline\n",
+                encoding="utf-8",
+            )
             (root / "skills.sources.yaml").write_text(
                 "version: 1\nagents: [codex]\nscope: global\nsources:\n"
                 "  - id: explicit\n    repo: owner/repo\n    skills: [alpha]\n",
@@ -73,6 +78,11 @@ class ReconcileE2ETests(unittest.TestCase):
             fake_bin.mkdir()
             (root / "global").mkdir()
             (root / "global" / "AGENTS.md").write_text("# baseline\n", encoding="utf-8")
+            (root / "global" / "claude").mkdir()
+            (root / "global" / "claude" / "statusline-command.sh").write_text(
+                "#!/bin/bash\n# Managed by Agentbot.\necho statusline\n",
+                encoding="utf-8",
+            )
             (root / "skills.sources.yaml").write_text(
                 "version: 1\nagents: [codex]\nscope: global\nsources:\n"
                 "  - id: wildcard\n    repo: owner/repo\n    skills: all\n",

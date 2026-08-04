@@ -15,7 +15,7 @@ agentbot_menu_update() {
 		fi
 		return "$rc"
 	fi
-	printf '%sApply the Agentbot reconciliation update?%s [y/N] ' "$C_YELLOW" "$C_RESET" >/dev/tty
+	printf '%sApply the Agentbot update (skills, workspaces, and global outputs)?%s [y/N] ' "$C_YELLOW" "$C_RESET" >/dev/tty
 	IFS= read -r answer </dev/tty || answer=n
 	case "$answer" in
 		y|Y|yes|YES) AGENTBOT_UPDATE_SHOW_STATUS=0 "$AGENTBOT_HOME/install.sh" update --yes ;;

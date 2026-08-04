@@ -183,6 +183,8 @@ repo as a small CLI plus shell entrypoint, not a full config plane.
 
 ```bash
 ./install.sh install
+./install.sh update
+./install.sh update --yes
 ./install.sh skills install
 ./install.sh global
 ./install.sh doctor
@@ -194,6 +196,8 @@ bash tests/test_agentbot_menu.sh
 **Repository constraints:**
 
 - `install.sh` is the supported bootstrap interface.
+- `./install.sh update --yes` reconciles skills, then refreshes registered
+  workspaces and managed global Codex/Claude outputs (including statusline).
 - Do not vendor upstream skills; use the manifest and global Skills CLI flow.
 - Keep Graphify opt-in. Dotfiles owns its optional CLI component, while
   Agentbot only sets up the generic Agent Skills integration after an explicit

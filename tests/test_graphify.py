@@ -170,22 +170,29 @@ class GraphifyIntegrationTests(unittest.TestCase):
     def test_reconciliation_update_refreshes_enabled_graphify_before_one_output_render(self) -> None:
         from src.service import AgentbotService
         from src.skill_reconcile import ReconcileResult
+        from src.workspace_service import WorkspaceReport
 
         service = AgentbotService(self._paths())
         with patch.object(service, "update_skills", return_value=SimpleNamespace(stdout="", stderr="")), \
              patch.object(service, "reconcile_skills", return_value=ReconcileResult("applied", (), (), ())), \
              patch.object(service, "refresh_graphify_if_enabled", return_value=None) as refresh_graphify, \
-             patch.object(service, "refresh_agent_outputs", return_value=(0, 0, 0)) as refresh_outputs:
+             patch.object(
+                 service,
+                 "resync_workspaces",
+                 return_value=WorkspaceReport(results=()),
+             ) as resync:
             result = service.run_reconciliation_update()
 
         self.assertEqual("applied", result.status)
         refresh_graphify.assert_called_once_with(refresh_outputs=False)
-        refresh_outputs.assert_called_once_with()
+        resync.assert_called_once_with(apply=True)
+        self.assertIs(result.workspace_report, resync.return_value)
 
     def test_reconciliation_dry_run_reports_enabled_graphify_without_setup(self) -> None:
         from src.graphify import GraphifyStatus
         from src.service import AgentbotService
         from src.skill_reconcile import ReconcileResult
+        from src.workspace_service import WorkspaceReport
 
         skill_path = self.root / "graphify" / "SKILL.md"
         skill_path.parent.mkdir()
@@ -203,11 +210,18 @@ class GraphifyIntegrationTests(unittest.TestCase):
         )
         with patch.object(service, "graphify_status", return_value=status), \
              patch.object(service, "reconcile_skills", return_value=ReconcileResult("preview", (), (), ())), \
-             patch.object(service, "refresh_graphify_if_enabled") as refresh_graphify:
+             patch.object(service, "refresh_graphify_if_enabled") as refresh_graphify, \
+             patch.object(
+                 service,
+                 "resync_workspaces",
+                 return_value=WorkspaceReport(results=()),
+             ) as resync:
             result = service.run_reconciliation_update(dry_run=True)
 
         self.assertIn("would be refreshed", result.message)
+        self.assertIn("surfaces:", result.message)
         refresh_graphify.assert_not_called()
+        resync.assert_called_once_with(apply=False)
 
 
 if __name__ == "__main__":

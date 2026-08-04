@@ -206,7 +206,7 @@ class AgentbotService:
         return confirm
 
     def run_reconciliation_update(self, *, dry_run: bool = False, confirm: bool = False) -> ReconcileResult:
-        """Refresh upstream pins, then reconcile source-owned runtime state."""
+        """Refresh upstream pins, reconcile skills, then resync workspaces + global outputs."""
         update_report = SkillsUpdateReport()
         discovered = None
         graphify_preview = self.graphify_status() if dry_run else None
@@ -238,18 +238,21 @@ class AgentbotService:
             preview_message = self._graphify_update_preview_message(graphify_preview)
             message = f"{result.message}; {preview_message}" if result.message else preview_message
             result = replace(result, message=message)
-        if dry_run:
-            statusline_preview = self._statusline_update_preview_message()
-            if statusline_preview:
-                message = f"{result.message}; {statusline_preview}" if result.message else statusline_preview
-                result = replace(result, message=message)
+
+        workspace_report = None
         graphify_status = None
-        if result.status in {"applied", "applied-with-local-changes"}:
-            # Refresh an already-enabled Graphify skill before the single
-            # global/bridge render. A CLI alone never enables Graphify.
-            graphify_status = self.refresh_graphify_if_enabled(refresh_outputs=False)
-            self.refresh_agent_outputs()
+        if dry_run or result.status in {"applied", "applied-with-local-changes"}:
+            if result.status in {"applied", "applied-with-local-changes"}:
+                # Refresh an already-enabled Graphify skill before the single
+                # global/workspace render. A CLI alone never enables Graphify.
+                graphify_status = self.refresh_graphify_if_enabled(refresh_outputs=False)
+            # Preview or apply registered workspaces plus managed global outputs.
+            workspace_report = self.resync_workspaces(apply=not dry_run)
+
         message = result.message
+        if workspace_report is not None:
+            surface_message = self._workspace_resync_summary(workspace_report, dry_run=dry_run)
+            message = f"{message}; {surface_message}" if message else surface_message
         if (
             graphify_status is not None
             and graphify_status.skill_path.is_file()
@@ -261,20 +264,18 @@ class AgentbotService:
             result,
             updated_skills=update_report.updated_skills,
             message=message,
+            workspace_report=workspace_report,
         )
 
-    def _statusline_update_preview_message(self) -> str:
-        state = inspect_claude_statusline(self.paths)
-        if not state.source_exists:
-            return "Claude statusline: managed source is missing."
-        if not state.installed:
-            return "Claude statusline: would install ~/.claude/statusline-command.sh after reconciliation."
-        if state.managed and not state.in_sync:
-            return "Claude statusline: would refresh ~/.claude/statusline-command.sh after reconciliation."
-        if state.installed and not state.settings_wired:
-            return "Claude statusline: would wire statusLine in ~/.claude/settings.json after reconciliation."
-        return "Claude statusline: would re-check ~/.claude/statusline-command.sh after reconciliation."
-
+    @staticmethod
+    def _workspace_resync_summary(report, *, dry_run: bool) -> str:
+        workspace_count = len(report.results)
+        global_count = len(getattr(report, "global_actions", ()) or ())
+        verb = "would refresh" if dry_run else "refreshed"
+        return (
+            f"surfaces: {verb} {workspace_count} workspace(s) and "
+            f"{global_count} global output(s)"
+        )
     @staticmethod
     def _graphify_update_preview_message(status: GraphifyStatus) -> str:
         if not status.skill_path.is_file():

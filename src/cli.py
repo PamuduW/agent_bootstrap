@@ -78,7 +78,21 @@ def main() -> int:
             for path in result.changed_paths:
                 print(f"  changed: {path}")
             print_reconciliation_report(result)
-            return 0 if result.status in {"applied", "applied-with-local-changes", "preview", "confirmation_required"} else 1
+            if result.workspace_report is not None:
+                print_workspace_resync_report(result.workspace_report)
+            failed_surfaces = False
+            if result.workspace_report is not None:
+                failed_surfaces = any(
+                    item.status in {"conflict", "failed"} for item in result.workspace_report.results
+                )
+            if result.status not in {
+                "applied",
+                "applied-with-local-changes",
+                "preview",
+                "confirmation_required",
+            }:
+                return 1
+            return 1 if failed_surfaces else 0
         if command == "workspace":
             targets = parse_workspace_targets(args.targets)
             if args.yes:

@@ -54,7 +54,7 @@ _agentbot_menu_setup() {
 	MENU_SIMPLE_DESCS=(
 		$'Check the installed Agentbot components and baseline.\nRead-only status; no updates or writes are performed.'
 		$'Install skills, refresh rendered outputs, run Doctor, and link agentbot.\nUse the explicit install action when changes are intended.'
-		$'Update the repository and reconcile installed skills.\nA preview and explicit confirmation are required before mutation.'
+		$'Update the repository, reconcile skills, and refresh workspaces plus global outputs.\nA preview and explicit confirmation are required before mutation.'
 		$'Configure the optional shared GitHub API token.\nThe token is stored outside this repository.'
 		$'Write Agentbot policy files into a target repository.\nDefaults to AGENTS.md and supported agent surfaces.'
 		$'List, preview, and resync locally registered workspaces.\nApply actions require explicit confirmation.'

@@ -139,6 +139,30 @@ class ClaudeStatuslineTests(unittest.TestCase):
         settings = json.loads((self.claude_home / "settings.json").read_text(encoding="utf-8"))
         self.assertEqual("~/.claude/statusline-command.sh", settings["statusLine"]["command"])
 
+    def test_doctor_reports_stale_and_missing_jq(self) -> None:
+        from src.claude_statusline import doctor_claude_statusline, install_claude_statusline
+        from unittest import mock
+
+        paths = self._paths()
+        install_claude_statusline(paths)
+        destination = self.claude_home / "statusline-command.sh"
+        destination.write_text(
+            "#!/bin/bash\n# Managed by Agentbot.\necho stale\n",
+            encoding="utf-8",
+        )
+
+        with mock.patch("src.claude_statusline.shutil.which", return_value=None):
+            messages = [issue.message for issue in doctor_claude_statusline(paths)]
+
+        self.assertTrue(any("stale" in message for message in messages))
+        self.assertTrue(any("jq is not installed" in message for message in messages))
+
+    def test_doctor_reports_missing_install(self) -> None:
+        from src.claude_statusline import doctor_claude_statusline
+
+        messages = [issue.message for issue in doctor_claude_statusline(self._paths())]
+        self.assertTrue(any("not installed" in message for message in messages))
+
 
 if __name__ == "__main__":
     unittest.main()

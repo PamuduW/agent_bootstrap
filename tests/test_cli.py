@@ -191,6 +191,7 @@ class CliTests(unittest.TestCase):
             "global_lock_exists": True,
             "global_lock_skills": 1,
             "claude_bridge_links": 1,
+            "claude_statusline_state": "ok",
             "manual_skill_count": 0,
             "doctor_issue_count": 0,
         }

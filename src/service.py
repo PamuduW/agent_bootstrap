@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Callable, Mapping
 
 from .claude_bridge import bridge_claude_skills as link_claude_skills
+from .claude_statusline import doctor_claude_statusline, inspect_claude_statusline
 from .graphify import GraphifyIntegration, GraphifyStatus
 from .models import DoctorIssue
 from .paths import AgentbotPaths
@@ -235,6 +236,11 @@ class AgentbotService:
             preview_message = self._graphify_update_preview_message(graphify_preview)
             message = f"{result.message}; {preview_message}" if result.message else preview_message
             result = replace(result, message=message)
+        if dry_run:
+            statusline_preview = self._statusline_update_preview_message()
+            if statusline_preview:
+                message = f"{result.message}; {statusline_preview}" if result.message else statusline_preview
+                result = replace(result, message=message)
         graphify_status = None
         if result.status in {"applied", "applied-with-local-changes"}:
             # Refresh an already-enabled Graphify skill before the single
@@ -254,6 +260,18 @@ class AgentbotService:
             updated_skills=update_report.updated_skills,
             message=message,
         )
+
+    def _statusline_update_preview_message(self) -> str:
+        state = inspect_claude_statusline(self.paths)
+        if not state.source_exists:
+            return "Claude statusline: managed source is missing."
+        if not state.installed:
+            return "Claude statusline: would install ~/.claude/statusline-command.sh after reconciliation."
+        if state.managed and not state.in_sync:
+            return "Claude statusline: would refresh ~/.claude/statusline-command.sh after reconciliation."
+        if state.installed and not state.settings_wired:
+            return "Claude statusline: would wire statusLine in ~/.claude/settings.json after reconciliation."
+        return "Claude statusline: would re-check ~/.claude/statusline-command.sh after reconciliation."
 
     @staticmethod
     def _graphify_update_preview_message(status: GraphifyStatus) -> str:
@@ -323,6 +341,8 @@ class AgentbotService:
                     message=f"Missing skills manifest: {self.paths.skills_sources_file}",
                 )
             )
+
+        issues.extend(doctor_claude_statusline(self.paths))
 
         managed_names = managed_skill_names(self.paths)
         declared_names = self._manifest_declared_skill_names()
@@ -493,6 +513,7 @@ class AgentbotService:
             )
 
         doctor_issues = self.doctor_issues() + self.skills_doctor_issues()
+        statusline = inspect_claude_statusline(self.paths)
 
         return {
             "installed_skills": len(self.list_skills()),
@@ -504,6 +525,7 @@ class AgentbotService:
             "managed_skill_count": len(managed_names),
             "manual_skill_count": len(local_names - managed_names),
             "claude_bridge_links": claude_bridge_links,
+            "claude_statusline_state": statusline.status_label,
             "doctor_issue_count": len(doctor_issues),
         }
 

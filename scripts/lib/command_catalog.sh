@@ -242,7 +242,7 @@ declare -A AGENTBOT_SURFACE_DESCRIPTION=(
 
 declare -A AGENTBOT_SURFACE_LOCATION=(
 	[canonical_sources]='agent_bootstrap/base/ and agent_bootstrap/global/'
-	[rendered_outputs]='~/.codex/AGENTS.md, ~/.claude/*, and selected target-repo files'
+	[rendered_outputs]='~/.codex/AGENTS.md, ~/.claude/*, ~/.claude/statusline-command.sh, and selected target-repo files'
 	[skill_store]='~/.agents/skills/ and ~/.agents/.skill-lock.json'
 	[workspace_registry]='${XDG_CONFIG_HOME:-$HOME/.config}/agentbot/workspaces.json'
 	[github_config]='${XDG_CONFIG_HOME:-$HOME/.config}/agentbot/github.env'

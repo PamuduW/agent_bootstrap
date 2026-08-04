@@ -189,6 +189,7 @@ def print_status_summary(
     global_lock_exists: bool = False,
     global_lock_skills: int = 0,
     claude_bridge_links: int = 0,
+    claude_statusline_state: str = "unknown",
     manual_skill_count: int = 0,
     doctor_issue_count: int = 0,
 ) -> None:
@@ -220,6 +221,11 @@ def print_status_summary(
                 "Claude bridge",
                 f"{claude_bridge_links} symlink(s)" if claude_bridge_links else "none",
                 "ok" if claude_bridge_links else "check",
+            ),
+            (
+                "Claude statusline",
+                claude_statusline_state,
+                "ok" if claude_statusline_state == "ok" else "check",
             ),
             (
                 "Manual skills",

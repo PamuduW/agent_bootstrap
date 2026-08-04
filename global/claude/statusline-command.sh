@@ -7,6 +7,19 @@
 
 input=$(cat)
 
+if ! command -v jq >/dev/null 2>&1; then
+  printf '%s\n' "jq not found - statusline disabled (install jq to restore it)"
+  exit 0
+fi
+
+# Guard git calls with a timeout so a hung/slow filesystem (network mount,
+# stale lock) can't stall statusline rendering, since this script runs on
+# every render.
+GIT_TIMEOUT=()
+if command -v timeout >/dev/null 2>&1; then
+  GIT_TIMEOUT=(timeout 1)
+fi
+
 # ---- colors: Claude brand orange accent theme (truecolor 24-bit) ----
 # NOTE: these must contain a REAL ESC byte (not the literal 4-char string
 # "\033"), because the assembled segments are emitted via `printf '%s' "$var"`
@@ -33,9 +46,20 @@ SEP_GIT_TO_INFO=$'\033[38;2;61;45;38m\033[48;2;46;36;32m'
 SEP_END=$'\033[38;2;46;36;32m'
 
 # ---- gather Claude Code session data ----
-cwd=$(echo "$input" | jq -r '.workspace.current_dir')
-model=$(echo "$input" | jq -r '.model.display_name')
-style=$(echo "$input" | jq -r '.output_style.name // empty')
+# A single jq call (instead of nine) to cut process-fork overhead, since this
+# script runs on every statusline render.
+IFS=$'\t' read -r cwd model style used_pct used_tokens total_tokens effort_level thinking_enabled <<<"$(
+  echo "$input" | jq -r '[
+    .workspace.current_dir,
+    .model.display_name,
+    (.output_style.name // empty),
+    (.context_window.used_percentage // empty),
+    (.context_window.total_input_tokens // empty),
+    (.context_window.context_window_size // empty),
+    (.effort.level // empty),
+    (.thinking.enabled // false)
+  ] | @tsv'
+)"
 
 # The model display_name sometimes bakes in a trailing bracket like
 # "Opus 4.8 (1M context)". Split that off so we can re-append it AFTER the
@@ -46,19 +70,20 @@ if [[ "$model" =~ ^(.*)\ (\([^\)]*\))$ ]]; then
   model_base="${BASH_REMATCH[1]}"
   model_bracket="${BASH_REMATCH[2]}"
 fi
-used_pct=$(echo "$input" | jq -r '.context_window.used_percentage // empty')
-used_tokens=$(echo "$input" | jq -r '.context_window.total_input_tokens // empty')
-total_tokens=$(echo "$input" | jq -r '.context_window.context_window_size // empty')
-# reasoning/thinking effort level (only present when the current model supports it)
-effort_level=$(echo "$input" | jq -r '.effort.level // empty')
-thinking_enabled=$(echo "$input" | jq -r '.thinking.enabled // false')
 
 # ---- format large numbers with k/m abbreviations (e.g. 25500 -> 25.5k, 1000000 -> 1m) ----
 format_tokens() {
   awk -v n="$1" 'BEGIN{
-    if (n >= 1000000) printf "%.1fm", n/1000000;
-    else if (n >= 1000) printf "%.1fk", n/1000;
-    else printf "%d", n;
+    if (n >= 1000000) { printf "%.1fm", n/1000000; exit }
+    if (n >= 1000) {
+      k = n/1000;
+      # k rounds to 1000.0 at 1 decimal (e.g. n=999999) -> bump to the m unit
+      # instead of printing "1000k".
+      if (k >= 999.95) printf "%.1fm", n/1000000;
+      else printf "%.1fk", k;
+      exit
+    }
+    printf "%d", n;
   }' | sed -E 's/\.0([km])$/\1/'
 }
 
@@ -72,11 +97,11 @@ fi
 
 # ---- git branch + status segment ----
 git_segment=""
-if git -C "$cwd" --no-optional-locks rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  branch=$(git -C "$cwd" --no-optional-locks symbolic-ref --short -q HEAD 2>/dev/null || git -C "$cwd" --no-optional-locks rev-parse --short HEAD 2>/dev/null)
+if "${GIT_TIMEOUT[@]}" git -C "$cwd" --no-optional-locks rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  branch=$("${GIT_TIMEOUT[@]}" git -C "$cwd" --no-optional-locks symbolic-ref --short -q HEAD 2>/dev/null || "${GIT_TIMEOUT[@]}" git -C "$cwd" --no-optional-locks rev-parse --short HEAD 2>/dev/null)
   if [ -n "$branch" ]; then
     dirty=""
-    if [ -n "$(git -C "$cwd" --no-optional-locks status --porcelain 2>/dev/null)" ]; then
+    if [ -n "$("${GIT_TIMEOUT[@]}" git -C "$cwd" --no-optional-locks status --porcelain 2>/dev/null)" ]; then
       dirty=" *"
     fi
     git_segment=" ${branch}${dirty} "
@@ -98,7 +123,9 @@ if [ -n "$used_pct" ] && [ "$used_pct" != "null" ]; then
   full_char="⣿"
 
   filled=$(awk -v p="$used_pct" -v w="$bar_width" 'BEGIN{v=p/100*w; if(v<0)v=0; if(v>w)v=w; printf "%d", int(v)}')
-  frac_idx=$(awk -v p="$used_pct" -v w="$bar_width" 'BEGIN{v=p/100*w; if(v<0)v=0; if(v>w)v=w; f=v-int(v); idx=int(f*8); if(idx>7)idx=7; printf "%d", idx}')
+  # idx counts DOWN as the partial cell fills (f: 0=empty..1=full), since
+  # levels[] is ordered from "almost full" (0) to "almost empty" (7).
+  frac_idx=$(awk -v p="$used_pct" -v w="$bar_width" 'BEGIN{v=p/100*w; if(v<0)v=0; if(v>w)v=w; f=v-int(v); idx=7-int(f*8); if(idx<0)idx=0; if(idx>7)idx=7; printf "%d", idx}')
 
   filled_part=""
   for ((i=0; i<filled; i++)); do filled_part+="$full_char"; done

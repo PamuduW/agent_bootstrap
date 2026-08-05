@@ -1,10 +1,10 @@
 # Agentbot expansion roadmap
 
 **Status:** Phases 0, 1, 2, and 5 are complete and verified against the live
-repositories (2026-07-27); supporting documentation was reconciled on
-2026-07-28. Phase 4 is the next workstream; its Slice 4M migration gate is
-complete in the working tree and pending review/merge. Phase 3 remains
-deferred. Phase 5 branches directly from the completed Phase 2 foundation.
+repositories. Phase 4 is the next workstream; its Slice 4M migration gate is
+merged and complete, so Slice 4.0A is next. Phase 3 remains deferred. Phase 5
+branches directly from the completed Phase 2 foundation. Current behavior and
+documentation were reconciled on 2026-08-06.
 
 This is a living roadmap. The runtime source and operational documentation are
 the authority; this file records the delivered contracts and the future
@@ -27,7 +27,7 @@ must use Agentbot and agentbot.
 | Curated skills | skills.sources.yaml and install.sh skills ... | Live |
 | Dotfiles integration | sibling dotfiles Agentbot bridge | Live |
 | Package catalog and MCP bundles | archive/catalog/, archive/mcp/ | Phase 3 (deferred) |
-| Durable memory | workspace `temp/mem/` design plus sanitized legacy note | Next (Phase 4; Slice 4M migration gate) |
+| Durable memory | workspace `temp/mem/` design plus sanitized legacy note | Next (Phase 4; Slice 4M complete) |
 | Graphify CLI and assistant integration | sibling dotfiles component plus Agentbot integration | Live (Phase 5) |
 
 Agentbot is the installed product and public command. agent_bootstrap remains
@@ -49,7 +49,7 @@ Phase 2: profiles + managed workspace render + local resync ✅
     |
     +----> Phase 3: package catalog + profile-filtered MCP bundles (deferred)
     |
-    +----> Phase 4: durable memory (next: Slice 4M migration gate)
+    +----> Phase 4: durable memory (next: Slice 4.0A)
 ```
 
 ## Phase 0 — slim bootstrap ✅
@@ -195,7 +195,7 @@ Planned work:
 Phase 3 must extend the Phase 2 renderer; it must not create a second unrelated
 configuration system.
 
-## Phase 4 — durable memory (next: Slice 4M migration gate)
+## Phase 4 — durable memory (next: Slice 4.0A)
 
 **Goal:** Add human-approved durable project knowledge only when the current
 Markdown policy surface is no longer sufficient.
@@ -207,7 +207,7 @@ Current gate status:
 - [x] retain only a sanitized historical note under `archive/docs/`;
 - [x] keep the private-memory design and implementation contracts in workspace
   `temp/mem/`;
-- [ ] review and merge the migration gate before implementation slices begin.
+- [x] review and merge the migration gate before implementation slices begin.
 
 Later planned work:
 
@@ -236,28 +236,30 @@ CLI ownership, assistant integration, or Agentbot's canonical policy ownership.
 
 ### Delivered behavior
 
-1. Add a default-off `graphify_cli` component to the Dotfiles component picker.
-   Selecting it installs Graphify with `uv tool install graphifyy`; an existing
-   non-uv Graphify installation is reported and preserved rather than silently
+1. Dotfiles provides a default-off `graphify_cli` component. Selecting it
+   installs Graphify with `uv tool install graphifyy`; an existing non-uv
+   Graphify installation is reported and preserved rather than silently
    replaced.
-2. Add Graphify to the existing `dotfiles update` flow. Update only a uv-owned
-   `graphifyy` tool with `uv tool upgrade graphifyy`; report external
-   installations as unmanaged and provide a manual command instead of taking
+2. The existing `dotfiles update` flow updates only a uv-owned
+   `graphifyy` tool with `uv tool upgrade graphifyy`. External installations
+   are reported as unmanaged with a manual command instead of Dotfiles taking
    ownership.
-3. Add a Graphify submenu and matching non-interactive command to Agentbot.
-   Status is read-only. Setup first checks for the CLI and gives a direct
-   Dotfiles/manual install instruction when it is absent. The submenu also has
-   a read-only `Commands` reference for assistant and shell forms, sourced from
-   Graphify's official [common command reference](https://github.com/Graphify-Labs/graphify#common-commands).
-4. Setup runs the skill-only command
-   `graphify install --platform agents`, then refreshes Agentbot's existing
-   assistant links and global outputs. This makes the canonical skill available
-   from `~/.agents/skills/graphify/` without allowing Graphify to edit a
-   repository policy file.
-5. Agentbot Update refreshes the Graphify skill only when Graphify integration
-   is already present. It never enables Graphify as a side effect.
-6. Add short conditional Graphify guidance to the canonical base and global
-   policies. Agents use Graphify only when the skill and a usable
+3. Agentbot's main menu provides a read-only **Graphify Lib** item for assistant
+   and shell forms, sourced from Graphify's official
+   [common command reference](https://github.com/Graphify-Labs/graphify#common-commands).
+   Keep `agentbot graphify status|setup` as direct inspection and repair
+   commands rather than a separate TUI submenu.
+4. Main Agentbot Install and successful Update run the skill-only command
+   `graphify install --platform agents` whenever the CLI exists, then refresh
+   Agentbot's existing assistant links and global outputs. Direct Graphify
+   setup uses the same path. This makes the canonical skill available from
+   `~/.agents/skills/graphify/` without allowing Graphify to edit a repository
+   policy file.
+5. A missing Graphify CLI is a non-failing skip. Setup failure is reported as a
+   failed main flow, while `agentbot update --dry-run` previews setup, refresh,
+   or skip without invoking Graphify.
+6. The canonical base and global policies include short conditional Graphify
+   guidance. Agents use Graphify only when the skill and a usable
    `graphify-out/graph.json` exist, and fall back to normal source inspection
    when they do not. The graph is scoped to the current project root; sibling
    repositories are not implicitly searched.
@@ -284,7 +286,8 @@ CLI ownership, assistant integration, or Agentbot's canonical policy ownership.
   Git skill source.
 
 Phase 5 was independent of the package-catalog and MCP work. Its completion did
-not implement Phase 4; the Phase 4 migration gate is now the next workstream.
+not implement Phase 4; Slice 4M is complete and Slice 4.0A is the next
+workstream.
 
 ## Explicitly out of scope
 
@@ -305,3 +308,4 @@ not implement Phase 4; the Phase 4 migration gate is now the next workstream.
 | 2026-07-27 | Deferred Phases 3–4 and delivered Phase 5 as the independent Graphify integration phase |
 | 2026-07-28 | Reconciled README, archive indexes, and Phase 4 design notes with the live Phase 5 boundary |
 | 2026-07-28 | Selected Phase 4 as the next workstream and applied Slice 4M public-memory retirement in the working tree; review remains pending |
+| 2026-08-06 | Confirmed Slice 4M merged, reconciled Graphify Lib and automatic Install/Update setup behavior, and selected Slice 4.0A as next |

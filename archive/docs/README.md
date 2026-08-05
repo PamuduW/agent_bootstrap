@@ -84,7 +84,7 @@ Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 
 | `agentos.yaml` profiles | **Live (Phase 2)** | `agentos.yaml`, `src/workspace_profiles.py` |
 | Durable memory design | **Next (Phase 4)** | Workspace `temp/mem/`; public prototype removed |
 | Deferred AgentOS / harness phases | **Archived** | `archive/docs/future.md`, `archive/docs/` |
-| Graphify skill integration | **On-demand / live** | Official Graphify CLI plus `agentbot graphify setup`; not a manifest source |
+| Graphify skill integration | **On-demand / live** | Main Agentbot Install/Update plus direct `agentbot graphify setup` repair; not a manifest source |
 | `obsidian-memory` skill source | **Disabled** | `skills.sources.yaml` (`enabled: false`) |
 
 ## Archived and deferred use cases

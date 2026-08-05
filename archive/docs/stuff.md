@@ -6,10 +6,9 @@ Nothing here is read by `./install.sh`, `npx skills`, or `agentbot` at runtime.
 
 **Implementation roadmap:** [stuff3.md](./stuff3.md) — phased build plan for restoring deferred features.
 
-**Current status (2026-07-28):** Phases 0–2 and 5 are complete. Phase 4 is
-the next workstream; its public-memory migration gate is complete in the
-working tree and pending review before implementation. Phase 3 remains
-deferred. The live system is
+**Current status (2026-08-06):** Phases 0–2 and 5 are complete. Phase 4 is
+the next workstream; its public-memory migration gate (Slice 4M) is merged and
+complete, so Slice 4.0A is next. Phase 3 remains deferred. The live system is
 the standalone Agentbot menu, profile-driven workspace rendering, local
 registration/resync, global baseline rendering, curated skills management, and
 the Dotfiles sibling bridge, with an optional Graphify CLI and assistant
@@ -63,7 +62,7 @@ unless you are sure you will never restore catalog, MCP, or workspace render.
 | `agentbot` bootstrap | `bin/agentbot`, `base/` |
 | Workspace render and resync | `src/workspace_*.py`, `agentos.yaml`, `scripts/menus/workspaces.sh` |
 | Global baseline | `global/AGENTS.md` → `~/.codex/`, `~/.claude/` |
-| Optional Graphify integration | sibling `dotfiles` `graphify_cli` component, `src/graphify.py`, and `agentbot graphify` |
+| Optional Graphify integration | sibling `dotfiles` `graphify_cli` component, main Agentbot Install/Update, `src/graphify.py`, and direct `agentbot graphify` repair commands |
 | Slim CLI | `src/` (`python3 -m src.cli`) |
 | Doctor / status | `install.sh` |
 
@@ -89,7 +88,7 @@ Upstream skills only — no in-repo vendored pack. Live path: `skills.sources.ya
 
 | Skill source | Reason |
 |--------------|--------|
-| Graphify | Live on demand through the official CLI and `agentbot graphify setup`; intentionally not a Git skill source |
+| Graphify | Live through the official CLI and main Agentbot Install/Update; direct `agentbot graphify setup` remains available for repair; intentionally not a Git skill source |
 | `obsidian-memory` | Disabled; source layout and provenance remain unresolved |
 
 ---

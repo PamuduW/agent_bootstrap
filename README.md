@@ -13,7 +13,7 @@ Deferred features and the phased expansion plan live in [`archive/docs/`](archiv
 ## Current roadmap status
 
 Phases 0, 1, 2, and 5 are complete. Phase 4 is the next workstream; its public
-memory retirement gate is complete in the working tree and pending review.
+memory retirement gate (Slice 4M) is merged and complete. Slice 4.0A is next.
 Phase 3 remains deferred.
 The live surface includes the standalone Agentbot menu, profile-driven
 workspace rendering, local workspace registration/resync, global baseline

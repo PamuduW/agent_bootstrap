@@ -3,17 +3,14 @@
 REPO_UPDATE_STATE=stopped
 REPO_UPDATE_AHEAD=0
 REPO_UPDATE_BEHIND=0
+REPO_UPDATE_DIRTY=0
+REPO_UPDATE_CHANGES=''
+REPO_UPDATE_UPSTREAM=''
 
 _repo_update_set_result() {
   local outcome_name="$1" reason_name="$2" outcome_value="$3" reason_value="$4"
   printf -v "$outcome_name" '%s' "$outcome_value"
   printf -v "$reason_name" '%s' "$reason_value"
-}
-
-_repo_update_upstream() {
-  local repo="$1" upstream
-  upstream="$(git -C "$repo" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)" || return 1
-  [[ -n "$upstream" ]]
 }
 
 _repo_update_origin_allowed() {
@@ -48,25 +45,26 @@ _repo_update_origin_allowed() {
   esac
 }
 
-repo_update_classify() {
+_repo_update_read_changes() {
+  local repo="$1" status_output
+
+  status_output="$(git -C "$repo" status --short --untracked-files=all 2>/dev/null)" || return 1
+  REPO_UPDATE_CHANGES="$status_output"
+  if [[ -n "$status_output" ]]; then
+    REPO_UPDATE_DIRTY=1
+  else
+    REPO_UPDATE_DIRTY=0
+  fi
+}
+
+repo_update_classify_history() {
   local repo="$1" state_name="$2" reason_name="$3"
-  local status_output branch upstream counts ahead behind classified_state classified_reason
+  local counts ahead behind classified_state classified_reason
 
   REPO_UPDATE_AHEAD=0
   REPO_UPDATE_BEHIND=0
 
-  status_output="$(git -C "$repo" status --porcelain 2>/dev/null)" || {
-    printf -v "$state_name" '%s' stopped
-    printf -v "$reason_name" '%s' invalid-counts
-    return 0
-  }
-  if [[ -n "$status_output" ]]; then
-    classified_state=dirty classified_reason=dirty
-  elif ! branch="$(git -C "$repo" symbolic-ref --quiet --short HEAD 2>/dev/null)" || [[ -z "$branch" ]]; then
-    classified_state=detached classified_reason=detached
-  elif ! upstream="$(git -C "$repo" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)" || [[ -z "$upstream" ]]; then
-    classified_state=no-upstream classified_reason=no-upstream
-  elif ! counts="$(git -C "$repo" rev-list --left-right --count 'HEAD...@{upstream}' 2>/dev/null)"; then
+  if ! counts="$(git -C "$repo" rev-list --left-right --count 'HEAD...@{upstream}' 2>/dev/null)"; then
     classified_state=stopped classified_reason=invalid-counts
   elif [[ "$counts" =~ ^([0-9]+)[[:space:]]+([0-9]+)$ ]]; then
     ahead="${BASH_REMATCH[1]}" behind="${BASH_REMATCH[2]}"
@@ -89,12 +87,15 @@ repo_update_classify() {
 
 repo_update_run() {
   local repo="$1" decision_fn="$2" outcome_name="$3" reason_name="$4"
-  local worktree bare origin state reason rewrite_rules
+  local worktree bare origin branch upstream state reason rewrite_rules
 
   _repo_update_set_result "$outcome_name" "$reason_name" stopped invalid-repository
   REPO_UPDATE_STATE=stopped
   REPO_UPDATE_AHEAD=0
   REPO_UPDATE_BEHIND=0
+  REPO_UPDATE_DIRTY=0
+  REPO_UPDATE_CHANGES=''
+  REPO_UPDATE_UPSTREAM=''
   [[ -d "$repo" ]] || return 0
   worktree="$(git -C "$repo" rev-parse --is-inside-work-tree 2>/dev/null)" || return 0
   [[ "$worktree" == true ]] || return 0
@@ -113,8 +114,25 @@ repo_update_run() {
     }
   fi
 
-  if ! _repo_update_upstream "$repo"; then
+  branch="$(git -C "$repo" symbolic-ref --quiet --short HEAD 2>/dev/null)" || {
+    _repo_update_set_result "$outcome_name" "$reason_name" stopped detached
+    return 0
+  }
+  [[ -n "$branch" ]] || {
+    _repo_update_set_result "$outcome_name" "$reason_name" stopped detached
+    return 0
+  }
+  upstream="$(git -C "$repo" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)" || {
     _repo_update_set_result "$outcome_name" "$reason_name" stopped no-upstream
+    return 0
+  }
+  [[ -n "$upstream" ]] || {
+    _repo_update_set_result "$outcome_name" "$reason_name" stopped no-upstream
+    return 0
+  }
+  REPO_UPDATE_UPSTREAM="$upstream"
+  if ! _repo_update_read_changes "$repo"; then
+    _repo_update_set_result "$outcome_name" "$reason_name" stopped status-failed
     return 0
   fi
   if ! git -C "$repo" fetch --prune; then
@@ -122,7 +140,15 @@ repo_update_run() {
     return 0
   fi
 
-  repo_update_classify "$repo" state reason
+  repo_update_classify_history "$repo" state reason
+  if [[ "$state" == stopped ]]; then
+    _repo_update_set_result "$outcome_name" "$reason_name" stopped "$reason"
+    return 0
+  fi
+  if ((REPO_UPDATE_DIRTY)); then
+    _repo_update_set_result "$outcome_name" "$reason_name" stopped dirty
+    return 0
+  fi
   case "$state" in
     current) _repo_update_set_result "$outcome_name" "$reason_name" current current ;;
     ahead)
@@ -141,7 +167,7 @@ repo_update_run() {
         _repo_update_set_result "$outcome_name" "$reason_name" stopped pull-failed
       fi
       ;;
-    dirty|detached|no-upstream|diverged|invalid-counts)
+    diverged)
       _repo_update_set_result "$outcome_name" "$reason_name" stopped "$reason"
       ;;
     *) _repo_update_set_result "$outcome_name" "$reason_name" stopped invalid-counts ;;

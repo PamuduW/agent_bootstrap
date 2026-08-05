@@ -45,16 +45,98 @@ test_direct_update_shows_status_before_reconciliation() (
   [[ "$(<"$TEST_ROOT/direct-update.calls")" == $'cli:status\ncli:update --dry-run' ]]
 )
 
-test_dirty_state_has_manual_resolution_guidance() (
+test_dirty_state_reports_changes_remote_history_and_blocks_backend() (
   AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
-  run_update_decision() { return 1; }
+  local calls="$TEST_ROOT/dirty-update.calls"
+  : >"$calls"
+  run_cli() { printf 'cli:%s\n' "$*" >>"$calls"; }
+  git() {
+    case "$*" in
+      *'rev-parse --abbrev-ref HEAD'*) printf 'main\n' ;;
+      *'rev-parse --short HEAD'*) printf 'abc123\n' ;;
+      *) return 1 ;;
+    esac
+  }
   repo_update_run() {
+    REPO_UPDATE_STATE=behind
+    REPO_UPDATE_AHEAD=0
+    REPO_UPDATE_BEHIND=3
+    REPO_UPDATE_DIRTY=1
+    REPO_UPDATE_UPSTREAM=origin/main
+    REPO_UPDATE_CHANGES=$' M scripts/example.sh\n?? .cursor/rules/agentbot-policy.mdc'
     printf -v "$3" '%s' stopped
     printf -v "$4" '%s' dirty
   }
   local output rc
   set +e; output="$(run_update_backend --dry-run 2>&1)"; rc=$?; set -e
-  [[ "$rc" -ne 0 && "$output" == *'review, commit, discard'* ]]
+  [[ "$rc" -ne 0 ]] || return 1
+  [[ "$output" == *'Repository update'* ]] || return 1
+  [[ "$output" == *'2 local change(s)'* ]] || return 1
+  [[ "$output" == *'origin/main'* && "$output" == *'3 commit(s) behind'* ]] || return 1
+  [[ "$output" == *'blocked'* && "$output" == *'Local changes:'* ]] || return 1
+  [[ "$output" == *' M scripts/example.sh'* ]] || return 1
+  [[ "$output" == *'?? .cursor/rules/agentbot-policy.mdc'* ]] || return 1
+  [[ "$output" == *'Repository pull and downstream updates stopped.'* ]] || return 1
+  [[ ! -s "$calls" ]]
+)
+
+test_dirty_current_reports_verified_current_and_stops() (
+  AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+  git() {
+    case "$*" in
+      *'rev-parse --abbrev-ref HEAD'*) printf 'main\n' ;;
+      *'rev-parse --short HEAD'*) printf 'abc123\n' ;;
+      *) return 1 ;;
+    esac
+  }
+  repo_update_run() {
+    REPO_UPDATE_STATE=current
+    REPO_UPDATE_DIRTY=1
+    REPO_UPDATE_UPSTREAM=origin/main
+    REPO_UPDATE_CHANGES='?? local-file'
+    printf -v "$3" '%s' stopped
+    printf -v "$4" '%s' dirty
+  }
+  local output rc
+  set +e; output="$(run_update_backend --dry-run 2>&1)"; rc=$?; set -e
+  [[ "$rc" -ne 0 && "$output" == *'origin/main'* && "$output" == *'current'* ]] || return 1
+  [[ "$output" == *'?? local-file'* ]]
+)
+
+test_dirty_fetch_failure_reports_paths_and_unknown_freshness() (
+  AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+  git() {
+    case "$*" in
+      *'rev-parse --abbrev-ref HEAD'*) printf 'main\n' ;;
+      *'rev-parse --short HEAD'*) printf 'abc123\n' ;;
+      *) return 1 ;;
+    esac
+  }
+  repo_update_run() {
+    REPO_UPDATE_STATE=stopped
+    REPO_UPDATE_DIRTY=1
+    REPO_UPDATE_UPSTREAM=origin/main
+    REPO_UPDATE_CHANGES='?? local-file'
+    printf -v "$3" '%s' stopped
+    printf -v "$4" '%s' fetch-failed
+  }
+  local output rc
+  set +e; output="$(run_update_backend --dry-run 2>&1)"; rc=$?; set -e
+  [[ "$rc" -ne 0 && "$output" == *'?? local-file'* ]] || return 1
+  [[ "$output" == *'origin/main'* && "$output" == *'freshness unknown'* ]] || return 1
+  [[ "$output" == *'Repository pull and downstream updates stopped.'* ]]
+)
+
+test_dirty_change_list_is_bounded_with_copyable_command() (
+  AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+  local i output status_lines='' printed
+  for i in $(seq 1 22); do status_lines+="?? path-${i}"$'\n'; done
+  REPO_UPDATE_CHANGES="${status_lines%$'\n'}"
+  output="$(print_repo_update_changes)"
+  printed="$(grep -c '^  ?? path-' <<<"$output")"
+  [[ "$printed" -eq 20 ]] || return 1
+  [[ "$output" == *'... 2 more local change(s)'* ]] || return 1
+  [[ "$output" == *'git -C '* && "$output" == *' status --short --untracked-files=all'* ]]
 )
 
 test_interactive_repo_decision_uses_tty_prompt_contract() (
@@ -85,6 +167,8 @@ test_repo_prompt_renders_after_table_on_the_tty_stream() (
   }
   REPO_UPDATE_STATE=behind
   REPO_UPDATE_BEHIND=6
+  REPO_UPDATE_DIRTY=0
+  REPO_UPDATE_UPSTREAM=origin/main
   AGENTBOT_UPDATE_TTY_INPUT="$tty_input"
   AGENTBOT_UPDATE_TTY_OUTPUT="$tty_output"
 
@@ -112,7 +196,10 @@ test_repo_update_table_honors_tui_color_mode() (
 )
 
 check 'repo gate short-circuits stopped and relaunch states' test_repo_gate_short_circuits_unsafe_states
-check 'dirty update stops with manual-resolution guidance' test_dirty_state_has_manual_resolution_guidance
+check 'dirty update reports changes and remote history before blocking backend work' test_dirty_state_reports_changes_remote_history_and_blocks_backend
+check 'dirty current repository reports verified current and stops' test_dirty_current_reports_verified_current_and_stops
+check 'dirty fetch failure reports paths and unknown remote freshness' test_dirty_fetch_failure_reports_paths_and_unknown_freshness
+check 'dirty change report caps paths and prints a copyable full-status command' test_dirty_change_list_is_bounded_with_copyable_command
 check 'interactive update decisions use the TTY prompt seam' test_interactive_repo_decision_uses_tty_prompt_contract
 check 'repository pull prompt renders below its table on the TTY stream' test_repo_prompt_renders_after_table_on_the_tty_stream
 check 'repository update table honors the Agentbot TUI color mode' test_repo_update_table_honors_tui_color_mode

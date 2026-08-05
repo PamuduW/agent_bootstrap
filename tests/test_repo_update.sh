@@ -39,12 +39,23 @@ case "$cmd" in
       printf '%s\n' 'url.git@github-personal:.insteadof git@github.com:'
     ;;
   'rev-parse --abbrev-ref --symbolic-full-name @{upstream}') [[ "$scenario" == no-upstream ]] && exit 1; printf 'origin/main\n' ;;
-  'fetch --prune') [[ "$scenario" == fetch-failed ]] && exit 29; : ;;
-  'status --porcelain') [[ "$scenario" == status-failed ]] && exit 43; [[ "$scenario" == dirty ]] && printf '?? local-change\n'; : ;;
+  'fetch --prune') [[ "$scenario" == fetch-failed || "$scenario" == dirty-fetch-failed ]] && exit 29; : ;;
+  'status --short --untracked-files=all')
+    [[ "$scenario" == status-failed ]] && exit 43
+    case "$scenario" in
+      dirty|dirty-*)
+        printf '%s\n' \
+          ' M scripts/example.sh' \
+          '?? .cursor/rules/agentbot-policy.mdc'
+        ;;
+    esac
+    ;;
   'symbolic-ref --quiet --short HEAD') [[ "$scenario" == detached ]] && exit 1; printf 'main\n' ;;
   'rev-list --left-right --count HEAD...@{upstream}')
     case "$scenario" in
-      ahead) printf '2\t0\n' ;; behind|pull-failed) printf '0\t3\n' ;; diverged) printf '2\t3\n' ;;
+      ahead|dirty-ahead) printf '2\t0\n' ;;
+      behind|pull-failed|dirty-behind) printf '0\t3\n' ;;
+      diverged|dirty-diverged) printf '2\t3\n' ;;
       invalid-counts) printf 'not-counts\n' ;; *) printf '0\t0\n' ;;
     esac ;;
   'pull --ff-only') [[ "$scenario" == pull-failed ]] && exit 31; : ;;
@@ -80,7 +91,7 @@ test_behind_declined() { run_case behind no; [[ "$OUTCOME/$REASON" == stopped/be
 test_behind_pulled() { run_case behind yes; [[ "$OUTCOME/$REASON" == relaunch-required/pulled && "$(pull_count)" -eq 1 ]]; }
 test_pull_failed() { run_case pull-failed yes; [[ "$OUTCOME/$REASON" == stopped/pull-failed && "$(pull_count)" -eq 1 ]]; }
 test_diverged() { run_case diverged yes; [[ "$OUTCOME/$REASON" == stopped/diverged && "$(decision_count)" -eq 0 && "$(pull_count)" -eq 0 ]]; }
-test_fetch_failed() { run_case fetch-failed yes; [[ "$OUTCOME/$REASON" == stopped/fetch-failed ]] && ! grep -q $'\tstatus\t--porcelain$' "$TEST_COMMAND_LOG"; }
+test_fetch_failed() { run_case fetch-failed yes; [[ "$OUTCOME/$REASON" == stopped/fetch-failed ]] && grep -q $'\tstatus\t--short\t--untracked-files=all$' "$TEST_COMMAND_LOG"; }
 test_invalid_counts() { run_case invalid-counts yes; [[ "$OUTCOME/$REASON" == stopped/invalid-counts && "$(pull_count)" -eq 0 ]]; }
 
 test_invalid_repo_and_origin() {
@@ -103,19 +114,16 @@ test_configured_alias_wrong_path_is_rejected() {
     ! grep -q $'\tfetch\t--prune$' "$TEST_COMMAND_LOG"
 }
 
-test_classify_output_parameter_table() {
+test_classify_history_output_parameter_table() {
   local scenario expected_state expected_reason actual_state actual_reason rc
   while read -r scenario expected_state expected_reason; do
     reset_case "$scenario"
     actual_state=unset actual_reason=unset
-    repo_update_classify "$TEST_ROOT/repo" actual_state actual_reason
+    repo_update_classify_history "$TEST_ROOT/repo" actual_state actual_reason
     rc=$?
     [[ "$rc" -eq 0 && "$actual_state" == "$expected_state" && "$actual_reason" == "$expected_reason" ]] || return 1
   done <<'TABLE'
 current current current
-dirty dirty dirty
-detached detached detached
-no-upstream no-upstream no-upstream
 ahead ahead ahead
 behind behind behind
 diverged diverged diverged
@@ -123,12 +131,39 @@ invalid-counts stopped invalid-counts
 TABLE
 }
 
-test_classify_status_failure_is_machine_stopped() {
-  local actual_state=unset actual_reason=unset rc
-  reset_case status-failed
-  repo_update_classify "$TEST_ROOT/repo" actual_state actual_reason
-  rc=$?
-  [[ "$rc" -eq 0 && "$actual_state/$actual_reason" == stopped/invalid-counts ]]
+test_status_failure_stops_before_fetch() {
+  run_case status-failed yes
+  [[ "$OUTCOME/$REASON" == stopped/status-failed ]] || return 1
+  ! grep -q $'\tfetch\t--prune$' "$TEST_COMMAND_LOG" || return 1
+  [[ "$(decision_count)" -eq 0 && "$(pull_count)" -eq 0 ]]
+}
+
+test_dirty_matrix_fetches_classifies_and_stops() {
+  local scenario expected_history
+  while read -r scenario expected_history; do
+    run_case "$scenario" yes
+    [[ "$OUTCOME/$REASON" == stopped/dirty ]] || return 1
+    [[ "${REPO_UPDATE_DIRTY:-0}" -eq 1 ]] || return 1
+    [[ "${REPO_UPDATE_CHANGES:-}" == *' M scripts/example.sh'* ]] || return 1
+    [[ "${REPO_UPDATE_CHANGES:-}" == *'?? .cursor/rules/agentbot-policy.mdc'* ]] || return 1
+    [[ "$REPO_UPDATE_STATE" == "$expected_history" ]] || return 1
+    grep -q $'\tfetch\t--prune$' "$TEST_COMMAND_LOG" || return 1
+    grep -q $'\trev-list\t--left-right\t--count\tHEAD...@{upstream}$' "$TEST_COMMAND_LOG" || return 1
+    [[ "$(pull_count)" -eq 0 && "$(decision_count)" -eq 0 ]] || return 1
+  done <<'TABLE'
+dirty-current current
+dirty-ahead ahead
+dirty-behind behind
+dirty-diverged diverged
+TABLE
+}
+
+test_dirty_fetch_failure_preserves_changes_and_stops() {
+  run_case dirty-fetch-failed yes
+  [[ "$OUTCOME/$REASON" == stopped/fetch-failed ]] || return 1
+  [[ "${REPO_UPDATE_DIRTY:-0}" -eq 1 ]] || return 1
+  [[ -n "${REPO_UPDATE_CHANGES:-}" ]] || return 1
+  [[ "$(pull_count)" -eq 0 && "$(decision_count)" -eq 0 ]]
 }
 
 test_git_ordering() {
@@ -137,13 +172,13 @@ test_git_ordering() {
   awk -F '\t' '
     /rev-parse.*--is-inside-work-tree/ {work=NR}
     /remote.*get-url.*origin/ {origin=NR}
-    /rev-parse.*symbolic-full-name.*upstream/ && !upstream {upstream=NR}
-    /fetch.*--prune/ {fetch=NR}
-    /status.*--porcelain/ {status=NR}
     /symbolic-ref.*--quiet.*--short.*HEAD/ {branch=NR}
+    /rev-parse.*symbolic-full-name.*upstream/ && !upstream {upstream=NR}
+    /status.*--short.*--untracked-files=all/ {status=NR}
+    /fetch.*--prune/ {fetch=NR}
     /rev-list.*--left-right.*--count/ {counts=NR}
     /pull.*--ff-only/ {pull=NR}
-    END { exit !(work<origin && origin<upstream && upstream<fetch && fetch<status && status<branch && branch<counts && counts<pull) }
+    END { exit !(work<origin && origin<branch && branch<upstream && upstream<status && status<fetch && fetch<counts && counts<pull) }
   ' "$log"
 }
 
@@ -155,6 +190,10 @@ test_pull_only_complete_table() {
   done <<'TABLE'
 current no 0
 dirty yes 0
+dirty-ahead yes 0
+dirty-behind yes 0
+dirty-diverged yes 0
+dirty-fetch-failed yes 0
 detached yes 0
 no-upstream yes 0
 ahead yes 0
@@ -211,9 +250,11 @@ expect 'malformed counts stop with invalid-counts' test_invalid_counts
 expect 'invalid repository and origin stop before fetch' test_invalid_repo_and_origin
 expect 'configured SSH alias resolving to Agentbot is accepted' test_configured_alias_origin_is_allowed
 expect 'configured SSH alias resolving to another path is rejected' test_configured_alias_wrong_path_is_rejected
-expect 'classifier writes exact state and reason output parameters for every state' test_classify_output_parameter_table
-expect 'classifier converts failed status probe to machine-stopped invalid-counts' test_classify_status_failure_is_machine_stopped
-expect 'Git sequence is validate origin upstream fetch classify pull' test_git_ordering
+expect 'history classifier writes exact state and reason output parameters' test_classify_history_output_parameter_table
+expect 'failed status probe stops before fetch' test_status_failure_stops_before_fetch
+expect 'dirty states fetch classify and stop without decisions or pull' test_dirty_matrix_fetches_classifies_and_stops
+expect 'dirty fetch failure preserves local changes and stops' test_dirty_fetch_failure_preserves_changes_and_stops
+expect 'Git sequence is validate origin branch upstream status fetch classify pull' test_git_ordering
 expect 'only clean confirmed behind state pulls across full table' test_pull_only_complete_table
 expect 'successful pull returns at adapter boundary without relaunch or extra commands' test_success_returns_at_pull_boundary
 expect 'relaunch adapter preserves argv caller context and status' test_relaunch_adapter

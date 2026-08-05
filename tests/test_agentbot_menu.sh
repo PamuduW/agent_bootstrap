@@ -456,6 +456,35 @@ FAKE
 	[[ "$output" == *'Dotfiles is not cloned'* && "$output" == *'launch cancelled'* ]]
 )
 
+test_update_action_preserves_detailed_dirty_report() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local output rc fake_home="$TEST_ROOT/fake-agentbot-dirty"
+	mkdir -p "$fake_home"
+	cat >"$fake_home/install.sh" <<'FAKE'
+#!/usr/bin/env bash
+printf '%s\n' \
+	'Repository update' \
+	'agent_bootstrap repo | main@abc123 / 2 local change(s) | blocked' \
+	'origin/main | current | blocked' \
+	'Local changes:' \
+	'  ?? .cursor/rules/agentbot-policy.mdc' \
+	'Repository pull and downstream updates stopped.'
+exit 1
+FAKE
+	chmod +x "$fake_home/install.sh"
+	AGENTBOT_HOME="$fake_home"
+	export AGENTBOT_HOME
+	set +e
+	output="$(agentbot_menu_update 2>&1)"
+	rc=$?
+	set -e
+	[[ "$rc" -eq 1 ]] || return 1
+	[[ "$output" == *'2 local change(s)'* ]] || return 1
+	[[ "$output" == *'origin/main | current | blocked'* ]] || return 1
+	[[ "$output" == *'?? .cursor/rules/agentbot-policy.mdc'* ]] || return 1
+	[[ "$output" == *'Repository pull and downstream updates stopped.'* ]]
+)
+
 test_update_pull_restarts_fresh_install_menu() (
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
 	local calls="$TEST_ROOT/update-relaunch.calls" fake_home="$TEST_ROOT/fake-agentbot-relaunch"
@@ -515,6 +544,7 @@ if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'failed Agentbot action pauses once and returns' test_failed_action_pauses_once
 	check 'failed Agentbot actions use the red failure color' test_failed_action_reports_red
 	check 'Update calls the real backend and Dotfiles remains guarded' test_update_action_calls_real_backend_and_dotfiles_stays_guarded
+	check 'Update preserves the detailed dirty-worktree report' test_update_action_preserves_detailed_dirty_report
 	check 'Update restarts the fresh install menu after a repository pull' test_update_pull_restarts_fresh_install_menu
 	check 'SETUP_CALLER=dotfiles hides the reciprocal menu entry' test_caller_guard_hides_dotfiles_entry
 else

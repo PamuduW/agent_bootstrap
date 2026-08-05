@@ -271,22 +271,77 @@ run_update_decision() {
   esac
 }
 
+repo_update_change_count() {
+  if [[ -z "${REPO_UPDATE_CHANGES:-}" ]]; then
+    printf '0\n'
+    return
+  fi
+  awk 'END { print NR }' <<<"$REPO_UPDATE_CHANGES"
+}
+
+repo_update_history_detail() {
+  case "${REPO_UPDATE_STATE:-stopped}" in
+    current) printf 'current' ;;
+    ahead) printf '%s local commit(s) ahead' "${REPO_UPDATE_AHEAD:-0}" ;;
+    behind) printf '%s commit(s) behind' "${REPO_UPDATE_BEHIND:-0}" ;;
+    diverged) printf '%s ahead / %s behind' "${REPO_UPDATE_AHEAD:-0}" "${REPO_UPDATE_BEHIND:-0}" ;;
+    *) printf 'freshness unknown' ;;
+  esac
+}
+
+print_repo_update_changes() {
+  local max_lines=20 total shown=0 omitted quoted_repo line
+  [[ -n "${REPO_UPDATE_CHANGES:-}" ]] || return 0
+  total="$(repo_update_change_count)"
+  printf '  Local changes:\n'
+  while IFS= read -r line; do
+    ((shown >= max_lines)) && break
+    printf '  %s\n' "$line"
+    shown=$((shown + 1))
+  done <<<"$REPO_UPDATE_CHANGES"
+  omitted=$((total - shown))
+  if ((omitted > 0)); then
+    printf '  ... %d more local change(s)\n' "$omitted"
+  fi
+  printf -v quoted_repo '%q' "$REPO_ROOT"
+  printf '  Full list: git -C %s status --short --untracked-files=all\n' "$quoted_repo"
+}
+
 print_repo_update_table() {
-  local branch local_rev available action bold='' reset='' yellow='' orange=''
+  local branch local_rev history action change_count upstream remote_result remote_color
+  local bold='' reset='' yellow='' orange='' red='' cyan=''
   if [[ -z "${NO_COLOR:-}" && ( -t 1 || -t 0 || -n "${AGENTBOT_TUI:-}" || -n "${FORCE_COLOR:-}" ) ]]; then
     bold=$'\033[1m'; reset=$'\033[0m'; yellow=$'\033[33m'; orange=$'\033[38;5;208m'
+    red=$'\033[31m'; cyan=$'\033[36m'
   fi
   branch="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
   local_rev="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  history="$(repo_update_history_detail)"
+  change_count="$(repo_update_change_count)"
+  upstream="${REPO_UPDATE_UPSTREAM:-upstream}"
   case "${REPO_UPDATE_STATE:-stopped}" in
-    behind) available="${REPO_UPDATE_BEHIND:-0} commit(s) behind"; action='pull --ff-only' ;;
-    ahead) available="${REPO_UPDATE_AHEAD:-0} local commit(s) ahead"; action='continue' ;;
-    *) available='repository state requires review'; action='check' ;;
+    current|ahead|behind|diverged) remote_result='verified'; remote_color="$cyan" ;;
+    *) remote_result='unchecked'; remote_color="$yellow" ;;
   esac
+  if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
+    action='blocked'
+  else
+    case "${REPO_UPDATE_STATE:-stopped}" in
+      behind) action='pull --ff-only' ;;
+      ahead) action='continue' ;;
+      current) action='current' ;;
+      *) action='check' ;;
+    esac
+  fi
   printf '\n  %s%sRepository update%s\n' "$bold" "$orange" "$reset"
   printf '  %s%-22s | %-40s | %s%s\n' "$bold" component detail result "$reset"
   printf '  %s\n' '-----------------------+------------------------------------------+----------'
-  printf '  %-22s | %-40s | %s%s%s\n' 'agent_bootstrap repo' "${branch}@${local_rev} / ${available}" "$yellow" "$action" "$reset"
+  if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
+    printf '  %-22s | %-40s | %s%s%s\n' 'agent_bootstrap repo' "${branch}@${local_rev} / ${change_count} local change(s)" "$red" "$action" "$reset"
+  else
+    printf '  %-22s | %-40s | %s%s%s\n' 'agent_bootstrap repo' "${branch}@${local_rev}" "$yellow" "$action" "$reset"
+  fi
+  printf '  %-22s | %-40s | %s%s%s\n' "$upstream" "$history" "$remote_color" "$remote_result" "$reset"
   printf '\n'
 }
 
@@ -336,8 +391,15 @@ run_update_backend_as() {
       return 2
       ;;
     stopped)
-      if [[ "$update_reason" == dirty ]]; then
-        warn 'repository update stopped: dirty worktree; review, commit, discard, or otherwise resolve local changes before updating.'
+      if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
+        print_repo_update_table >&2
+        print_repo_update_changes >&2
+        warn 'Repository pull and downstream updates stopped.'
+        if [[ "$update_reason" == dirty ]]; then
+          warn 'Resolve the local changes, then run agentbot update again.'
+        else
+          warn "Remote freshness could not be verified: $update_reason"
+        fi
       else
         warn "repository update stopped: $update_reason"
       fi

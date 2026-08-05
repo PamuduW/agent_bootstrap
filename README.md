@@ -259,11 +259,18 @@ The interactive **Command Lib**, `agentbot help`, and the bootstrap help all
 show the complete supported command, option, configuration, output, and
 integration reference. They are read-only and use the same catalog.
 
-`agentbot update` is repo-first: dirty, detached, diverged, missing-upstream,
-declined, or failed pull states stop before skills work. A confirmed
-reconciliation never runs `git add`, `git commit`, or `git push`; tracked
-manifest or policy changes are handed back as `applied-with-local-changes` for
-the user to review and commit or discard.
+`agentbot update` is repo-first. It validates the repository and upstream,
+captures local changes, fetches the allowed origin, and classifies the verified
+ahead/behind state before deciding whether any update may run. Any tracked or
+untracked local change stops both the repository pull and every downstream
+Agentbot update step, even when the fetched upstream is current. The stopped
+report shows the verified remote state and up to 20 changed paths, plus a
+copyable command for the complete list. Detached, diverged, missing-upstream,
+declined, and failed pull states also stop before skills work.
+
+A confirmed reconciliation never runs `git add`, `git commit`, or `git push`;
+tracked manifest or policy changes are handed back as
+`applied-with-local-changes` for the user to review and commit or discard.
 
 Repository origin validation accepts the canonical Agentbot GitHub URLs and
 global `url.*.insteadOf` aliases only when the resolved URL is that exact

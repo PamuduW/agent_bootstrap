@@ -292,14 +292,16 @@ print_repo_update_table() {
 
 run_update_prompt() {
   local action="$1" prompt answer=''
+  local tty_input="${AGENTBOT_UPDATE_TTY_INPUT:-/dev/tty}"
+  local tty_output="${AGENTBOT_UPDATE_TTY_OUTPUT:-/dev/tty}"
   case "$action" in
     pull-behind) prompt='Pull the available repository commit(s) with --ff-only?' ;;
     continue-ahead) prompt='The local repository is ahead. Continue with the Agentbot update?' ;;
     *) return 1 ;;
   esac
-  print_repo_update_table
-  printf '%s [y/N]: ' "$prompt" >/dev/tty
-  IFS= read -r answer </dev/tty || true
+  print_repo_update_table >"$tty_output"
+  printf '%s [y/N]: ' "$prompt" >>"$tty_output"
+  IFS= read -r answer <"$tty_input" || true
   case "$answer" in
     y|Y|yes|YES) return 0 ;;
     *) return 1 ;;

@@ -67,6 +67,35 @@ test_interactive_repo_decision_uses_tty_prompt_contract() (
   [[ "$prompted" == pull-behind ]]
 )
 
+test_repo_prompt_renders_after_table_on_the_tty_stream() (
+  AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+  local tty_input="$TEST_ROOT/update-prompt.input"
+  local tty_output="$TEST_ROOT/update-prompt.output"
+  local captured_stdout="$TEST_ROOT/update-prompt.stdout"
+  local table_line prompt_line
+  printf 'y\n' >"$tty_input"
+  : >"$tty_output"
+  : >"$captured_stdout"
+  git() {
+    case "$*" in
+      *'rev-parse --abbrev-ref HEAD'*) printf 'main\n' ;;
+      *'rev-parse --short HEAD'*) printf 'abc123\n' ;;
+      *) return 1 ;;
+    esac
+  }
+  REPO_UPDATE_STATE=behind
+  REPO_UPDATE_BEHIND=6
+  AGENTBOT_UPDATE_TTY_INPUT="$tty_input"
+  AGENTBOT_UPDATE_TTY_OUTPUT="$tty_output"
+
+  run_update_prompt pull-behind >"$captured_stdout" || return 1
+
+  table_line="$(grep -n 'Repository update' "$tty_output" | cut -d: -f1)"
+  prompt_line="$(grep -n 'Pull the available repository commit(s)' "$tty_output" | cut -d: -f1)"
+  [[ -n "$table_line" && -n "$prompt_line" && "$table_line" -lt "$prompt_line" ]] || return 1
+  [[ ! -s "$captured_stdout" ]]
+)
+
 test_repo_update_table_honors_tui_color_mode() (
   AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
   local output
@@ -85,6 +114,7 @@ test_repo_update_table_honors_tui_color_mode() (
 check 'repo gate short-circuits stopped and relaunch states' test_repo_gate_short_circuits_unsafe_states
 check 'dirty update stops with manual-resolution guidance' test_dirty_state_has_manual_resolution_guidance
 check 'interactive update decisions use the TTY prompt seam' test_interactive_repo_decision_uses_tty_prompt_contract
+check 'repository pull prompt renders below its table on the TTY stream' test_repo_prompt_renders_after_table_on_the_tty_stream
 check 'repository update table honors the Agentbot TUI color mode' test_repo_update_table_honors_tui_color_mode
 check 'direct update shows the status table before reconciliation' test_direct_update_shows_status_before_reconciliation
 test_harness_verify_safety || failed=$((failed + 1))

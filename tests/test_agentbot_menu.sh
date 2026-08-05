@@ -485,6 +485,40 @@ FAKE
 	[[ "$output" == *'Repository pull and downstream updates stopped.'* ]]
 )
 
+test_tui_update_routes_dirty_report_to_tty() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local rc fake_home="$TEST_ROOT/fake-agentbot-dirty-tty"
+	local tty_output="$TEST_ROOT/update-dirty.tty" inherited_output="$TEST_ROOT/update-dirty.inherited"
+	mkdir -p "$fake_home"
+	cat >"$fake_home/install.sh" <<'FAKE'
+#!/usr/bin/env bash
+printf '%s\n' \
+	'Repository update' \
+	'agent_bootstrap repo | main@abc123 / 2 local change(s) | blocked' \
+	'origin/main | current | verified' \
+	'Local changes:' \
+	'  ?? .cursor/rules/agentbot-policy.mdc' \
+	'Repository pull and downstream updates stopped.'
+exit 1
+FAKE
+	chmod +x "$fake_home/install.sh"
+	: >"$tty_output"
+	: >"$inherited_output"
+	AGENTBOT_HOME="$fake_home"
+	AGENTBOT_TUI=1
+	AGENTBOT_UPDATE_TTY_OUTPUT="$tty_output"
+	export AGENTBOT_HOME AGENTBOT_TUI AGENTBOT_UPDATE_TTY_OUTPUT
+	set +e
+	agentbot_menu_update >"$inherited_output" 2>&1
+	rc=$?
+	set -e
+	[[ "$rc" -eq 1 ]] || return 1
+	grep -Fq 'Repository update' "$tty_output" || return 1
+	grep -Fq '?? .cursor/rules/agentbot-policy.mdc' "$tty_output" || return 1
+	grep -Fq 'Repository pull and downstream updates stopped.' "$tty_output" || return 1
+	[[ ! -s "$inherited_output" ]]
+)
+
 test_update_pull_restarts_fresh_install_menu() (
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
 	local calls="$TEST_ROOT/update-relaunch.calls" fake_home="$TEST_ROOT/fake-agentbot-relaunch"
@@ -545,6 +579,7 @@ if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'failed Agentbot actions use the red failure color' test_failed_action_reports_red
 	check 'Update calls the real backend and Dotfiles remains guarded' test_update_action_calls_real_backend_and_dotfiles_stays_guarded
 	check 'Update preserves the detailed dirty-worktree report' test_update_action_preserves_detailed_dirty_report
+	check 'TUI Update routes the complete dirty report to the controlling terminal' test_tui_update_routes_dirty_report_to_tty
 	check 'Update restarts the fresh install menu after a repository pull' test_update_pull_restarts_fresh_install_menu
 	check 'SETUP_CALLER=dotfiles hides the reciprocal menu entry' test_caller_guard_hides_dotfiles_entry
 else

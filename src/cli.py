@@ -18,6 +18,7 @@ from .ui import (
     print_skills_update_report,
     print_status_summary,
     print_workspace_list,
+    print_workspace_removed,
     print_workspace_report,
     print_workspace_resync_report,
 )
@@ -115,7 +116,14 @@ def main() -> int:
             print_workspace_report(result)
             return 1 if result.status in {"conflict", "failed"} else 0
         if command == "workspaces":
-            print_workspace_list(service.list_workspaces())
+            if args.remove:
+                removed = service.remove_workspace(Path(args.remove))
+                print_workspace_removed(removed)
+            elif args.paths0:
+                for record in service.list_workspaces():
+                    sys.stdout.write(f"{record.path}\0")
+            else:
+                print_workspace_list(service.list_workspaces())
             return 0
         if command == "resync":
             if args.yes and args.dry_run:
@@ -184,7 +192,20 @@ def build_parser() -> argparse.ArgumentParser:
     workspace.add_argument("--yes", action="store_true", help="Apply and register the render")
     workspace.add_argument("path", help="Workspace directory")
 
-    subparsers.add_parser("workspaces", help="List locally registered workspaces")
+    workspaces = subparsers.add_parser(
+        "workspaces", help="List or forget locally registered workspaces"
+    )
+    workspaces_action = workspaces.add_mutually_exclusive_group()
+    workspaces_action.add_argument(
+        "--paths0",
+        action="store_true",
+        help="Print canonical recorded paths separated by NUL bytes",
+    )
+    workspaces_action.add_argument(
+        "--remove",
+        metavar="PATH",
+        help="Stop managing one recorded workspace without changing its files",
+    )
 
     resync = subparsers.add_parser("resync", help="Preview or refresh registered workspaces")
     resync_group = resync.add_mutually_exclusive_group()

@@ -145,7 +145,10 @@ test_agentbot_help_describes_full_command_options() {
 	[[ "$output" == *'--targets LIST'* ]] || return 1
 	[[ "$output" == *'AGENTBOT_HOME'* ]] || return 1
 	[[ "$output" == *'GITHUB_TOKEN'* ]] || return 1
-	[[ "$output" == *'agentbot update|upgrade'* ]]
+	[[ "$output" == *'agentbot update|upgrade'* ]] || return 1
+	[[ "$output" == *'agentbot workspaces [--paths0 | --remove PATH]'* ]] || return 1
+	[[ "$output" == *'Print canonical recorded paths separated by NUL bytes'* ]] || return 1
+	[[ "$output" == *'Stop managing one recorded workspace without changing its files'* ]]
 }
 
 check 'agentbot dispatcher exists and is executable' test_dispatcher_exists

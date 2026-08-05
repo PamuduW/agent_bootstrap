@@ -23,9 +23,10 @@ test_menu_snapshot() {
 	[[ "$output" == *'=== Agentbot ==='* ]] || return 1
 	[[ "$output" == *$'\033[1m\033[38;5;208m=== Agentbot ===\033[0m'* ]] || return 1
 	[[ "$output" == *'Agentbot'* ]] || return 1
-	[[ "$output" == *'1. Check status'* && "$output" == *'11. Quit'* ]] || return 1
-	[[ "$output" == *$'11. Quit\n\n'* ]] || return 1
-	[[ "$output" == *'Graphify'* ]] || return 1
+	[[ "$output" == *'1. Check status'* && "$output" == *'10. Quit'* ]] || return 1
+	[[ "$output" == *$'10. Quit\n\n'* ]] || return 1
+	[[ "$output" == *'Graphify Lib'* ]] || return 1
+	[[ "$output" != *'Repo setup (agentbot)'* ]] || return 1
 	[[ "$output" == *'Workspaces'* ]] || return 1
 	[[ "$output" == *'Check the installed Agentbot components and baseline.'* ]] || return 1
 }
@@ -97,6 +98,9 @@ test_command_lib_documents_full_help_catalog() (
 		'--profile NAME' \
 		'--targets LIST' \
 		'--dry-run' \
+		'--paths0' \
+		'--remove PATH' \
+		'No workspace files are changed' \
 		'AGENTBOT_HOME' \
 		'XDG_CONFIG_HOME' \
 		'GITHUB_TOKEN' \
@@ -164,7 +168,7 @@ test_workspaces_menu_uses_scrollable_submenu_contract() (
 	}
 	ui_clear() { :; }
 	agentbot_menu_workspaces
-	[[ "$(<"$capture")" == 'Workspaces|Agentbot › Workspaces|List recorded workspaces Preview resync (all) Apply resync (all) Set up current repository|list preview apply setup' ]] || return 1
+	[[ "$(<"$capture")" == 'Workspaces|Agentbot › Workspaces|List recorded workspaces Preview resync (all) Apply resync (all) Remove recorded workspaces|list preview apply remove' ]] || return 1
 	[[ "$MENU_SIMPLE_TITLE" == Agentbot && "$MENU_SIMPLE_BREADCRUMB" == Agentbot ]]
 )
 
@@ -179,7 +183,7 @@ test_dispatch_order_and_return() (
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
 	local calls="$TEST_ROOT/menu.calls"
 	: >"$calls"
-	MENU_TEST_CHOICES=(status install update token boot workspaces command_lib doctor graphify dotfiles quit)
+	MENU_TEST_CHOICES=(status install update token workspaces command_lib doctor graphify_lib dotfiles quit)
 	MENU_TEST_INDEX=0
 	menu_simple_run() {
 		local choice="${MENU_TEST_CHOICES[$MENU_TEST_INDEX]}"
@@ -192,90 +196,41 @@ test_dispatch_order_and_return() (
 	agentbot_menu_install() { printf 'install\n' >>"$calls"; }
 	agentbot_menu_update() { printf 'update\n' >>"$calls"; }
 	agentbot_menu_token() { printf 'token\n' >>"$calls"; }
-	agentbot_menu_boot() { printf 'boot\n' >>"$calls"; }
 	agentbot_menu_workspaces() { printf 'workspaces\n' >>"$calls"; }
 	agentbot_menu_command_lib() { printf 'command_lib\n' >>"$calls"; }
 	agentbot_menu_doctor() { printf 'doctor\n' >>"$calls"; }
-	agentbot_menu_graphify() { printf 'graphify\n' >>"$calls"; }
+	agentbot_menu_graphify_lib() { printf 'graphify_lib\n' >>"$calls"; }
 	agentbot_menu_dotfiles() { printf 'dotfiles\n' >>"$calls"; }
 	agentbot_menu_loop
-	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\npause\nboot\npause\nworkspaces\ncommand_lib\npause\ndoctor\npause\ngraphify\npause\ndotfiles' ]]
+	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\npause\nworkspaces\ncommand_lib\npause\ndoctor\npause\ngraphify_lib\npause\ndotfiles' ]]
 )
 
-test_graphify_menu_actions_use_backend_and_confirm_setup() (
+test_graphify_lib_is_read_only_and_documents_platform_forms() (
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
-	local calls="$TEST_ROOT/graphify-menu.calls" choice_index=0 choice
+	local calls="$TEST_ROOT/graphify-lib.calls" output
 	: >"$calls"
-	local choices=(status commands setup back)
-	menu_simple_run() {
-		choice="${choices[$choice_index]}"
-		choice_index=$((choice_index + 1))
-		if [[ "$choice" == back ]]; then
-			MENU_SIMPLE_RESULT=''
-			return 1
-		fi
-		MENU_SIMPLE_RESULT="$choice"
-		return 0
-	}
-	ui_clear() { :; }
-	ui_pause() { printf 'pause\n' >>"$calls"; }
-	agentbot_menu_graphify_confirm() { return 0; }
-	agentbot_menu_graphify_commands() { printf 'commands\n' >>"$calls"; }
-	agentbot_menu_graphify_cli_available() { return 0; }
 	agentbot_run_backend() { printf 'backend:%s\n' "$*" >>"$calls"; }
-	agentbot_menu_graphify
-	[[ "$(<"$calls")" == $'backend:graphify status\npause\ncommands\npause\nbackend:graphify status\nbackend:graphify setup\npause' ]]
-)
-
-test_graphify_commands_are_read_only_and_document_platform_forms() (
-	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
-	local output rc
-	set +e
-	output="$(AGENTBOT_MENU_COLS=100 agentbot_menu_graphify_dispatch commands 2>&1)"
-	rc=$?
-	set -e
-	[[ "$rc" -eq 0 ]] || return 1
+	output="$(AGENTBOT_MENU_COLS=100 agentbot_menu_graphify_lib 2>&1)"
 	for needle in \
-		'Graphify Commands' \
+		'Graphify Lib' \
+		'Agentbot › Graphify Lib' \
 		'Claude/Cursor: /graphify .' \
 		"Codex: \$graphify ." \
 		'graphify update .' \
 		'graphify query "what connects auth to the database?"' \
+		'Agentbot Install and Update run only: graphify install --platform agents' \
 		'graphify install --platform agents' \
 		'graphify claude install' \
 		'graphify agents install' \
 		'graphify codex install' \
 		'graphify cursor install' \
-		'Agentbot does not run'; do
+		'Direct agentbot graphify status|setup commands remain available'; do
 		[[ "$output" == *"$needle"* ]] || {
 			printf 'missing Graphify command detail: %s\n' "$needle" >&2
 			return 1
 		}
 	done
-)
-
-test_graphify_menu_missing_cli_never_invokes_setup() (
-	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
-	local calls="$TEST_ROOT/graphify-menu-missing.calls"
-	: >"$calls"
-	MENU_TEST_CHOICES=(setup back)
-	MENU_TEST_INDEX=0
-	menu_simple_run() {
-		local choice="${MENU_TEST_CHOICES[$MENU_TEST_INDEX]}"
-		MENU_TEST_INDEX=$((MENU_TEST_INDEX + 1))
-		if [[ "$choice" == back ]]; then
-			MENU_SIMPLE_RESULT=''
-			return 1
-		fi
-		MENU_SIMPLE_RESULT="$choice"
-		return 0
-	}
-	ui_clear() { :; }
-	ui_pause() { :; }
-	agentbot_menu_graphify_cli_available() { return 1; }
-	agentbot_run_backend() { printf 'backend:%s\n' "$*" >>"$calls"; }
-	agentbot_menu_graphify
-	[[ "$(<"$calls")" == 'backend:graphify status' ]]
+	[[ ! -s "$calls" ]]
 )
 
 test_main_menu_rebuilds_after_workspaces_returns() (
@@ -299,14 +254,14 @@ test_main_menu_rebuilds_after_workspaces_returns() (
 	ui_clear() { :; }
 	ui_pause() { :; }
 	agentbot_menu_loop
-	[[ "$(<"$capture")" == 'Agentbot|Agentbot|Check status Install Agentbot Update Configure GitHub token Repo setup (agentbot) Workspaces Command Lib Doctor Graphify Dotfiles Quit' ]]
+	[[ "$(<"$capture")" == 'Agentbot|Agentbot|Check status Install Agentbot Update Configure GitHub token Workspaces Command Lib Doctor Graphify Lib Dotfiles Quit' ]]
 )
 
 test_workspaces_menu_actions() (
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
 	local calls="$TEST_ROOT/workspaces.calls" choice_index=0 choice
 	: >"$calls"
-	local choices=(list preview apply setup back)
+	local choices=(list preview apply back)
 	menu_simple_run() {
 		choice="${choices[$choice_index]}"
 		choice_index=$((choice_index + 1))
@@ -322,7 +277,108 @@ test_workspaces_menu_actions() (
 	agentbot_menu_workspaces_confirm() { return 0; }
 	agentbot_run_backend() { printf 'backend:%s\n' "$*" >>"$calls"; }
 	agentbot_menu_workspaces
-	[[ "$(<"$calls")" == $'backend:workspaces\npause\nbackend:resync --all\npause\nbackend:resync --all --yes\npause\nbackend:workspace --yes '"$PWD"$'\npause' ]]
+	[[ "$(<"$calls")" == $'backend:workspaces\npause\nbackend:resync --all\npause\nbackend:resync --all --yes\npause' ]]
+)
+
+test_workspaces_remove_forgets_exact_record_and_reloads() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local calls="$TEST_ROOT/workspaces-remove.calls" choice_index=0 list_count=0
+	local choices=(1 back)
+	: >"$calls"
+	menu_simple_run() {
+		local choice="${choices[$choice_index]}"
+		choice_index=$((choice_index + 1))
+		if [[ "$choice" == back ]]; then
+			MENU_SIMPLE_RESULT=''
+			return 1
+		fi
+		MENU_SIMPLE_RESULT="$choice"
+	}
+	agentbot_menu_workspaces_remove_confirm() { return 0; }
+	agentbot_run_backend() {
+		if [[ "$*" == 'workspaces --paths0' ]]; then
+			list_count=$((list_count + 1))
+			if ((list_count == 1)); then
+				printf '/repo/a\0/missing/b\0'
+			else
+				printf '/repo/a\0'
+			fi
+		else
+			printf 'backend:%s\n' "$*" >>"$calls"
+		fi
+	}
+	ui_clear() { :; }
+	ui_pause() { printf 'pause\n' >>"$calls"; }
+
+	agentbot_menu_workspaces_remove_recorded
+
+	[[ "$(<"$calls")" == $'backend:workspaces --remove /missing/b\npause' ]]
+)
+
+test_workspaces_remove_decline_is_non_destructive() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local calls="$TEST_ROOT/workspaces-remove-decline.calls" choice_index=0
+	local choices=(0 back)
+	: >"$calls"
+	menu_simple_run() {
+		local choice="${choices[$choice_index]}"
+		choice_index=$((choice_index + 1))
+		if [[ "$choice" == back ]]; then MENU_SIMPLE_RESULT=''; return 1; fi
+		MENU_SIMPLE_RESULT="$choice"
+	}
+	agentbot_menu_workspaces_remove_confirm() { return 1; }
+	agentbot_run_backend() {
+		[[ "$*" == 'workspaces --paths0' ]] && printf '/repo/a\0' || printf 'backend:%s\n' "$*" >>"$calls"
+	}
+	ui_clear() { :; }
+	ui_pause() { :; }
+
+	agentbot_menu_workspaces_remove_recorded
+
+	[[ ! -s "$calls" ]]
+)
+
+test_workspaces_remove_empty_registry_is_safe() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local output
+	agentbot_run_backend() { return 0; }
+	ui_pause() { :; }
+	output="$(agentbot_menu_workspaces_remove_recorded)"
+	[[ "$output" == *'No recorded workspaces to remove.'* ]]
+)
+
+test_workspaces_remove_list_failure_is_not_reported_as_empty() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local output pauses=0
+	agentbot_run_backend() { printf 'malformed registry\n' >&2; return 9; }
+	ui_pause() { pauses=$((pauses + 1)); }
+	set +e
+	output="$(agentbot_menu_workspaces_remove_recorded 2>&1)"
+	local rc=$?
+	set -e
+	[[ "$rc" -eq 9 ]] || return 1
+	[[ "$output" == *'malformed registry'* ]] || return 1
+	[[ "$output" != *'No recorded workspaces'* ]]
+)
+
+test_failed_workspaces_remove_pauses_once_before_redraw() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local calls="$TEST_ROOT/workspaces-remove-failure.calls" choice_index=0
+	local choices=(remove back)
+	: >"$calls"
+	menu_simple_run() {
+		local choice="${choices[$choice_index]}"
+		choice_index=$((choice_index + 1))
+		if [[ "$choice" == back ]]; then MENU_SIMPLE_RESULT=''; return 1; fi
+		MENU_SIMPLE_RESULT="$choice"
+	}
+	agentbot_menu_workspaces_remove_recorded() { return 9; }
+	ui_clear() { :; }
+	ui_pause() { printf 'pause\n' >>"$calls"; }
+	set +e
+	agentbot_menu_workspaces >/dev/null 2>&1
+	set -e
+	[[ "$(<"$calls")" == pause ]]
 )
 
 test_workspaces_menu_apply_decline_is_safe() (
@@ -428,7 +484,9 @@ test_caller_guard_hides_dotfiles_entry() (
 	SETUP_CALLER=dotfiles
 	export SETUP_CALLER
 	_agentbot_menu_setup
-	! printf '%s\n' "${MENU_SIMPLE_KEYS[@]}" | grep -Fxq dotfiles
+	! printf '%s\n' "${MENU_SIMPLE_KEYS[@]}" | grep -Fxq dotfiles || return 1
+	[[ "${#MENU_SIMPLE_LABELS[@]}" -eq "${#MENU_SIMPLE_KEYS[@]}" ]] || return 1
+	[[ "${#MENU_SIMPLE_LABELS[@]}" -eq "${#MENU_SIMPLE_DESCS[@]}" ]]
 )
 
 check 'Agentbot menu source exists' test_menu_source_exists
@@ -445,11 +503,14 @@ if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'Workspaces uses the scrollable submenu title and breadcrumb contract' test_workspaces_menu_uses_scrollable_submenu_contract
 	check 'Agentbot pauses use the shared blank-line contract' test_pause_has_global_blank_line_contract
 	check 'Agentbot menu dispatches actions in order and returns on Quit' test_dispatch_order_and_return
-	check 'Graphify submenu dispatches status and confirmed setup' test_graphify_menu_actions_use_backend_and_confirm_setup
-	check 'Graphify Commands is a read-only platform-aware reference' test_graphify_commands_are_read_only_and_document_platform_forms
-	check 'Graphify submenu stops at the status handoff when the CLI is missing' test_graphify_menu_missing_cli_never_invokes_setup
+	check 'Graphify Lib is a read-only platform-aware reference' test_graphify_lib_is_read_only_and_documents_platform_forms
 	check 'Agentbot menu rebuilds after returning from Workspaces' test_main_menu_rebuilds_after_workspaces_returns
 	check 'Workspaces menu exposes actions and keeps apply confirmation safe' test_workspaces_menu_actions
+	check 'Workspaces removal forgets the exact record and reloads the registry' test_workspaces_remove_forgets_exact_record_and_reloads
+	check 'declined Workspaces removal is non-destructive' test_workspaces_remove_decline_is_non_destructive
+	check 'empty Workspaces removal registry is safe' test_workspaces_remove_empty_registry_is_safe
+	check 'Workspaces removal preserves backend list failures' test_workspaces_remove_list_failure_is_not_reported_as_empty
+	check 'failed Workspaces removal pauses once before redraw' test_failed_workspaces_remove_pauses_once_before_redraw
 	check 'declined Workspaces apply never invokes --yes' test_workspaces_menu_apply_decline_is_safe
 	check 'failed Agentbot action pauses once and returns' test_failed_action_pauses_once
 	check 'failed Agentbot actions use the red failure color' test_failed_action_reports_red

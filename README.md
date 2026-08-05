@@ -56,8 +56,10 @@ cd /any/path/agent_bootstrap
 ./install.sh install
 ```
 
-Explicit install runs skills install → Claude bridge → global render → doctor, and
-symlinks `bin/agentbot` → `~/bin/agentbot`. Ensure `~/bin` is on your PATH.
+Explicit install runs skills install → optional generic Graphify Agent Skills
+sync → Claude bridge/global render → doctor, and symlinks `bin/agentbot` →
+`~/bin/agentbot`. Graphify is skipped without error when its CLI is absent.
+Ensure `~/bin` is on your PATH.
 Running `./install.sh` or `agentbot` without arguments requires a controlling TTY
 and opens the Agentbot menu when that menu is available.
 
@@ -112,11 +114,12 @@ A folder copied into `~/.agents/skills/` is a valid **manual local skill**. `./i
 
 ### Optional Graphify integration
 
-Graphify is opt-in. Select the `graphify_cli` component in the sibling
-Dotfiles installer first; Agentbot does not install the Python package as part
-of `./install.sh install` and does not enable Graphify implicitly.
+Graphify is opt-in through CLI installation. Select the `graphify_cli`
+component in the sibling Dotfiles installer first; Agentbot never installs or
+upgrades the Python package. When that optional CLI exists, main Agentbot
+Install and successful Update run only the generic Agent Skills synchronization.
 
-Use the Agentbot command or menu after the CLI is available:
+Use the direct Agentbot commands to inspect or repair that integration:
 
 ```bash
 agentbot graphify status
@@ -146,16 +149,17 @@ assistant-specific form shown by the installed skill (`/graphify` for Claude or
 Cursor; `$graphify` for Codex) and the shell CLI form (`graphify extract .`,
 `graphify update .`, or `graphify query ...`) only in a terminal.
 
-The TUI's **Agentbot → Graphify → Commands** item is a read-only quick
+The TUI's **Graphify Lib** item is a read-only quick
 reference for those forms and the [official Graphify command reference](https://github.com/Graphify-Labs/graphify#common-commands).
 It also shows the explicit platform setup commands. Agentbot does **not** run
 `graphify claude install`, `graphify agents install`, `graphify codex install`,
 or `graphify cursor install`; those commands can edit project instruction files
 or hooks and remain opt-in.
 
-`agentbot update` refreshes Graphify only when the canonical Graphify skill is
-already enabled. `agentbot update --dry-run` reports that intended action but
-does not invoke Graphify or enable it.
+Main Install and successful Update set up or refresh the canonical Graphify
+skill whenever the CLI exists. CLI absence is a non-failing skip; generic setup
+failure makes the main flow fail. `agentbot update --dry-run` reports whether
+setup, refresh, or skip would occur without invoking Graphify.
 
 ## Workspace setup and repository scaffolding
 
@@ -192,6 +196,7 @@ original files are never overwritten just because they conflict.
 agentbot workspace ~/Dev/existing-project
 agentbot workspace --yes ~/Dev/existing-project
 agentbot workspaces
+agentbot workspaces --remove ~/Dev/existing-project
 agentbot resync --dry-run --all
 agentbot resync --yes --all
 agentbot resync --yes ~/Dev/existing-project
@@ -199,7 +204,11 @@ agentbot resync --yes ~/Dev/existing-project
 
 Workspace records are stored privately at
 `${XDG_CONFIG_HOME:-$HOME/.config}/agentbot/workspaces.json`; they are not
-written into projects or tracked by Git. Cursor's generated rule is
+written into projects or tracked by Git. `workspaces --remove PATH` deletes
+only the exact private registry record and does not read, regenerate, or delete
+workspace files; it also works after the directory itself is gone. Repository
+setup remains available through explicit `agentbot boot` and
+`agentbot workspace --yes` commands, not through the TUI. Cursor's generated rule is
 `.cursor/rules/agentbot-policy.mdc`, not a skill installer.
 
 Templates: [`base/AGENTS.md`](base/AGENTS.md), [`base/CLAUDE.md`](base/CLAUDE.md). Machine baseline stays in `global/AGENTS.md`.
@@ -238,7 +247,7 @@ agentbot update|upgrade [--dry-run] [--yes]
 agentbot token
 agentbot boot [--claude] [--copilot] [--cursor] [--codex] [--profile NAME] [target]
 agentbot workspace [--profile NAME] [--targets LIST] [--yes] PATH
-agentbot workspaces
+agentbot workspaces [--paths0 | --remove PATH]
 agentbot resync [--all | PATH ...] [--yes | --dry-run]
 agentbot doctor
 agentbot graphify status|setup

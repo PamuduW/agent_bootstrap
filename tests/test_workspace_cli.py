@@ -156,6 +156,68 @@ class WorkspaceCliTests(unittest.TestCase):
         self.assertIn("/repo", stdout)
         self.assertIn("safe-default", stdout)
 
+    @patch("src.cli.default_paths")
+    @patch("src.cli.AgentbotService")
+    def test_workspaces_paths0_is_nul_delimited(self, service_type, _default_paths) -> None:
+        service = self._service()
+        service.list_workspaces.return_value = (
+            WorkspaceRecord(
+                path="/repo",
+                kind="directory",
+                policy_mode="managed",
+                profile="safe-default",
+                targets=("agents",),
+                enabled=True,
+                last_commit=None,
+                last_rendered_at=None,
+            ),
+            WorkspaceRecord(
+                path="/second",
+                kind="directory",
+                policy_mode="managed",
+                profile="safe-default",
+                targets=("agents",),
+                enabled=True,
+                last_commit=None,
+                last_rendered_at=None,
+            ),
+        )
+        service_type.return_value = service
+
+        rc, stdout, stderr = self._run_main(["agentbot", "workspaces", "--paths0"])
+
+        self.assertEqual(0, rc)
+        self.assertEqual("/repo\0/second\0", stdout)
+        self.assertEqual("", stderr)
+
+    @patch("src.cli.default_paths")
+    @patch("src.cli.AgentbotService")
+    def test_workspaces_remove_reports_registry_only_change(
+        self, service_type, _default_paths
+    ) -> None:
+        service = self._service()
+        service.remove_workspace.return_value = WorkspaceRecord(
+            path="/missing/repo",
+            kind="directory",
+            policy_mode="managed",
+            profile="safe-default",
+            targets=("agents",),
+            enabled=True,
+            last_commit=None,
+            last_rendered_at=None,
+        )
+        service_type.return_value = service
+
+        rc, stdout, stderr = self._run_main(
+            ["agentbot", "workspaces", "--remove", "/missing/repo"]
+        )
+
+        self.assertEqual(0, rc)
+        service.remove_workspace.assert_called_once_with(Path("/missing/repo"))
+        self.assertIn("Stopped managing", stdout)
+        self.assertIn("No workspace files were changed", stdout)
+        self.assertEqual("", stderr)
+
     def test_resync_requires_all_or_explicit_paths(self) -> None:
         with patch("src.cli.default_paths"), patch("src.cli.AgentbotService"):
             rc, _stdout, stderr = self._run_main(["agentbot", "resync"])

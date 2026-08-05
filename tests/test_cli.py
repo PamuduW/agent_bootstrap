@@ -127,6 +127,24 @@ class CliTests(unittest.TestCase):
 
     @patch("src.cli.default_paths")
     @patch("src.cli.AgentbotService")
+    def test_update_returns_failure_for_broken_graphify_setup(
+        self, service_type, _default_paths
+    ) -> None:
+        from src.skill_reconcile import ReconcileResult
+
+        service = MagicMock()
+        service.run_reconciliation_update.return_value = ReconcileResult(
+            "failed", (), (), (), message="Graphify: skill setup failed"
+        )
+        service_type.return_value = service
+
+        rc, stdout, _stderr = self._run_main(["agentbot", "update", "--yes"])
+
+        self.assertEqual(1, rc)
+        self.assertIn("Graphify: skill setup failed", stdout)
+
+    @patch("src.cli.default_paths")
+    @patch("src.cli.AgentbotService")
     def test_upgrade_is_update_alias_and_prints_skill_delta(self, service_type, _default_paths) -> None:
         from src.skill_reconcile import ReconcileResult
 

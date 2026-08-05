@@ -119,6 +119,15 @@ class WorkspaceStore:
         self.replace(ordered)
         return ordered
 
+    def remove(self, path: Path) -> WorkspaceRecord | None:
+        canonical = str(Path(path).expanduser().resolve(strict=False))
+        records = self.load()
+        removed = next((record for record in records if record.path == canonical), None)
+        if removed is None:
+            return None
+        self.replace(record for record in records if record.path != canonical)
+        return removed
+
     def replace(self, records: Iterable[WorkspaceRecord]) -> None:
         normalized = tuple(records)
         by_path: dict[str, WorkspaceRecord] = {}

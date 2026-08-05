@@ -27,7 +27,7 @@ class ReconcileE2ETests(unittest.TestCase):
             "reconcile_skills",
             return_value=ReconcileResult("confirmation_required", (), (), ()),
         ), mock.patch.object(
-            service, "refresh_graphify_if_enabled"
+            service, "sync_graphify_if_cli_available"
         ) as refresh_graphify, mock.patch.object(
             service, "resync_workspaces"
         ) as resync:

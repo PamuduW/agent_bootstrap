@@ -28,7 +28,13 @@ from .skill_reconcile import (
     apply_reconcile_plan,
     build_reconcile_plan,
 )
-from .ui import print_bridge_summary, print_doctor_summary, print_header, print_skills_report
+from .ui import (
+    print_bridge_summary,
+    print_doctor_summary,
+    print_graphify_status,
+    print_header,
+    print_skills_report,
+)
 from .workspace_service import WorkspaceReport, WorkspaceResult, WorkspaceService
 from .workspace_state import WorkspaceRecord
 
@@ -62,11 +68,16 @@ class AgentbotService:
         print_header("Install Agentbot", "Agentbot › Install Agentbot")
         results = run_skills_install(self.paths)
         skills_rc = print_skills_report(results, title="Skills install")
+        graphify_status = self.sync_graphify_if_cli_available(refresh_outputs=False)
         self.refresh_agent_outputs()
+        if graphify_status.cli_path is not None or graphify_status.state == "broken":
+            print_graphify_status(graphify_status)
         issues = self.doctor_issues() + self.skills_doctor_issues()
         doctor_rc = print_doctor_summary(issues)
         if skills_rc != 0:
             return skills_rc
+        if graphify_status.state == "broken":
+            return 1
         return doctor_rc
 
     def update_skills(self) -> InstallResult:
@@ -112,6 +123,9 @@ class AgentbotService:
 
     def list_workspaces(self) -> tuple[WorkspaceRecord, ...]:
         return self.workspace_service.store.load()
+
+    def remove_workspace(self, path: Path) -> WorkspaceRecord:
+        return self.workspace_service.remove(path)
 
     def reconcile_skills(
         self,
@@ -243,9 +257,9 @@ class AgentbotService:
         graphify_status = None
         if dry_run or result.status in {"applied", "applied-with-local-changes"}:
             if result.status in {"applied", "applied-with-local-changes"}:
-                # Refresh an already-enabled Graphify skill before the single
-                # global/workspace render. A CLI alone never enables Graphify.
-                graphify_status = self.refresh_graphify_if_enabled(refresh_outputs=False)
+                graphify_status = self.sync_graphify_if_cli_available(
+                    refresh_outputs=False
+                )
             # Preview or apply registered workspaces plus managed global outputs.
             workspace_report = self.resync_workspaces(apply=not dry_run)
 
@@ -253,7 +267,12 @@ class AgentbotService:
         if workspace_report is not None:
             surface_message = self._workspace_resync_summary(workspace_report, dry_run=dry_run)
             message = f"{message}; {surface_message}" if message else surface_message
-        if (
+        result_status = result.status
+        if graphify_status is not None and graphify_status.state == "broken":
+            detail = f"Graphify: {graphify_status.message}"
+            message = f"{message}; {detail}" if message else detail
+            result_status = "failed"
+        elif (
             graphify_status is not None
             and graphify_status.skill_path.is_file()
             and graphify_status.state != "ready"
@@ -262,6 +281,7 @@ class AgentbotService:
             message = f"{message}; {detail}" if message else detail
         return replace(
             result,
+            status=result_status,
             updated_skills=update_report.updated_skills,
             message=message,
             workspace_report=workspace_report,
@@ -278,14 +298,17 @@ class AgentbotService:
         )
     @staticmethod
     def _graphify_update_preview_message(status: GraphifyStatus) -> str:
-        if not status.skill_path.is_file():
-            return "Graphify: integration is not enabled; no action would run."
         if status.cli_path is None:
+            return "Graphify: CLI is not installed; integration would be skipped."
+        if not status.skill_path.is_file():
             return (
-                "Graphify: the existing skill would need a CLI refresh, but the CLI is missing; "
-                "install it with `uv tool install graphifyy` or through Dotfiles."
+                "Graphify: the generic Agent Skills integration would be set up "
+                "after reconciliation."
             )
-        return "Graphify: the already-enabled Agent Skills integration would be refreshed after reconciliation."
+        return (
+            "Graphify: the generic Agent Skills integration would be refreshed "
+            "after reconciliation."
+        )
 
     def refresh_agent_outputs(self) -> tuple[int, int, int]:
         linked, skipped, updated = self.apply_claude_bridge(print_summary=False)
@@ -302,14 +325,16 @@ class AgentbotService:
             return GraphifyIntegration(self.paths).status()
         return status
 
-    def refresh_graphify_if_enabled(self, *, refresh_outputs: bool = True) -> GraphifyStatus:
+    def sync_graphify_if_cli_available(
+        self, *, refresh_outputs: bool = True
+    ) -> GraphifyStatus:
         integration = GraphifyIntegration(self.paths)
-        if not integration.skill_path.is_file():
-            return integration.status()
+        current = integration.status()
+        if current.cli_path is None:
+            return current
         status = integration.setup()
         if (
             refresh_outputs
-            and status.cli_path is not None
             and status.skill_path.is_file()
             and status.state != "broken"
         ):

@@ -466,3 +466,10 @@ def print_workspace_list(records) -> None:
         rows.append((record.path, detail, "ok" if exists and record.enabled else "missing"))
     print_table(rows, show_header=False, wrap_details=True)
     print()
+
+
+def print_workspace_removed(record) -> None:
+    print_header("Workspace removed", "Agentbot › Workspaces › Remove")
+    print(f"  Stopped managing: {record.path}")
+    print("  No workspace files were changed.")
+    print()

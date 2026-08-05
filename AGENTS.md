@@ -203,8 +203,12 @@ bash tests/test_agentbot_menu.sh
   changes without writing. `--yes` pre-approves source-owned skill additions,
   removals, and manifest changes that would otherwise require confirmation.
 - Do not vendor upstream skills; use the manifest and global Skills CLI flow.
-- Keep Graphify opt-in. Dotfiles owns its optional CLI component, while
-  Agentbot only sets up the generic Agent Skills integration after an explicit
-  operator action; neither path builds project graphs automatically.
+- Keep Graphify CLI installation opt-in and owned by Dotfiles. When the CLI
+  exists, main Agentbot Install and Update run only
+  `graphify install --platform agents`; CLI absence is a non-failing skip and
+  setup failure fails the main flow. Neither path builds project graphs.
+- The TUI does not register repositories. Keep explicit `boot` and
+  `workspace --yes` CLI setup available. `workspaces --remove PATH` changes
+  only the private registry and never removes or regenerates workspace files.
 - Archived commands (`all`, `interactive`, `import-local`, and similar) must
   remain unavailable until their archived modules are deliberately restored.

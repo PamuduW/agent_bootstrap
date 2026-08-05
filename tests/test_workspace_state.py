@@ -101,6 +101,78 @@ class WorkspaceStateTests(unittest.TestCase):
         self.assertEqual(1, document["version"])
         self.assertEqual(["agents"], document["workspaces"][0]["targets"])
 
+    def test_remove_returns_record_and_preserves_other_records(self) -> None:
+        store = WorkspaceStore(self.state_file)
+        first = WorkspaceRecord(
+            path="/work/a",
+            kind="directory",
+            policy_mode="managed",
+            profile="safe-default",
+            targets=("agents",),
+            enabled=True,
+            last_commit=None,
+            last_rendered_at=None,
+        )
+        second = WorkspaceRecord(
+            path="/missing/b",
+            kind="directory",
+            policy_mode="custom",
+            profile="safe-default",
+            targets=("agents", "claude"),
+            enabled=True,
+            last_commit=None,
+            last_rendered_at=None,
+        )
+        store.replace((first, second))
+
+        removed = store.remove(Path("/missing/b"))
+
+        self.assertEqual(second, removed)
+        self.assertEqual((first,), store.load())
+        self.assertEqual(0o600, stat.S_IMODE(self.state_file.stat().st_mode))
+
+    def test_remove_unknown_path_does_not_rewrite_state(self) -> None:
+        store = WorkspaceStore(self.state_file)
+        record = WorkspaceRecord(
+            path="/work/a",
+            kind="directory",
+            policy_mode="managed",
+            profile="safe-default",
+            targets=("agents",),
+            enabled=True,
+            last_commit=None,
+            last_rendered_at=None,
+        )
+        store.replace((record,))
+        before = self.state_file.read_bytes()
+        before_stat = self.state_file.stat()
+
+        removed = store.remove(Path("/unregistered"))
+
+        self.assertIsNone(removed)
+        self.assertEqual(before, self.state_file.read_bytes())
+        self.assertEqual(before_stat.st_ino, self.state_file.stat().st_ino)
+        self.assertEqual(before_stat.st_mtime_ns, self.state_file.stat().st_mtime_ns)
+
+    def test_remove_canonicalizes_missing_path_without_requiring_it_to_exist(self) -> None:
+        store = WorkspaceStore(self.state_file)
+        record = WorkspaceRecord(
+            path="/work/a",
+            kind="directory",
+            policy_mode="managed",
+            profile="safe-default",
+            targets=("agents",),
+            enabled=True,
+            last_commit=None,
+            last_rendered_at=None,
+        )
+        store.replace((record,))
+
+        removed = store.remove(Path("/work/a/../a"))
+
+        self.assertEqual(record, removed)
+        self.assertEqual((), store.load())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -158,18 +158,58 @@ class GraphifyIntegrationTests(unittest.TestCase):
         self.assertEqual("ready", status.state)
         refresh.assert_called_once_with()
 
-    def test_service_update_does_not_enable_graphify_when_skill_is_absent(self) -> None:
+    def test_service_sync_enables_graphify_when_cli_exists(self) -> None:
         from src.service import AgentbotService
 
         self._write_graphify()
+        log = self.root / "graphify-sync.log"
         service = AgentbotService(self._paths())
-        with patch.dict(os.environ, self._env(), clear=False), patch.object(
-            service, "refresh_agent_outputs"
+        with patch.dict(
+            os.environ,
+            {**self._env(), "GRAPHIFY_TEST_LOG": str(log)},
+            clear=False,
+        ), patch.object(
+            service, "refresh_agent_outputs", return_value=(0, 0, 0)
         ) as refresh:
-            status = service.refresh_graphify_if_enabled()
+            status = service.sync_graphify_if_cli_available()
 
-        self.assertEqual("cli-only", status.state)
-        refresh.assert_not_called()
+        self.assertEqual("ready", status.state)
+        self.assertEqual("install --platform agents", log.read_text(encoding="utf-8").strip())
+        refresh.assert_called_once_with()
+
+    def test_bootstrap_reports_broken_graphify_as_failure(self) -> None:
+        from src.graphify import GraphifyStatus
+        from src.service import AgentbotService
+
+        service = AgentbotService(self._paths())
+        broken = GraphifyStatus(
+            "broken",
+            self.fake_bin / "graphify",
+            "graphify 1.2.3",
+            self.home / ".agents/skills/graphify/SKILL.md",
+            None,
+            "missing",
+            "missing",
+            "Graphify skill setup failed: exit 23",
+        )
+        with patch("src.service.run_skills_install", return_value=[]), patch(
+            "src.service.print_skills_report", return_value=0
+        ), patch.object(
+            service, "sync_graphify_if_cli_available", return_value=broken
+        ), patch.object(
+            service, "refresh_agent_outputs", return_value=(0, 0, 0)
+        ) as refresh, patch.object(
+            service, "doctor_issues", return_value=[]
+        ), patch.object(
+            service, "skills_doctor_issues", return_value=[]
+        ), patch(
+            "src.service.print_graphify_status"
+        ) as print_status:
+            rc = service.run_bootstrap()
+
+        self.assertEqual(1, rc)
+        refresh.assert_called_once_with()
+        print_status.assert_called_once_with(broken)
 
     def test_reconciliation_update_refreshes_enabled_graphify_before_one_output_render(self) -> None:
         from src.service import AgentbotService
@@ -179,7 +219,7 @@ class GraphifyIntegrationTests(unittest.TestCase):
         service = AgentbotService(self._paths())
         with patch.object(service, "update_skills", return_value=SimpleNamespace(stdout="", stderr="")), \
              patch.object(service, "reconcile_skills", return_value=ReconcileResult("applied", (), (), ())), \
-             patch.object(service, "refresh_graphify_if_enabled", return_value=None) as refresh_graphify, \
+             patch.object(service, "sync_graphify_if_cli_available", return_value=None) as refresh_graphify, \
              patch.object(
                  service,
                  "resync_workspaces",
@@ -214,7 +254,7 @@ class GraphifyIntegrationTests(unittest.TestCase):
         )
         with patch.object(service, "graphify_status", return_value=status), \
              patch.object(service, "reconcile_skills", return_value=ReconcileResult("preview", (), (), ())), \
-             patch.object(service, "refresh_graphify_if_enabled") as refresh_graphify, \
+             patch.object(service, "sync_graphify_if_cli_available") as refresh_graphify, \
              patch.object(
                  service,
                  "resync_workspaces",
@@ -222,10 +262,76 @@ class GraphifyIntegrationTests(unittest.TestCase):
              ) as resync:
             result = service.run_reconciliation_update(dry_run=True)
 
-        self.assertIn("would be refreshed", result.message)
+        self.assertIn(
+            "Graphify: the generic Agent Skills integration would be refreshed after reconciliation.",
+            result.message,
+        )
         self.assertIn("surfaces:", result.message)
         refresh_graphify.assert_not_called()
         resync.assert_called_once_with(apply=False)
+
+    def test_reconciliation_dry_run_reports_cli_only_setup_without_mutation(self) -> None:
+        from src.graphify import GraphifyStatus
+        from src.service import AgentbotService
+        from src.skill_reconcile import ReconcileResult
+        from src.workspace_service import WorkspaceReport
+
+        service = AgentbotService(self._paths())
+        status = GraphifyStatus(
+            "cli-only",
+            self.fake_bin / "graphify",
+            "graphify 1.2.3",
+            self.home / ".agents/skills/graphify/SKILL.md",
+            None,
+            "missing",
+            "missing",
+            "Graphify CLI is installed; the Agent Skills integration is not set up.",
+        )
+        with patch.object(service, "graphify_status", return_value=status), patch.object(
+            service, "reconcile_skills", return_value=ReconcileResult("preview", (), (), ())
+        ), patch.object(
+            service, "sync_graphify_if_cli_available"
+        ) as sync, patch.object(
+            service, "resync_workspaces", return_value=WorkspaceReport(results=())
+        ):
+            result = service.run_reconciliation_update(dry_run=True)
+
+        self.assertIn(
+            "Graphify: the generic Agent Skills integration would be set up after reconciliation.",
+            result.message,
+        )
+        sync.assert_not_called()
+
+    def test_reconciliation_broken_graphify_setup_fails_truthfully(self) -> None:
+        from src.graphify import GraphifyStatus
+        from src.service import AgentbotService
+        from src.skill_reconcile import ReconcileResult
+        from src.workspace_service import WorkspaceReport
+
+        service = AgentbotService(self._paths())
+        broken = GraphifyStatus(
+            "broken",
+            self.fake_bin / "graphify",
+            "graphify 1.2.3",
+            self.home / ".agents/skills/graphify/SKILL.md",
+            None,
+            "missing",
+            "missing",
+            "Graphify skill setup failed: exit 23",
+        )
+        with patch.object(
+            service, "update_skills", return_value=SimpleNamespace(stdout="", stderr="")
+        ), patch.object(
+            service, "reconcile_skills", return_value=ReconcileResult("applied", (), (), ())
+        ), patch.object(
+            service, "sync_graphify_if_cli_available", return_value=broken
+        ), patch.object(
+            service, "resync_workspaces", return_value=WorkspaceReport(results=())
+        ):
+            result = service.run_reconciliation_update()
+
+        self.assertEqual("failed", result.status)
+        self.assertIn("Graphify: Graphify skill setup failed: exit 23", result.message)
 
 
 if __name__ == "__main__":

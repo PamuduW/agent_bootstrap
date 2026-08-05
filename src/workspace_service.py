@@ -86,6 +86,13 @@ class WorkspaceService:
         self.paths = paths
         self.store = WorkspaceStore(paths.workspace_state_file)
 
+    def remove(self, path: Path) -> WorkspaceRecord:
+        removed = self.store.remove(path)
+        if removed is None:
+            canonical = Path(path).expanduser().resolve(strict=False)
+            raise ValueError(f"workspace is not registered: {canonical}")
+        return removed
+
     def preview(
         self,
         path: Path,

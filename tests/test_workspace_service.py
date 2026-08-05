@@ -197,6 +197,46 @@ class WorkspaceServiceTests(unittest.TestCase):
         self.assertIn("My notes.", review.read_text(encoding="utf-8"))
         self.assertFalse((target / "CLAUDE_temp_1.md").exists())
 
+    def test_remove_forgets_missing_workspace_without_touching_its_path(self) -> None:
+        missing = self.root / "missing-workspace"
+        record = WorkspaceRecord(
+            path=str(missing.resolve()),
+            kind="directory",
+            policy_mode="managed",
+            profile="safe-default",
+            targets=("agents",),
+            enabled=True,
+            last_commit=None,
+            last_rendered_at=None,
+        )
+        self.workspace_service.store.replace((record,))
+
+        removed = self.workspace_service.remove(missing)
+
+        self.assertEqual(record, removed)
+        self.assertEqual((), self.workspace_service.store.load())
+        self.assertFalse(missing.exists())
+
+    def test_remove_unregistered_workspace_does_not_rewrite_registry(self) -> None:
+        registered = self.root / "registered"
+        record = WorkspaceRecord(
+            path=str(registered.resolve()),
+            kind="directory",
+            policy_mode="managed",
+            profile="safe-default",
+            targets=("agents",),
+            enabled=True,
+            last_commit=None,
+            last_rendered_at=None,
+        )
+        self.workspace_service.store.replace((record,))
+        before = self.paths.workspace_state_file.read_bytes()
+
+        with self.assertRaisesRegex(ValueError, "workspace is not registered"):
+            self.workspace_service.remove(self.root / "unknown")
+
+        self.assertEqual(before, self.paths.workspace_state_file.read_bytes())
+
 
 if __name__ == "__main__":
     unittest.main()

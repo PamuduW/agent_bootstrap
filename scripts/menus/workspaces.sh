@@ -12,6 +12,72 @@ agentbot_menu_workspaces_confirm() {
 	esac
 }
 
+agentbot_menu_workspaces_remove_confirm() {
+	local path="$1" answer=''
+	printf '%sStop managing this workspace?%s\n' "$C_YELLOW" "$C_RESET" >/dev/tty
+	printf '%s%s%s\n' "$C_CYAN" "$path" "$C_RESET" >/dev/tty
+	printf 'No workspace files will be changed. [y/N]: ' >/dev/tty
+	IFS= read -r answer </dev/tty || answer=n
+	case "$answer" in
+	y|Y|yes|YES) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+agentbot_menu_workspaces_remove_recorded() {
+	local paths_file='' choice='' rc=0
+	local -a recorded_paths=() labels=() keys=() descriptions=()
+	local index path
+
+	while true; do
+		paths_file="$(mktemp)" || return 1
+		if agentbot_run_backend workspaces --paths0 >"$paths_file"; then
+			mapfile -d '' -t recorded_paths <"$paths_file"
+			rm -f -- "$paths_file"
+			paths_file=''
+		else
+			rc=$?
+			rm -f -- "$paths_file"
+			return "$rc"
+		fi
+
+		if ((${#recorded_paths[@]} == 0)); then
+			printf '%sNo recorded workspaces to remove.%s\n' "$C_DIM" "$C_RESET"
+			ui_pause
+			return 0
+		fi
+
+		labels=()
+		keys=()
+		descriptions=()
+		for index in "${!recorded_paths[@]}"; do
+			labels+=("${recorded_paths[$index]}")
+			keys+=("$index")
+			descriptions+=('Stop managing this recorded path. No workspace files will be changed.')
+		done
+		MENU_SIMPLE_TITLE='Remove recorded workspaces'
+		MENU_SIMPLE_BREADCRUMB='Agentbot › Workspaces › Remove'
+		MENU_SIMPLE_LABELS=("${labels[@]}")
+		MENU_SIMPLE_KEYS=("${keys[@]}")
+		MENU_SIMPLE_DESCS=("${descriptions[@]}")
+
+		if ! menu_simple_run; then
+			return 0
+		fi
+		choice="${MENU_SIMPLE_RESULT:-}"
+		[[ "$choice" =~ ^[0-9]+$ ]] || return 2
+		path="${recorded_paths[$choice]:-}"
+		[[ -n "$path" ]] || return 2
+		ui_clear
+		if agentbot_menu_workspaces_remove_confirm "$path"; then
+			agentbot_run_backend workspaces --remove "$path" || return $?
+		else
+			printf '%sWorkspace removal cancelled.%s\n' "$C_DIM" "$C_RESET"
+		fi
+		ui_pause
+	done
+}
+
 agentbot_menu_workspaces_dispatch() {
 	local choice="$1" rc=0
 	case "$choice" in
@@ -24,7 +90,7 @@ agentbot_menu_workspaces_dispatch() {
 			printf '%sApply cancelled.%s\n' "$C_DIM" "$C_RESET"
 		fi
 		;;
-	setup) agentbot_run_backend workspace --yes "$PWD" || rc=$? ;;
+	remove) agentbot_menu_workspaces_remove_recorded || rc=$? ;;
 	*) printf 'Unknown Workspaces action: %s\n' "$choice" >&2; rc=2 ;;
 	esac
 	if ((rc != 0)); then
@@ -42,14 +108,14 @@ agentbot_menu_workspaces() {
 		'List recorded workspaces'
 		'Preview resync (all)'
 		'Apply resync (all)'
-		'Set up current repository'
+		'Remove recorded workspaces'
 	)
-	MENU_SIMPLE_KEYS=(list preview apply setup)
+	MENU_SIMPLE_KEYS=(list preview apply remove)
 	MENU_SIMPLE_DESCS=(
 		$'Read the private local workspace registry.\nNo repository or state changes are performed.'
 		$'Preview managed changes for every enabled workspace plus global Codex/Claude outputs.\nNo files are written.'
 		$'Apply managed workspace changes and refresh global AGENTS/CLAUDE/statusline outputs.\nConfirmation is required before mutation.'
-		$'Render and register the current folder or Git root.\nWrites only with the explicit setup action.'
+		$'Select one recorded path and stop managing it.\nNo workspace files are changed or removed.'
 	)
 
 	while true; do
@@ -62,6 +128,8 @@ agentbot_menu_workspaces() {
 		ui_clear
 		rc=0
 		agentbot_menu_workspaces_dispatch "$choice" || rc=$?
-		ui_pause
+		if ((rc != 0)) || [[ "$choice" != remove ]]; then
+			ui_pause
+		fi
 	done
 }

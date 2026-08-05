@@ -355,7 +355,7 @@ usage() {
 Usage: ./install.sh <command> [args]
 
   Commands:
-  install                Install Agentbot: skills, bridge, global render, doctor, link
+  install                Install Agentbot: skills, Graphify sync, outputs, doctor, link
   skills install         Install curated upstream skills from skills.sources.yaml
   skills update|upgrade  Refresh global skills from ~/.agents/.skill-lock.json
   skills list            List installed skills
@@ -367,7 +367,8 @@ Usage: ./install.sh <command> [args]
   global                 Render global agent outputs
   workspace [--profile NAME] [--targets LIST] [--yes] PATH
                          Preview or render one workspace
-  workspaces             List locally registered workspaces
+  workspaces [--paths0 | --remove PATH]
+                         List paths or stop managing one without changing its files
   resync [--all | PATH ...] [--yes | --dry-run]
                          Preview or refresh registered workspaces
   graphify status|setup  Inspect or set up the optional Graphify Agent Skills integration

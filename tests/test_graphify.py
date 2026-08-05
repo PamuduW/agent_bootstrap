@@ -270,6 +270,63 @@ class GraphifyIntegrationTests(unittest.TestCase):
         refresh_graphify.assert_not_called()
         resync.assert_called_once_with(apply=False)
 
+    def test_workspace_summary_counts_only_mutating_actions(self) -> None:
+        from src.service import AgentbotService
+        from src.workspace_render import RenderAction
+        from src.workspace_service import WorkspaceReport, WorkspaceResult
+
+        changed = WorkspaceResult(
+            Path("/workspace/changed"),
+            "preview",
+            (
+                RenderAction("AGENTS.md", "update", None, "refresh"),
+                RenderAction("CLAUDE.md", "unchanged", None, "current"),
+            ),
+            "preview",
+        )
+        unchanged = WorkspaceResult(
+            Path("/workspace/current"),
+            "preview",
+            (RenderAction("AGENTS.md", "unchanged", None, "current"),),
+            "preview",
+        )
+        report = WorkspaceReport(
+            results=(changed, unchanged),
+            global_actions=(
+                RenderAction("~/.codex/AGENTS.md", "create", None, "create"),
+                RenderAction("~/.claude/AGENTS.md", "unchanged", None, "current"),
+            ),
+        )
+
+        self.assertEqual(
+            "surfaces: would refresh 1 workspace(s) and 1 global output(s)",
+            AgentbotService._workspace_resync_summary(report, dry_run=True),
+        )
+
+    def test_workspace_summary_reports_zero_for_noop_actions(self) -> None:
+        from src.service import AgentbotService
+        from src.workspace_render import RenderAction
+        from src.workspace_service import WorkspaceReport, WorkspaceResult
+
+        report = WorkspaceReport(
+            results=(
+                WorkspaceResult(
+                    Path("/workspace/current"),
+                    "preview",
+                    (RenderAction("AGENTS.md", "unchanged", None, "current"),),
+                    "preview",
+                ),
+            ),
+            global_actions=(
+                RenderAction("~/.codex/AGENTS.md", "unchanged", None, "current"),
+            ),
+        )
+
+        self.assertEqual(
+            "surfaces: would refresh 0 workspace(s) and 0 global output(s)",
+            AgentbotService._workspace_resync_summary(report, dry_run=True),
+        )
+
     def test_reconciliation_dry_run_reports_cli_only_setup_without_mutation(self) -> None:
         from src.graphify import GraphifyStatus
         from src.service import AgentbotService

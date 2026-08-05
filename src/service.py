@@ -289,8 +289,17 @@ class AgentbotService:
 
     @staticmethod
     def _workspace_resync_summary(report, *, dry_run: bool) -> str:
-        workspace_count = len(report.results)
-        global_count = len(getattr(report, "global_actions", ()) or ())
+        mutating_kinds = {"create", "update"}
+        workspace_count = sum(
+            1
+            for result in report.results
+            if any(action.kind in mutating_kinds for action in result.actions)
+        )
+        global_count = sum(
+            1
+            for action in (getattr(report, "global_actions", ()) or ())
+            if action.kind in mutating_kinds
+        )
         verb = "would refresh" if dry_run else "refreshed"
         return (
             f"surfaces: {verb} {workspace_count} workspace(s) and "
@@ -421,16 +430,7 @@ class AgentbotService:
                 )
 
         if self.paths.agents_skills_home.is_dir():
-            for source in sorted(self.paths.agents_skills_home.iterdir()):
-                if (
-                    not source.is_dir()
-                    or not (source / "SKILL.md").is_file()
-                    or source.name in managed_names
-                    or source.name in declared_names
-                ):
-                    continue
-                if source.name == "graphify" and (source / ".graphify_version").is_file():
-                    continue
+            for source in self._unmanaged_skill_dirs(managed_names, declared_names):
                 target = codex_skills / source.name
                 if not target.is_symlink() or not target.exists() or target.resolve() != source.resolve():
                     issues.append(
@@ -438,7 +438,7 @@ class AgentbotService:
                             level="warning",
                             scope="reproducibility",
                             message=(
-                                f"Manual skill {source.name!r} is outside the global lock and has no Codex link yet; "
+                                f"Manual skill {source.name!r} is outside managed sources and has no Codex link yet; "
                                 "run './install.sh global' to make the local skill available, then add a source to make it reproducible"
                             ),
                         )
@@ -449,13 +449,34 @@ class AgentbotService:
                             level="warning",
                             scope="reproducibility",
                             message=(
-                                f"Manual skill {source.name!r} is available to Codex but outside the global lock; "
+                                f"Manual skill {source.name!r} is available to Codex but outside managed sources; "
                                 "add a manifest source to make it reproducible"
                             ),
                         )
                     )
 
         return issues
+
+    def _unmanaged_skill_dirs(
+        self,
+        managed_names: set[str],
+        declared_names: set[str],
+    ) -> tuple[Path, ...]:
+        if not self.paths.agents_skills_home.is_dir():
+            return ()
+        unmanaged: list[Path] = []
+        for source in sorted(self.paths.agents_skills_home.iterdir()):
+            if (
+                not source.is_dir()
+                or not (source / "SKILL.md").is_file()
+                or source.name in managed_names
+                or source.name in declared_names
+            ):
+                continue
+            if source.name == "graphify" and (source / ".graphify_version").is_file():
+                continue
+            unmanaged.append(source)
+        return tuple(unmanaged)
 
     @staticmethod
     def _graphify_doctor_message(status: GraphifyStatus) -> str:
@@ -533,7 +554,7 @@ class AgentbotService:
 
         global_lock_skills = self._count_global_lock_skills(self.paths)
         managed_names = set(managed_skill_names(self.paths))
-        local_names = {skill_dir.name for skill_dir in installed_skill_dirs(self.paths)}
+        declared_names = self._manifest_declared_skill_names()
         claude_bridge_links = 0
         if self.paths.claude_skills_home.is_dir():
             claude_bridge_links = sum(
@@ -551,7 +572,7 @@ class AgentbotService:
             "global_lock_exists": self.paths.global_skill_lock.exists(),
             "global_lock_skills": global_lock_skills,
             "managed_skill_count": len(managed_names),
-            "manual_skill_count": len(local_names - managed_names),
+            "manual_skill_count": len(self._unmanaged_skill_dirs(managed_names, declared_names)),
             "claude_bridge_links": claude_bridge_links,
             "claude_statusline_state": statusline.status_label,
             "doctor_issue_count": len(doctor_issues),

@@ -287,6 +287,28 @@ class CliTests(unittest.TestCase):
         self.assertIn("Agentbot › Status", status_stdout)
         self.assertIn("Agentbot › Update", update_stdout)
 
+    def test_status_labels_trial_skills_outside_managed_sources(self) -> None:
+        from src.ui import print_status_summary
+
+        output = io.StringIO()
+        with patch("sys.stdout", output):
+            print_status_summary(
+                installed_skills=4,
+                global_agents_exists=True,
+                skills_sources_exists=True,
+                enabled_sources=1,
+                global_lock_exists=True,
+                global_lock_skills=4,
+                claude_bridge_links=4,
+                claude_statusline_state="ok",
+                manual_skill_count=4,
+                doctor_issue_count=4,
+            )
+
+        rendered = output.getvalue()
+        self.assertIn("4 outside managed sources", rendered)
+        self.assertNotIn("outside global lock", rendered)
+
     @patch("src.cli.default_paths")
     @patch("src.cli.AgentbotService")
     def test_update_reconciliation_report_has_one_table_header(self, service_type, _default_paths) -> None:
@@ -365,7 +387,7 @@ class CliTests(unittest.TestCase):
         from src.ui import print_doctor_summary
 
         message = (
-            "Manual skill 'brainstorming' is available but outside the global lock; "
+            "Manual skill 'brainstorming' is available but outside managed sources; "
             "add a manifest source to make it reproducible"
         )
         output = io.StringIO()
@@ -374,7 +396,7 @@ class CliTests(unittest.TestCase):
 
         rendered = output.getvalue()
         self.assertIn("Manual skill 'brainstorming' is", rendered)
-        self.assertIn("available but outside the global lock;", rendered)
+        self.assertIn("available but outside managed sources;", rendered)
         self.assertIn("add a manifest source to make it", rendered)
         self.assertIn("reproducible", rendered)
         self.assertNotIn("...", output.getvalue())
@@ -389,7 +411,7 @@ class CliTests(unittest.TestCase):
             DoctorIssue(
                 "warning",
                 "reproducibility",
-                "Manual skill 'writing-clearly-and-concisely' is outside the global lock",
+                "Manual skill 'writing-clearly-and-concisely' is outside managed sources",
             ),
             DoctorIssue("warning", "token", "saved token path 'example' needs attention"),
         ]

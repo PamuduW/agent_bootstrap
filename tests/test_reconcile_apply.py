@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -123,7 +124,7 @@ class ReconcileApplyTests(unittest.TestCase):
         self.assertEqual("confirmation_required", result.status)
         self.assertTrue((self.agents / "gone").exists())
 
-    def test_dry_run_reports_global_lock_refresh(self) -> None:
+    def test_noop_dry_run_reports_no_changed_paths(self) -> None:
         from src.skill_reconcile import apply_reconcile_plan, build_reconcile_plan
         from src.skills_sources import load_skills_sources
 
@@ -139,7 +140,30 @@ class ReconcileApplyTests(unittest.TestCase):
             result = apply_reconcile_plan(paths, config, plan, confirm=True, dry_run=True)
 
         self.assertEqual("preview", result.status)
-        self.assertEqual((self.lock,), result.changed_paths)
+        self.assertEqual((), result.changed_paths)
+
+    def test_noop_apply_preserves_global_lock_bytes_and_mtime(self) -> None:
+        from src.skill_reconcile import apply_reconcile_plan, build_reconcile_plan
+        from src.skills_sources import load_skills_sources
+
+        original = '{"version":3,"skills":{"gone":{"source":"owner/repo"},"keep":{"source":"owner/repo"},"manual":{"source":"manual/repo"},"old":{"source":"owner/all"}}}\n'
+        self.lock.write_text(original, encoding="utf-8")
+        os.utime(self.lock, (1_000_000_000, 1_000_000_000))
+        before_mtime = self.lock.stat().st_mtime_ns
+        config = load_skills_sources(self.root / "skills.sources.yaml")
+        plan = build_reconcile_plan(
+            config,
+            discovered={"explicit": ("gone", "keep"), "wildcard": ("old",)},
+            lock=json.loads(original),
+        )
+        paths, patches = self._paths()
+        with patches[0], patches[1]:
+            result = apply_reconcile_plan(paths, config, plan, confirm=True)
+
+        self.assertEqual("applied", result.status)
+        self.assertEqual((), result.changed_paths)
+        self.assertEqual(original, self.lock.read_text(encoding="utf-8"))
+        self.assertEqual(before_mtime, self.lock.stat().st_mtime_ns)
 
     def test_failure_restores_files_and_keeps_backup(self) -> None:
         from src.skill_reconcile import apply_reconcile_plan, build_reconcile_plan

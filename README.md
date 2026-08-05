@@ -110,7 +110,7 @@ GitHub skill sources are shallow-cloned locally with a two-minute bound before `
 
 ### Manual skill folders
 
-A folder copied into `~/.agents/skills/` is a valid **manual local skill**. `./install.sh global` (and both skill install/update commands) links every valid local skill into Codex and Claude without replacing conflicting user-owned links. Manual skills remain distinct from managed installs: `doctor` and `status` report them as available-but-not-reproducible until their repository and selected skill names are added to `skills.sources.yaml` and installed through `npx skills`, which records them in the global lock.
+A folder copied into `~/.agents/skills/` is a valid **manual local skill**. `./install.sh global` (and both skill install/update commands) links every valid local skill into Codex and Claude without replacing conflicting user-owned links. Manual skills remain distinct from managed installs: `doctor` and `status` report them as outside managed sources until their repository and selected skill names are added to `skills.sources.yaml`. A pre-existing global-lock pin alone does not make a skill manifest-managed. Agentbot's officially stamped Graphify integration is reported through its dedicated status instead of as a manual skill.
 
 ### Optional Graphify integration
 
@@ -290,6 +290,12 @@ outputs. `--dry-run` is the write-free preview. `--yes` does not turn rendering
 on; it pre-approves source-owned additions, removals, and manifest edits that
 would otherwise require confirmation. The dedicated `resync` command remains
 preview-by-default and still needs `--yes` to apply.
+
+Reconciliation reports only semantic changes. A no-delta preview shows no
+changed lock file, and a no-delta apply does not rewrite the global lock.
+Workspace and global refresh totals count only outputs whose planned action is
+`create` or `update`; unchanged inspected targets remain visible in the detail
+table but do not inflate the summary.
 
 From the TTY menu, **Update** checks the repository first. If it is behind, a
 colored repository table is shown before the fast-forward pull prompt; after a

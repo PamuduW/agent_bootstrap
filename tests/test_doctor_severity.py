@@ -83,7 +83,9 @@ class DoctorSeverityTests(unittest.TestCase):
             with patch.dict(os.environ, {"HOME": str(home)}, clear=False):
                 issues = AgentbotService(paths).doctor_issues()
 
-            self.assertTrue(any("Manual skill 'graphify'" in issue.message for issue in issues))
+            manual_messages = [issue.message for issue in issues if "Manual skill 'graphify'" in issue.message]
+            self.assertTrue(manual_messages)
+            self.assertTrue(all("outside managed sources" in message for message in manual_messages))
 
     def test_broken_official_graphify_state_is_an_error(self) -> None:
         from src.graphify import GraphifyStatus

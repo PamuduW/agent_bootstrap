@@ -265,7 +265,8 @@ class SlimBootstrapEngineTests(unittest.TestCase):
             messages = [issue.message for issue in service.doctor_issues()]
 
         self.assertTrue(any("alpha-skill" in message and "missing" in message for message in messages))
-        self.assertTrue(any("manual-skill" in message and "manual" in message for message in messages))
+        self.assertTrue(any("manual-skill" in message and "outside managed sources" in message for message in messages))
+        self.assertFalse(any("outside the global lock" in message for message in messages))
 
     def test_doctor_does_not_reclassify_declared_skill_missing_from_lock_as_manual(self) -> None:
         from src.service import AgentbotService
@@ -356,6 +357,28 @@ sources:
         self.assertIn("enabled_sources", summary)
         self.assertIn("global_lock_skills", summary)
         self.assertIn("doctor_issue_count", summary)
+
+    def test_status_excludes_official_graphify_from_unmanaged_skill_count(self) -> None:
+        from src.service import AgentbotService
+
+        paths = self._paths()
+        for name in ("deslop", "humanizer", "no-ai-slop", "writing-clearly-and-concisely"):
+            skill = self.agents_home / name
+            skill.mkdir()
+            (skill / "SKILL.md").write_text(f"# {name}\n", encoding="utf-8")
+        graphify = self.agents_home / "graphify"
+        graphify.mkdir()
+        (graphify / "SKILL.md").write_text("# graphify\n", encoding="utf-8")
+        (graphify / ".graphify_version").write_text("1.2.3\n", encoding="utf-8")
+
+        with mock.patch.object(
+            type(paths),
+            "agents_skills_home",
+            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / "skills"),
+        ):
+            summary = AgentbotService(paths).status_summary()
+
+        self.assertEqual(4, summary["manual_skill_count"])
 
 
 if __name__ == "__main__":

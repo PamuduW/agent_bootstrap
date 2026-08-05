@@ -164,6 +164,31 @@ def _lock_data(path: Path) -> dict[str, Any]:
     return value
 
 
+def _approved_lock_mutations(
+    config: SkillsSourcesConfig,
+    plan: SkillReconcilePlan,
+    lock: Mapping[str, Any],
+) -> tuple[set[str], set[str]]:
+    lock_skills = _lock_skills(lock)
+    active_repos = {source.repo for source in config.active_sources() if source.repo}
+    owned_by_name = {
+        str(name): str(entry.get("source"))
+        for name, entry in lock_skills.items()
+        if isinstance(entry, Mapping) and entry.get("source")
+    }
+    candidates = set(plan.wildcard_removals) | {
+        change.skill
+        for change in plan.manifest_changes
+        if change.action == "remove"
+    }
+    removals = {
+        skill
+        for skill in candidates
+        if owned_by_name.get(skill) in active_repos
+    }
+    return set(plan.wildcard_additions), removals
+
+
 def _checkout_dirs(checkout: Path) -> dict[str, Path]:
     result: dict[str, Path] = {}
     if not checkout.is_dir():
@@ -294,16 +319,19 @@ def apply_reconcile_plan(
     approved = confirm(plan) if callable(confirm) else confirm
     if needs_confirmation and not approved:
         return ReconcileResult("confirmation_required", (), (), (), message="reconciliation was not confirmed")
+
+    lock_path = paths.global_skill_lock
+    lock = _lock_data(lock_path)
+    added, removed = _approved_lock_mutations(config, plan, lock)
     if dry_run:
         return ReconcileResult(
             "preview",
-            (paths.global_skill_lock,),
-            plan.wildcard_removals,
-            plan.wildcard_additions,
+            (lock_path,) if added or removed else (),
+            tuple(sorted(removed)),
+            tuple(sorted(added)),
             message="reconciliation preview only",
         )
 
-    lock_path = paths.global_skill_lock
     agents_home = paths.agents_skills_home
     codex_home = paths.codex_home / "skills"
     claude_home = paths.claude_skills_home
@@ -312,9 +340,6 @@ def apply_reconcile_plan(
         for change in plan.manifest_changes
         if change.action == "remove"
     }
-    removed = set(plan.wildcard_removals) | {skill for _source, skill in explicit_removals}
-    added = set(plan.wildcard_additions)
-    lock = _lock_data(lock_path)
     lock_skills = lock["skills"]
     source_by_id = {source.id: source for source in config.active_sources()}
     owned_by_name = {
@@ -322,12 +347,6 @@ def apply_reconcile_plan(
         for name, entry in lock_skills.items()
         if isinstance(entry, Mapping) and entry.get("source")
     }
-
-    # Never remove a skill unless the lock proves this source owns it.
-    for skill in sorted(removed):
-        owner = owned_by_name.get(skill)
-        if owner is None or owner not in {source.repo for source in config.active_sources()}:
-            removed.discard(skill)
 
     checkout_dirs: dict[str, Path] = {}
     checkout_owner: dict[str, str] = {}
@@ -337,7 +356,7 @@ def apply_reconcile_plan(
         for skill in source_dirs:
             checkout_owner.setdefault(skill, source_id)
 
-    affected: list[Path] = [lock_path]
+    affected: list[Path] = [lock_path] if added or removed else []
     if explicit_removals:
         affected.append(paths.skills_sources_file)
         for canonical in (paths.root / "base" / "AGENTS.md", paths.root / "AGENTS.md"):
@@ -393,9 +412,9 @@ def apply_reconcile_plan(
                 "sourceType": "github",
             }
 
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        lock_path.write_text(json.dumps(lock, indent=2) + "\n", encoding="utf-8")
-        if lock_path not in changed:
+        if added or removed:
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            lock_path.write_text(json.dumps(lock, indent=2) + "\n", encoding="utf-8")
             changed.append(lock_path)
 
         from .claude_bridge import bridge_claude_skills

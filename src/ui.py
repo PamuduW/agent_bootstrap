@@ -229,7 +229,7 @@ def print_status_summary(
             ),
             (
                 "Manual skills",
-                f"{manual_skill_count} outside global lock" if manual_skill_count else "none",
+                f"{manual_skill_count} outside managed sources" if manual_skill_count else "none",
                 "info" if manual_skill_count else "ok",
             ),
             (

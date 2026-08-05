@@ -4,6 +4,7 @@ import stat
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 
@@ -11,6 +12,30 @@ class ReconcileE2ETests(unittest.TestCase):
     def test_reconciliation_has_no_publish_operations(self) -> None:
         source = (Path(__file__).resolve().parents[1] / "src" / "skill_reconcile.py").read_text(encoding="utf-8")
         self.assertNotRegex(source, r"git\s+(add|commit|push)")
+
+    def test_confirmation_required_does_not_refresh_graphify_or_surfaces(self) -> None:
+        from src.service import AgentbotService
+        from src.skill_reconcile import ReconcileResult
+
+        service = AgentbotService(mock.MagicMock())
+        with mock.patch.object(
+            service,
+            "update_skills",
+            return_value=SimpleNamespace(stdout="", stderr=""),
+        ), mock.patch.object(
+            service,
+            "reconcile_skills",
+            return_value=ReconcileResult("confirmation_required", (), (), ()),
+        ), mock.patch.object(
+            service, "refresh_graphify_if_enabled"
+        ) as refresh_graphify, mock.patch.object(
+            service, "resync_workspaces"
+        ) as resync:
+            result = service.run_reconciliation_update()
+
+        self.assertEqual("confirmation_required", result.status)
+        refresh_graphify.assert_not_called()
+        resync.assert_not_called()
 
     def test_update_uses_fake_npx_and_only_writes_temp_home(self) -> None:
         from src.paths import AgentbotPaths

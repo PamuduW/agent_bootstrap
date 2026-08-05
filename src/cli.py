@@ -34,6 +34,14 @@ ARCHIVED_COMMANDS = frozenset(
 )
 
 
+def _workspace_report_has_failures(report) -> bool:
+    if report is None:
+        return False
+    if any(item.status in {"conflict", "failed"} for item in report.results):
+        return True
+    return any(action.kind == "conflict" for action in report.global_actions)
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -80,11 +88,7 @@ def main() -> int:
             print_reconciliation_report(result)
             if result.workspace_report is not None:
                 print_workspace_resync_report(result.workspace_report)
-            failed_surfaces = False
-            if result.workspace_report is not None:
-                failed_surfaces = any(
-                    item.status in {"conflict", "failed"} for item in result.workspace_report.results
-                )
+            failed_surfaces = _workspace_report_has_failures(result.workspace_report)
             if result.status not in {
                 "applied",
                 "applied-with-local-changes",
@@ -157,10 +161,19 @@ def build_parser() -> argparse.ArgumentParser:
     for command in ("update", "upgrade"):
         update = subparsers.add_parser(
             command,
-            help="Reconcile source-owned skills after the repository gate",
+            help="Refresh upstream skills and managed workspace/global outputs",
         )
-        update.add_argument("--dry-run", action="store_true", help="Preview reconciliation without writing")
-        update.add_argument("--yes", dest="confirm", action="store_true", help="Confirm source-owned changes")
+        update.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Preview reconciliation and managed-surface changes without writing",
+        )
+        update.add_argument(
+            "--yes",
+            dest="confirm",
+            action="store_true",
+            help="Pre-approve source-owned skill and manifest changes",
+        )
 
     workspace = subparsers.add_parser("workspace", help="Preview or render one workspace")
     workspace.add_argument("--profile", help="Workspace profile name")

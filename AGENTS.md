@@ -196,8 +196,12 @@ bash tests/test_agentbot_menu.sh
 **Repository constraints:**
 
 - `install.sh` is the supported bootstrap interface.
-- `./install.sh update --yes` reconciles skills, then refreshes registered
-  workspaces and managed global Codex/Claude outputs (including statusline).
+- Plain `./install.sh update` refreshes upstream skills and, after successful
+  or no-delta reconciliation, refreshes registered workspaces and managed
+  global Codex/Claude outputs (including statusline).
+- `./install.sh update --dry-run` previews reconciliation and managed-surface
+  changes without writing. `--yes` pre-approves source-owned skill additions,
+  removals, and manifest changes that would otherwise require confirmation.
 - Do not vendor upstream skills; use the manifest and global Skills CLI flow.
 - Keep Graphify opt-in. Dotfiles owns its optional CLI component, while
   Agentbot only sets up the generic Agent Skills integration after an explicit

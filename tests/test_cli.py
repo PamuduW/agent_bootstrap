@@ -66,6 +66,67 @@ class CliTests(unittest.TestCase):
 
     @patch("src.cli.default_paths")
     @patch("src.cli.AgentbotService")
+    def test_update_returns_failure_for_global_output_conflict(
+        self, service_type, _default_paths
+    ) -> None:
+        from src.skill_reconcile import ReconcileResult
+        from src.workspace_render import RenderAction
+        from src.workspace_service import WorkspaceReport
+
+        service = MagicMock()
+        service.run_reconciliation_update.return_value = ReconcileResult(
+            "applied",
+            (),
+            (),
+            (),
+            workspace_report=WorkspaceReport(
+                results=(),
+                global_actions=(
+                    RenderAction(
+                        "global/AGENTS.md",
+                        "conflict",
+                        None,
+                        "missing global baseline",
+                    ),
+                ),
+            ),
+        )
+        service_type.return_value = service
+
+        rc, stdout, _stderr = self._run_main(["agentbot", "update", "--yes"])
+
+        self.assertEqual(1, rc)
+        self.assertIn("conflict", stdout)
+
+    @patch("src.cli.default_paths")
+    @patch("src.cli.AgentbotService")
+    def test_update_accepts_non_conflicting_global_output_actions(
+        self, service_type, _default_paths
+    ) -> None:
+        from src.skill_reconcile import ReconcileResult
+        from src.workspace_render import RenderAction
+        from src.workspace_service import WorkspaceReport
+
+        actions = tuple(
+            RenderAction(f"global/{kind}", kind, None, kind)
+            for kind in ("create", "update", "unchanged")
+        )
+        service = MagicMock()
+        service.run_reconciliation_update.return_value = ReconcileResult(
+            "applied",
+            (),
+            (),
+            (),
+            workspace_report=WorkspaceReport(results=(), global_actions=actions),
+        )
+        service_type.return_value = service
+
+        rc, _stdout, _stderr = self._run_main(["agentbot", "update", "--yes"])
+
+        self.assertEqual(0, rc)
+
+    @patch("src.cli.default_paths")
+    @patch("src.cli.AgentbotService")
     def test_upgrade_is_update_alias_and_prints_skill_delta(self, service_type, _default_paths) -> None:
         from src.skill_reconcile import ReconcileResult
 

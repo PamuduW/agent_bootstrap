@@ -61,7 +61,9 @@ class GraphifyIntegrationTests(unittest.TestCase):
 
         paths = self._paths()
         before = sorted(path.relative_to(self.root) for path in self.root.rglob("*"))
-        with patch.dict(os.environ, self._env(), clear=False):
+        with patch("src.graphify.shutil.which", return_value=None), patch.dict(
+            os.environ, self._env(), clear=False
+        ):
             status = GraphifyIntegration(paths).status()
         after = sorted(path.relative_to(self.root) for path in self.root.rglob("*"))
 
@@ -132,7 +134,9 @@ class GraphifyIntegrationTests(unittest.TestCase):
     def test_setup_fails_with_actionable_message_when_cli_is_absent(self) -> None:
         from src.graphify import GraphifyIntegration
 
-        with patch.dict(os.environ, self._env(), clear=False):
+        with patch("src.graphify.shutil.which", return_value=None), patch.dict(
+            os.environ, self._env(), clear=False
+        ):
             status = GraphifyIntegration(self._paths()).setup()
 
         self.assertEqual("not-installed", status.state)

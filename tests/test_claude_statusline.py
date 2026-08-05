@@ -1,4 +1,5 @@
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -31,6 +32,78 @@ class ClaudeStatuslineTests(unittest.TestCase):
             claude_home=self.claude_home,
             cursor_home=self.root / "home" / ".cursor",
         )
+
+    def _run_real_statusline(
+        self, payload: dict | str
+    ) -> subprocess.CompletedProcess[str]:
+        script = Path(__file__).resolve().parents[1] / "global/claude/statusline-command.sh"
+        raw = payload if isinstance(payload, str) else json.dumps(payload)
+        return subprocess.run(
+            ["bash", str(script)],
+            input=raw,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def test_real_statusline_preserves_sparse_fields(self) -> None:
+        result = self._run_real_statusline(
+            {
+                "workspace": {"current_dir": str(self.root)},
+                "model": {"display_name": "High"},
+                "context_window": {"used_percentage": 42},
+            }
+        )
+
+        self.assertEqual(0, result.returncode)
+        self.assertEqual("", result.stderr)
+        self.assertIn("High", result.stdout)
+        self.assertIn("(42%)", result.stdout)
+        self.assertNotIn("High (42)", result.stdout)
+
+    def test_real_statusline_accepts_null_pre_response_fields(self) -> None:
+        result = self._run_real_statusline(
+            {
+                "workspace": {"current_dir": str(self.root)},
+                "model": {"display_name": "Opus"},
+                "output_style": None,
+                "context_window": None,
+                "effort": None,
+                "thinking": None,
+            }
+        )
+
+        self.assertEqual(0, result.returncode)
+        self.assertEqual("", result.stderr)
+        self.assertIn("Opus", result.stdout)
+
+    def test_real_statusline_falls_back_for_malformed_json(self) -> None:
+        result = self._run_real_statusline("{not-json")
+
+        self.assertEqual(0, result.returncode)
+        self.assertEqual("", result.stderr)
+        self.assertEqual("Claude Code\n", result.stdout)
+
+    def test_real_statusline_renders_complete_high_effort_payload(self) -> None:
+        result = self._run_real_statusline(
+            {
+                "workspace": {"current_dir": str(self.root)},
+                "model": {"display_name": "Opus 4.1 (1M context)"},
+                "output_style": {"name": "default"},
+                "context_window": {
+                    "used_percentage": 42,
+                    "total_input_tokens": 420000,
+                    "context_window_size": 1000000,
+                },
+                "effort": {"level": "high"},
+                "thinking": {"enabled": True},
+            }
+        )
+
+        self.assertEqual(0, result.returncode)
+        self.assertEqual("", result.stderr)
+        self.assertIn("Opus 4.1 High (1M context)", result.stdout)
+        self.assertIn("420k/1m (42%)", result.stdout)
 
     def test_install_creates_executable_script_and_settings(self) -> None:
         from src.claude_statusline import install_claude_statusline
@@ -88,6 +161,36 @@ class ClaudeStatuslineTests(unittest.TestCase):
         settings = json.loads((self.claude_home / "settings.json").read_text(encoding="utf-8"))
         self.assertEqual("~/.claude/custom-statusline.sh", settings["statusLine"]["command"])
         self.assertEqual(2, settings["statusLine"]["padding"])
+
+    def test_install_only_replaces_exact_managed_statusline_commands(self) -> None:
+        from src.claude_statusline import install_claude_statusline
+
+        cases = {
+            "~/.claude/statusline-command.sh": "~/.claude/statusline-command.sh",
+            "bash ~/.claude/statusline-command.sh": "~/.claude/statusline-command.sh",
+            "/usr/bin/bash ~/.claude/statusline-command.sh": "~/.claude/statusline-command.sh",
+            "/tmp/custom/statusline-command.sh": "/tmp/custom/statusline-command.sh",
+            "bash /tmp/custom/statusline-command.sh": "bash /tmp/custom/statusline-command.sh",
+            "~/.claude/statusline-command.sh --compact": "~/.claude/statusline-command.sh --compact",
+            "bash -c ~/.claude/statusline-command.sh": "bash -c ~/.claude/statusline-command.sh",
+            "printf statusline-command.sh": "printf statusline-command.sh",
+            "bash '~/.claude/statusline-command.sh": "bash '~/.claude/statusline-command.sh",
+        }
+
+        for command, expected in cases.items():
+            with self.subTest(command=command):
+                settings_path = self.claude_home / "settings.json"
+                self.claude_home.mkdir(parents=True, exist_ok=True)
+                settings_path.write_text(
+                    json.dumps({"statusLine": {"type": "command", "command": command}})
+                    + "\n",
+                    encoding="utf-8",
+                )
+
+                install_claude_statusline(self._paths())
+
+                settings = json.loads(settings_path.read_text(encoding="utf-8"))
+                self.assertEqual(expected, settings["statusLine"]["command"])
 
     def test_install_preserves_user_authored_script(self) -> None:
         from src.claude_statusline import install_claude_statusline

@@ -48,18 +48,31 @@ SEP_END=$'\033[38;2;46;36;32m'
 # ---- gather Claude Code session data ----
 # A single jq call (instead of nine) to cut process-fork overhead, since this
 # script runs on every statusline render.
-IFS=$'\t' read -r cwd model style used_pct used_tokens total_tokens effort_level thinking_enabled <<<"$(
-  echo "$input" | jq -r '[
-    .workspace.current_dir,
-    .model.display_name,
-    (.output_style.name // empty),
-    (.context_window.used_percentage // empty),
-    (.context_window.total_input_tokens // empty),
-    (.context_window.context_window_size // empty),
-    (.effort.level // empty),
-    (.thinking.enabled // false)
-  ] | @tsv'
-)"
+FIELD_SEP=$'\x1f'
+if ! parsed="$(
+  printf '%s' "$input" | jq -r --arg sep "$FIELD_SEP" '
+    [
+      (.workspace.current_dir // .cwd // ""),
+      (.model.display_name // ""),
+      (.output_style.name // ""),
+      (.context_window.used_percentage // ""),
+      (.context_window.total_input_tokens // ""),
+      (.context_window.context_window_size // ""),
+      (.effort.level // ""),
+      (.thinking.enabled // false)
+    ]
+    | map(tostring)
+    | join($sep)
+  ' 2>/dev/null
+)"; then
+  printf '%s\n' 'Claude Code'
+  exit 0
+fi
+
+IFS="$FIELD_SEP" read -r cwd model style used_pct used_tokens total_tokens effort_level thinking_enabled <<<"$parsed"
+[[ "$used_pct" =~ ^[0-9]+([.][0-9]+)?$ ]] || used_pct=""
+[[ "$used_tokens" =~ ^[0-9]+$ ]] || used_tokens=""
+[[ "$total_tokens" =~ ^[0-9]+$ ]] || total_tokens=""
 
 # The model display_name sometimes bakes in a trailing bracket like
 # "Opus 4.8 (1M context)". Split that off so we can re-append it AFTER the
@@ -88,7 +101,12 @@ format_tokens() {
 }
 
 # ---- directory segment (truncate to last 3 path components, like starship) ----
-dir_display=$(echo "$cwd" | sed "s|^$HOME|~|")
+dir_display="$cwd"
+if [[ "$cwd" == "$HOME" ]]; then
+  dir_display="~"
+elif [[ "$cwd" == "$HOME/"* ]]; then
+  dir_display="~${cwd#"$HOME"}"
+fi
 IFS='/' read -ra parts <<< "$dir_display"
 count=${#parts[@]}
 if [ "$count" -gt 3 ]; then

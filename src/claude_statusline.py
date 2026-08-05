@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import stat
 from dataclasses import dataclass
@@ -15,6 +16,14 @@ from .paths import AgentbotPaths
 MANAGED_MARKER = "# Managed by Agentbot."
 STATUSLINE_SCRIPT_NAME = "statusline-command.sh"
 STATUSLINE_SETTINGS_COMMAND = f"~/.claude/{STATUSLINE_SCRIPT_NAME}"
+_STATUSLINE_SHELL_WRAPPERS = {
+    "bash",
+    "sh",
+    "/bin/bash",
+    "/bin/sh",
+    "/usr/bin/bash",
+    "/usr/bin/sh",
+}
 
 
 @dataclass(frozen=True)
@@ -283,12 +292,24 @@ def _settings_points_at_managed(settings_path: Path) -> bool:
     return bool(command) and _is_managed_statusline_command(command)
 
 
+def _normalized_command_path(value: str) -> Path | None:
+    expanded = Path(os.path.expanduser(value))
+    if not expanded.is_absolute():
+        return None
+    return expanded.resolve(strict=False)
+
+
 def _is_managed_statusline_command(command: str) -> bool:
-    expanded = os.path.expanduser(command.strip())
-    managed = os.path.expanduser(STATUSLINE_SETTINGS_COMMAND)
-    if expanded == managed:
-        return True
-    # Accept "bash ~/.claude/statusline-command.sh" style wrappers.
-    return expanded.endswith(f"/{STATUSLINE_SCRIPT_NAME}") or expanded.endswith(
-        STATUSLINE_SCRIPT_NAME
-    )
+    try:
+        tokens = shlex.split(command, comments=False, posix=True)
+    except ValueError:
+        return False
+    if len(tokens) == 1:
+        candidate = tokens[0]
+    elif len(tokens) == 2 and tokens[0] in _STATUSLINE_SHELL_WRAPPERS:
+        candidate = tokens[1]
+    else:
+        return False
+    observed = _normalized_command_path(candidate)
+    managed = _normalized_command_path(STATUSLINE_SETTINGS_COMMAND)
+    return observed is not None and managed is not None and observed == managed

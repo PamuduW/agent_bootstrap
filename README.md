@@ -77,8 +77,8 @@ Curated upstreams are listed in [`skills.sources.yaml`](skills.sources.yaml). In
 ./install.sh skills install   # idempotent install from manifest, then refresh Claude/Codex outputs
 ./install.sh skills update    # npx skills update -g + Claude bridge + Codex symlinks
 ./install.sh skills upgrade   # alias for skills update
-./install.sh update --dry-run # repo-first reconciliation preview
-./install.sh update --yes     # confirmed repo-first reconciliation
+./install.sh update --dry-run # write-free reconciliation and managed-surface preview
+./install.sh update --yes     # pre-approve source-owned skill/manifest deltas
 ./install.sh upgrade --yes    # alias for the repo-first reconciliation
 ./install.sh skills list
 ./install.sh skills doctor
@@ -207,9 +207,12 @@ The same preserved-original and review-copy behavior applies to the rendered
 files under `~/.codex` and `~/.claude`. Global render also installs the managed
 Claude Code status line script at `~/.claude/statusline-command.sh` (from
 `global/claude/statusline-command.sh`) and merges a `statusLine` entry into
-`~/.claude/settings.json` when that slot is free. `./install.sh update` now also previews/applies registered workspace resync and
-managed global Codex/Claude outputs (including the statusline) after skill
-reconciliation, so one update brings the machine surfaces current.
+`~/.claude/settings.json` when that slot is free. Plain `./install.sh update`
+refreshes registered workspaces and managed global Codex/Claude outputs
+(including the statusline) after successful or no-delta skill reconciliation.
+`--dry-run` previews both reconciliation and managed surfaces without writing;
+`--yes` pre-approves source-owned skill additions, removals, and manifest
+changes that would otherwise return `confirmation_required`.
 
 Re-link after moving the clone by running `./install.sh install` explicitly.
 
@@ -219,7 +222,7 @@ Re-link after moving the clone by running `./install.sh install` explicitly.
 ./install.sh global     # re-render ~/.codex and ~/.claude outputs from global/AGENTS.md
 ./install.sh status     # skills count + global baseline status
 ./install.sh doctor     # validate manifest, locks, and managed agent skill links
-./install.sh update --dry-run # preview source-owned skill changes
+./install.sh update --dry-run # preview skills and managed surfaces without writing
 ./install.sh workspace ~/Dev/existing-project
 ./install.sh workspaces
 ./install.sh resync --dry-run --all
@@ -264,6 +267,13 @@ When `npx skills` reports that a source repository deleted a skill, Agentbot
 automatically approves removal of that source-owned local skill from the global
 store and lock; unrelated reconciliation changes still use the normal
 confirmation flow.
+
+Plain `agentbot update` is mutating once reconciliation can proceed safely: it
+refreshes upstream skills, then registered workspaces and managed global
+outputs. `--dry-run` is the write-free preview. `--yes` does not turn rendering
+on; it pre-approves source-owned additions, removals, and manifest edits that
+would otherwise require confirmation. The dedicated `resync` command remains
+preview-by-default and still needs `--yes` to apply.
 
 From the TTY menu, **Update** checks the repository first. If it is behind, a
 colored repository table is shown before the fast-forward pull prompt; after a

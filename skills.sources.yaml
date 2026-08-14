@@ -53,6 +53,26 @@ sources:
     skills:
       - literature-review
 
+  - id: deslop
+    repo: brycewang-stanford/Auto-Empirical-Research-Skills
+    skills:
+      - deslop
+
+  - id: humanizer
+    repo: blader/humanizer
+    skills:
+      - humanizer
+
+  - id: simple-english
+    repo: AminBlg/SimpleEnglish
+    skills:
+      - simple-english
+
+  - id: writing-clearly-and-concisely
+    repo: obra/the-elements-of-style
+    skills:
+      - writing-clearly-and-concisely
+
   - id: akindu-agent-skills
     repo: Akindu23/my-agent-skills
     skills: all

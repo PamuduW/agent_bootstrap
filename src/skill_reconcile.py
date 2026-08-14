@@ -236,11 +236,6 @@ def _canonical_after_removals(path: Path, skills: set[str]) -> str:
             changed = True
             continue
         output.append(line)
-    missing = [skill for skill in sorted(skills) if not any(f"`{skill}`" in line for line in lines)]
-    if missing:
-        raise ReconcileError(
-            f"canonical skill table {path} does not advertise: {', '.join(missing)}"
-        )
     return "".join(output) if changed else content
 
 

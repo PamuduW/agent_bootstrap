@@ -225,6 +225,10 @@ def _canonical_after_removals(path: Path, skills: set[str]) -> str:
     except OSError as error:
         raise ReconcileError(f"unable to read canonical skill table {path}: {error}") from error
     lines = content.splitlines(keepends=True)
+    has_skill_table = any(re.search(r"\|\s*`[^`]+`\s*\|", line) for line in lines)
+    if not has_skill_table:
+        return content
+
     changed = False
     output: list[str] = []
     for line in lines:
@@ -241,7 +245,10 @@ def _canonical_after_removals(path: Path, skills: set[str]) -> str:
 
 
 def _snapshot(paths: Iterable[Path], root: Path) -> Path:
-    backup = Path(tempfile.mkdtemp(prefix="reconcile-", dir=root))
+    # Keep rollback artifacts outside the repository. Failed reconciliations
+    # retain their backup for recovery, so placing it under ``root`` would
+    # leave untracked files that block the next Agentbot update.
+    backup = Path(tempfile.mkdtemp(prefix="agentbot-reconcile-"))
     manifest: list[str] = []
     for index, path in enumerate(dict.fromkeys(paths)):
         if not (path.exists() or path.is_symlink()):

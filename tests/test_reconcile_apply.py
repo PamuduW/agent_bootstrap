@@ -112,6 +112,26 @@ class ReconcileApplyTests(unittest.TestCase):
         self.assertNotIn("`gone`", (self.root / "base" / "AGENTS.md").read_text(encoding="utf-8"))
         self.assertNotIn("gone", (self.root / "skills.sources.yaml").read_text(encoding="utf-8"))
 
+    def test_explicit_removal_succeeds_without_canonical_skill_tables(self) -> None:
+        from src.skill_reconcile import apply_reconcile_plan, build_reconcile_plan
+        from src.skills_sources import load_skills_sources
+
+        (self.root / "base" / "AGENTS.md").write_text("# canonical baseline\n", encoding="utf-8")
+        (self.root / "AGENTS.md").write_text("# repository policy\n", encoding="utf-8")
+        config = load_skills_sources(self.root / "skills.sources.yaml")
+        plan = build_reconcile_plan(
+            config,
+            discovered={"explicit": ("keep",), "wildcard": ()},
+            lock=json.loads(self.lock.read_text(encoding="utf-8")),
+        )
+        paths, patches = self._paths()
+        with patches[0], patches[1]:
+            result = apply_reconcile_plan(paths, config, plan, confirm=True)
+
+        self.assertEqual("applied", result.status)
+        self.assertFalse((self.agents / "gone").exists())
+        self.assertNotIn("gone", (self.root / "skills.sources.yaml").read_text(encoding="utf-8"))
+
     def test_unconfirmed_plan_is_preview_only(self) -> None:
         from src.skill_reconcile import apply_reconcile_plan, build_reconcile_plan
         from src.skills_sources import load_skills_sources
@@ -178,6 +198,7 @@ class ReconcileApplyTests(unittest.TestCase):
             result = apply_reconcile_plan(paths, config, plan, confirm=True)
         self.assertEqual("failed", result.status)
         self.assertIsNotNone(result.backup_path)
+        self.assertNotIn(self.root, result.backup_path.parents)
         self.assertEqual(before, (self.root / "skills.sources.yaml").read_text(encoding="utf-8"))
 
 

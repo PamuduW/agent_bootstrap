@@ -23,8 +23,8 @@ test_menu_snapshot() {
 	[[ "$output" == *'=== Agentbot ==='* ]] || return 1
 	[[ "$output" == *$'\033[1m\033[38;5;208m=== Agentbot ===\033[0m'* ]] || return 1
 	[[ "$output" == *'Agentbot'* ]] || return 1
-	[[ "$output" == *'1. Check status'* && "$output" == *'10. Quit'* ]] || return 1
-	[[ "$output" == *$'10. Quit\n\n'* ]] || return 1
+	[[ "$output" == *'1. Check status'* && "$output" == *'9. Quit'* ]] || return 1
+	[[ "$output" == *$'9. Quit\n\n'* ]] || return 1
 	[[ "$output" == *'Graphify Lib'* ]] || return 1
 	[[ "$output" != *'Repo setup (agentbot)'* ]] || return 1
 	[[ "$output" == *'Workspaces'* ]] || return 1
@@ -70,6 +70,15 @@ test_menu_exports_tui_render_mode_to_backend() (
 	}
 	agentbot_menu_loop
 	[[ "$calls" -eq 1 ]]
+)
+
+test_status_combines_status_and_doctor_backends() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local calls="$TEST_ROOT/status.calls"
+	: >"$calls"
+	agentbot_run_backend() { printf '%s\n' "$*" >>"$calls"; }
+	agentbot_menu_status
+	[[ "$(<"$calls")" == $'status\ndoctor' ]]
 )
 
 test_command_lib_matches_colored_table_contract() (
@@ -198,11 +207,10 @@ test_dispatch_order_and_return() (
 	agentbot_menu_token() { printf 'token\n' >>"$calls"; }
 	agentbot_menu_workspaces() { printf 'workspaces\n' >>"$calls"; }
 	agentbot_menu_command_lib() { printf 'command_lib\n' >>"$calls"; }
-	agentbot_menu_doctor() { printf 'doctor\n' >>"$calls"; }
 	agentbot_menu_graphify_lib() { printf 'graphify_lib\n' >>"$calls"; }
 	agentbot_menu_dotfiles() { printf 'dotfiles\n' >>"$calls"; }
 	agentbot_menu_loop
-	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\npause\nworkspaces\ncommand_lib\npause\ndoctor\npause\ngraphify_lib\npause\ndotfiles' ]]
+	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\npause\nworkspaces\ncommand_lib\npause\nstatus\npause\ngraphify_lib\npause\ndotfiles' ]]
 )
 
 test_graphify_lib_is_read_only_and_documents_platform_forms() (
@@ -254,7 +262,7 @@ test_main_menu_rebuilds_after_workspaces_returns() (
 	ui_clear() { :; }
 	ui_pause() { :; }
 	agentbot_menu_loop
-	[[ "$(<"$capture")" == 'Agentbot|Agentbot|Check status Install Agentbot Update Configure GitHub token Workspaces Command Lib Doctor Graphify Lib Dotfiles Quit' ]]
+	[[ "$(<"$capture")" == 'Agentbot|Agentbot|Check status Install Agentbot Update Configure GitHub token Workspaces Command Lib Graphify Lib Dotfiles Quit' ]]
 )
 
 test_workspaces_menu_actions() (

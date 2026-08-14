@@ -25,8 +25,6 @@ source "$_AGENTBOT_MENU_DIR/menus/workspaces.sh"
 # shellcheck disable=SC1091
 source "$_AGENTBOT_MENU_DIR/menus/command_lib.sh"
 # shellcheck disable=SC1091
-source "$_AGENTBOT_MENU_DIR/menus/doctor.sh"
-# shellcheck disable=SC1091
 source "$_AGENTBOT_MENU_DIR/menus/graphify.sh"
 # shellcheck disable=SC1091
 source "$_AGENTBOT_MENU_DIR/menus/dotfiles.sh"
@@ -42,12 +40,11 @@ _agentbot_menu_setup() {
 		'Configure GitHub token'
 		'Workspaces'
 		'Command Lib'
-		'Doctor'
 		'Graphify Lib'
 		'Dotfiles'
 		'Quit'
 	)
-	MENU_SIMPLE_KEYS=(status install update token workspaces command_lib doctor graphify_lib dotfiles quit)
+	MENU_SIMPLE_KEYS=(status install update token workspaces command_lib graphify_lib dotfiles quit)
 	MENU_SIMPLE_DESCS=(
 		$'Check the installed Agentbot components and baseline.\nRead-only status; no updates or writes are performed.'
 		$'Install skills, refresh rendered outputs, run Doctor, and link agentbot.\nUse the explicit install action when changes are intended.'
@@ -55,7 +52,6 @@ _agentbot_menu_setup() {
 		$'Configure the optional shared GitHub API token.\nThe token is stored outside this repository.'
 		$'List, preview, and resync locally registered workspaces.\nApply actions require explicit confirmation.'
 		$'Show Agentbot commands and whether they read or mutate state.\nUse this as the local command reference.'
-		$'Validate skills, rendered outputs, links, and configuration.\nWarnings and errors are reported by the backend.'
 		$'Show Graphify assistant and shell commands plus safety boundaries.\nRead-only; Install and Update own generic skill synchronization.'
 		$'Open the sibling Dotfiles installer.\nUnavailable until the reciprocal bridge slice is installed.'
 		$'Exit the Agentbot menu.\nReturn to the calling process.'
@@ -68,11 +64,10 @@ _agentbot_menu_setup() {
 			'Configure GitHub token'
 			'Workspaces'
 			'Command Lib'
-			'Doctor'
 			'Graphify Lib'
 			'Quit'
 		)
-		MENU_SIMPLE_KEYS=(status install update token workspaces command_lib doctor graphify_lib quit)
+		MENU_SIMPLE_KEYS=(status install update token workspaces command_lib graphify_lib quit)
 		MENU_SIMPLE_DESCS=(
 			"${MENU_SIMPLE_DESCS[0]}"
 			"${MENU_SIMPLE_DESCS[1]}"
@@ -81,8 +76,7 @@ _agentbot_menu_setup() {
 			"${MENU_SIMPLE_DESCS[4]}"
 			"${MENU_SIMPLE_DESCS[5]}"
 			"${MENU_SIMPLE_DESCS[6]}"
-			"${MENU_SIMPLE_DESCS[7]}"
-			"${MENU_SIMPLE_DESCS[9]}"
+			"${MENU_SIMPLE_DESCS[8]}"
 		)
 	fi
 }

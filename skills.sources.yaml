@@ -1,87 +1,59 @@
-# skills.sources.yaml — curated upstream skill sources for agent_bootstrap
-# Install template (every entry):
-#   npx skills add <repo> --skill <name> ... \
-#     -a cursor -a codex -a claude-code -a github-copilot -g -y
-# Use `skills: all` to install every skill supplied by a source; otherwise use
-# a YAML list of explicit skill names.
-#
-# Lockfile: global installs (-g) pin versions in ~/.agents/.skill-lock.json.
-# This repo file stays a stub unless you switch to project-scoped installs.
-
 version: 1
 agents:
-  - cursor
-  - codex
-  - claude-code
-  - github-copilot
+- cursor
+- codex
+- claude-code
+- github-copilot
 scope: global
-
 sources:
-  - id: superpowers
-    repo: obra/superpowers
-    skills:
-      - brainstorming
-      - writing-plans
-      - executing-plans
-      - subagent-driven-development
-      - test-driven-development
-
-  - id: devops-fullstack
-    # NOTE: upstream org slug is literally "full-statck-skills" (misspelled on GitHub).
-    # Verified: https://github.com/full-statck-skills/devops-skills — part of partme-ai/full-stack-skills ecosystem.
-    repo: full-statck-skills/devops-skills
-    skills:
-      - kubernetes
-      - terraform
-      - gitlab-ci
-
-  - id: devops-anmol
-    repo: anmolnagpal/devops-skills
-    skills:
-      - k8s
-      - github-actions
-      - owasp
-
-  - id: claude-devops
-    repo: jeffallan/claude-skills
-    skills:
-      - kubernetes-specialist
-      - devops-engineer
-
-  - id: research-papers
-    repo: ShaishavMaisuria/research-paper-lifecycle-skills
-    skills:
-      - literature-review
-
-  - id: deslop
-    repo: brycewang-stanford/Auto-Empirical-Research-Skills
-    skills:
-      - deslop
-
-  - id: humanizer
-    repo: blader/humanizer
-    skills:
-      - humanizer
-
-  - id: simple-english
-    repo: AminBlg/SimpleEnglish
-    skills:
-      - simple-english
-
-  - id: writing-clearly-and-concisely
-    repo: obra/the-elements-of-style
-    skills:
-      - writing-clearly-and-concisely
-
-  - id: akindu-agent-skills
-    repo: Akindu23/my-agent-skills
-    skills: all
-
-  - id: pamudu-agent-bootstrap-skills
-    repo: PamuduW/agent_bootstrap_skills
-    skills: all
-
-  - id: obsidian-memory
-    repo: AdamTylerLynch/obsidian-agent-memory-skills
-    skills: []
-    enabled: false  # not advertised in base templates
+- id: superpowers
+  repo: obra/superpowers
+  skills:
+  - brainstorming
+  - writing-plans
+  - executing-plans
+  - subagent-driven-development
+  - test-driven-development
+- id: devops-fullstack
+  repo: full-statck-skills/devops-skills
+  skills:
+  - kubernetes
+  - terraform
+  - gitlab-ci
+- id: devops-anmol
+  repo: anmolnagpal/devops-skills
+  skills:
+  - k8s
+  - github-actions
+  - owasp
+- id: claude-devops
+  repo: jeffallan/claude-skills
+  skills:
+  - kubernetes-specialist
+  - devops-engineer
+- id: research-papers
+  repo: ShaishavMaisuria/research-paper-lifecycle-skills
+  skills:
+  - literature-review
+- id: deslop
+  repo: brycewang-stanford/Auto-Empirical-Research-Skills
+  skills: []
+- id: humanizer
+  repo: blader/humanizer
+  skills: []
+- id: simple-english
+  repo: AminBlg/SimpleEnglish
+  skills: []
+- id: writing-clearly-and-concisely
+  repo: obra/the-elements-of-style
+  skills: []
+- id: akindu-agent-skills
+  repo: Akindu23/my-agent-skills
+  skills: all
+- id: pamudu-agent-bootstrap-skills
+  repo: PamuduW/agent_bootstrap_skills
+  skills: all
+- id: obsidian-memory
+  repo: AdamTylerLynch/obsidian-agent-memory-skills
+  skills: []
+  enabled: false

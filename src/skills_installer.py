@@ -278,7 +278,7 @@ def build_add_argv(
     if not source.repo:
         raise ValueError(f"source {source.id!r} has no repo")
 
-    argv = [npx, "skills", "add", source.repo]
+    argv = [npx, "skills", "add", source.repo, "--full-depth"]
     for skill in source.skills:
         argv.extend(["--skill", skill])
     for agent in agents:

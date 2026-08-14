@@ -94,7 +94,7 @@ install_source() {
   done
 
   if [[ -n "${AGENTBOT_QUIET:-}${AGENTBOT_TUI:-}" ]]; then
-    if github_token_child npx skills add "$repo" "${skill_flags[@]}" "${AGENT_FLAGS[@]}" "${GLOBAL_FLAGS[@]}" </dev/null >/dev/null 2>&1; then
+    if github_token_child npx skills add "$repo" --full-depth "${skill_flags[@]}" "${AGENT_FLAGS[@]}" "${GLOBAL_FLAGS[@]}" </dev/null >/dev/null 2>&1; then
       info "installed skills from ${repo}"
     else
       die "failed installing skills from ${repo}"
@@ -103,7 +103,7 @@ install_source() {
   fi
 
   info "installing skills from ${repo}"
-  github_token_child npx skills add "$repo" "${skill_flags[@]}" "${AGENT_FLAGS[@]}" "${GLOBAL_FLAGS[@]}" </dev/null
+  github_token_child npx skills add "$repo" --full-depth "${skill_flags[@]}" "${AGENT_FLAGS[@]}" "${GLOBAL_FLAGS[@]}" </dev/null
 }
 
 install_all() {

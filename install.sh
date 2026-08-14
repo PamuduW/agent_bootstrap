@@ -256,7 +256,11 @@ run_install() {
   run_bootstrap_backend || rc=$?
   cleanup_owned_old_agentboot_link
   link_agentbot
-  log_info "Agentbot install complete"
+  if ((rc == 0)); then
+    log_info "Agentbot install complete"
+  else
+    warn "Agentbot install failed (exit ${rc})"
+  fi
   return "$rc"
 }
 

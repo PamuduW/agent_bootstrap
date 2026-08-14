@@ -131,7 +131,7 @@ test_saved_update_probe_normal_and_quiet() (
 test_npx_argv_contract() (
   reset_state
   run_skills_script install >/dev/null || return 1
-  grep -q $'^npx\tskills\tadd\t[^\t]*\t--skill\t.*\t-a\tcursor\t-a\tcodex\t-a\tclaude-code\t-a\tgithub-copilot\t-g\t-y\tvalid=no\tsource=none$' "$TEST_COMMAND_LOG" || return 1
+  grep -q $'^npx\tskills\tadd\t[^\t]*\t--full-depth\t--skill\t.*\t-a\tcursor\t-a\tcodex\t-a\tclaude-code\t-a\tgithub-copilot\t-g\t-y\tvalid=no\tsource=none$' "$TEST_COMMAND_LOG" || return 1
   reset_state
   run_skills_script update >/dev/null || return 1
   grep -Fqx $'npx\tskills\tupdate\t--help\tvalid=no\tsource=none' "$TEST_COMMAND_LOG" || return 1

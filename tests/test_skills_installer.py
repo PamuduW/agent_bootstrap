@@ -61,6 +61,20 @@ sources:
             stderr="",
         )
 
+    def test_build_add_argv_enables_full_depth_skill_discovery(self) -> None:
+        from src.skills_installer import build_add_argv
+        from src.skills_sources import SkillSourceEntry
+
+        source = SkillSourceEntry(
+            id="deslop",
+            repo="brycewang-stanford/Auto-Empirical-Research-Skills",
+            skills=["deslop"],
+        )
+
+        command = build_add_argv(source, agents=["codex"])
+
+        self.assertIn("--full-depth", command)
+
     @patch("src.skills_installer._clone_github_source")
     @patch("src.skills_installer.run_install_command")
     def test_install_skills_runs_npx_for_active_sources(self, mock_run, mock_clone) -> None:

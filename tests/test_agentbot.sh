@@ -119,6 +119,19 @@ test_install_link_and_owned_cleanup() (
 	[[ "$(readlink "$HOME/bin/agentbot")" == "$ROOT/bin/agentbot" && ! -e "$HOME/bin/agentboot" && ! -L "$HOME/bin/agentboot" ]]
 )
 
+test_install_reports_backend_failure() (
+	AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+	run_bootstrap_backend() { return 7; }
+	local output rc
+	set +e
+	output="$(run_install 2>&1)"
+	rc=$?
+	set -e
+	[[ "$rc" -eq 7 ]] || return 1
+	[[ "$output" != *"Agentbot install complete"* ]] || return 1
+	[[ "$output" == *"Agentbot install failed (exit 7)"* ]]
+)
+
 test_foreign_old_paths_are_preserved() (
 	AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
 	mkdir -p "$HOME/bin"
@@ -161,6 +174,7 @@ if [[ -x "$AGENTBOT" ]]; then
 	check 'boot without a target registers the current directory' test_boot_without_target_registers_pwd
 	check 'boot rejects invalid inputs before partial writes' test_boot_validation_is_atomic
 	check 'explicit install links agentbot and cleans owned old link' test_install_link_and_owned_cleanup
+	check 'install reports backend failures without claiming completion' test_install_reports_backend_failure
 	check 'foreign and regular old paths are preserved' test_foreign_old_paths_are_preserved
 	check 'help and executable expose no old public surface' test_environment_and_no_old_binary
 	check 'agentbot help describes full command options and configuration' test_agentbot_help_describes_full_command_options

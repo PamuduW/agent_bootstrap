@@ -27,6 +27,8 @@ source "$_AGENTBOT_MENU_DIR/menus/command_lib.sh"
 # shellcheck disable=SC1091
 source "$_AGENTBOT_MENU_DIR/menus/graphify.sh"
 # shellcheck disable=SC1091
+source "$_AGENTBOT_MENU_DIR/menus/libraries.sh"
+# shellcheck disable=SC1091
 source "$_AGENTBOT_MENU_DIR/menus/dotfiles.sh"
 
 # shellcheck disable=SC2034
@@ -39,20 +41,18 @@ _agentbot_menu_setup() {
 		'Update'
 		'Configure GitHub token'
 		'Workspaces'
-		'Command Lib'
-		'Graphify Lib'
+		'Libraries'
 		'Dotfiles'
 		'Quit'
 	)
-	MENU_SIMPLE_KEYS=(status install update token workspaces command_lib graphify_lib dotfiles quit)
+	MENU_SIMPLE_KEYS=(status install update token workspaces libraries dotfiles quit)
 	MENU_SIMPLE_DESCS=(
 		$'Check the installed Agentbot components and baseline.\nRead-only status; no updates or writes are performed.'
 		$'Install skills, refresh rendered outputs, run Doctor, and link agentbot.\nUse the explicit install action when changes are intended.'
 		$'Update the repository, reconcile skills, and refresh workspaces plus global outputs.\nA preview and explicit confirmation are required before mutation.'
 		$'Configure the optional shared GitHub API token.\nThe token is stored outside this repository.'
 		$'List, preview, and resync locally registered workspaces.\nApply actions require explicit confirmation.'
-		$'Show Agentbot commands and whether they read or mutate state.\nUse this as the local command reference.'
-		$'Show Graphify assistant and shell commands plus safety boundaries.\nRead-only; Install and Update own generic skill synchronization.'
+		$'Open the Agentbot and Graphify command reference libraries.\nRead-only command and safety information.'
 		$'Open the sibling Dotfiles installer.\nUnavailable until the reciprocal bridge slice is installed.'
 		$'Exit the Agentbot menu.\nReturn to the calling process.'
 	)
@@ -63,11 +63,10 @@ _agentbot_menu_setup() {
 			'Update'
 			'Configure GitHub token'
 			'Workspaces'
-			'Command Lib'
-			'Graphify Lib'
+			'Libraries'
 			'Quit'
 		)
-		MENU_SIMPLE_KEYS=(status install update token workspaces command_lib graphify_lib quit)
+		MENU_SIMPLE_KEYS=(status install update token workspaces libraries quit)
 		MENU_SIMPLE_DESCS=(
 			"${MENU_SIMPLE_DESCS[0]}"
 			"${MENU_SIMPLE_DESCS[1]}"
@@ -75,8 +74,7 @@ _agentbot_menu_setup() {
 			"${MENU_SIMPLE_DESCS[3]}"
 			"${MENU_SIMPLE_DESCS[4]}"
 			"${MENU_SIMPLE_DESCS[5]}"
-			"${MENU_SIMPLE_DESCS[6]}"
-			"${MENU_SIMPLE_DESCS[8]}"
+			"${MENU_SIMPLE_DESCS[7]}"
 		)
 	fi
 }
@@ -89,9 +87,8 @@ agentbot_menu_dispatch() {
 	update) agentbot_menu_update || rc=$? ;;
 	token) agentbot_menu_token || rc=$? ;;
 	workspaces) agentbot_menu_workspaces || rc=$? ;;
-	command_lib) agentbot_menu_command_lib || rc=$? ;;
+	libraries) agentbot_menu_libraries || rc=$? ;;
 	doctor) agentbot_menu_doctor || rc=$? ;;
-	graphify_lib) agentbot_menu_graphify_lib || rc=$? ;;
 	dotfiles) agentbot_menu_dotfiles || rc=$? ;;
 	*) printf 'Unknown Agentbot menu action: %s\n' "$choice" >&2; rc=2 ;;
 	esac

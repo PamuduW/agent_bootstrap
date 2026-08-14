@@ -23,9 +23,9 @@ test_menu_snapshot() {
 	[[ "$output" == *'=== Agentbot ==='* ]] || return 1
 	[[ "$output" == *$'\033[1m\033[38;5;208m=== Agentbot ===\033[0m'* ]] || return 1
 	[[ "$output" == *'Agentbot'* ]] || return 1
-	[[ "$output" == *'1. Check status'* && "$output" == *'9. Quit'* ]] || return 1
-	[[ "$output" == *$'9. Quit\n\n'* ]] || return 1
-	[[ "$output" == *'Graphify Lib'* ]] || return 1
+	[[ "$output" == *'1. Check status'* && "$output" == *'8. Quit'* ]] || return 1
+	[[ "$output" == *$'8. Quit\n\n'* ]] || return 1
+	[[ "$output" == *'Libraries'* ]] || return 1
 	[[ "$output" != *'Repo setup (agentbot)'* ]] || return 1
 	[[ "$output" == *'Workspaces'* ]] || return 1
 	[[ "$output" == *'Check the installed Agentbot components and baseline.'* ]] || return 1
@@ -192,7 +192,7 @@ test_dispatch_order_and_return() (
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
 	local calls="$TEST_ROOT/menu.calls"
 	: >"$calls"
-	MENU_TEST_CHOICES=(status install update token workspaces command_lib doctor graphify_lib dotfiles quit)
+	MENU_TEST_CHOICES=(status install update token workspaces libraries dotfiles quit)
 	MENU_TEST_INDEX=0
 	menu_simple_run() {
 		local choice="${MENU_TEST_CHOICES[$MENU_TEST_INDEX]}"
@@ -206,11 +206,10 @@ test_dispatch_order_and_return() (
 	agentbot_menu_update() { printf 'update\n' >>"$calls"; }
 	agentbot_menu_token() { printf 'token\n' >>"$calls"; }
 	agentbot_menu_workspaces() { printf 'workspaces\n' >>"$calls"; }
-	agentbot_menu_command_lib() { printf 'command_lib\n' >>"$calls"; }
-	agentbot_menu_graphify_lib() { printf 'graphify_lib\n' >>"$calls"; }
+	agentbot_menu_libraries() { printf 'libraries\n' >>"$calls"; }
 	agentbot_menu_dotfiles() { printf 'dotfiles\n' >>"$calls"; }
 	agentbot_menu_loop
-	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\npause\nworkspaces\ncommand_lib\npause\nstatus\npause\ngraphify_lib\npause\ndotfiles' ]]
+	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\npause\nworkspaces\nlibraries\npause\ndotfiles' ]]
 )
 
 test_graphify_lib_is_read_only_and_documents_platform_forms() (
@@ -262,7 +261,19 @@ test_main_menu_rebuilds_after_workspaces_returns() (
 	ui_clear() { :; }
 	ui_pause() { :; }
 	agentbot_menu_loop
-	[[ "$(<"$capture")" == 'Agentbot|Agentbot|Check status Install Agentbot Update Configure GitHub token Workspaces Command Lib Graphify Lib Dotfiles Quit' ]]
+	[[ "$(<"$capture")" == 'Agentbot|Agentbot|Check status Install Agentbot Update Configure GitHub token Workspaces Libraries Dotfiles Quit' ]]
+)
+
+test_agentbot_libraries_submenu_uses_q_back() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local capture="$TEST_ROOT/agentbot-libraries-menu.capture"
+	menu_simple_run() {
+		printf '%s|%s|%s|%s\n' "$MENU_SIMPLE_TITLE" "$MENU_SIMPLE_BREADCRUMB" \
+			"${MENU_SIMPLE_LABELS[*]}" "${MENU_SIMPLE_KEYS[*]}" >"$capture"
+		return 1
+	}
+	agentbot_menu_libraries
+	[[ "$(<"$capture")" == 'Libraries|Agentbot › Libraries|Command Lib Graphify Lib|command_lib graphify_lib' ]]
 )
 
 test_workspaces_menu_actions() (

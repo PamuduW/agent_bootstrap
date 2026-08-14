@@ -16,6 +16,7 @@ prepare_existing() {
 	FAKE_GIT_STDOUT="${1:-git@github.com:PamuduW/dotfiles.git}"
 	FAKE_SIBLING_EXIT=0
 	export DOTFILES_HOME FAKE_GIT_STDOUT FAKE_SIBLING_EXIT
+	sibling_dotfiles_update_all() { :; }
 	: >"$TEST_SIBLING_LOG"
 }
 
@@ -23,6 +24,25 @@ test_existing_allowed_launch() {
 	prepare_existing
 	sibling_dotfiles_launch >/dev/null
 	grep -Fq $'sibling\tcaller=agentbot' "$TEST_SIBLING_LOG"
+}
+
+test_existing_launch_requires_both_repository_gates() {
+	prepare_existing
+	local gates="$TEST_ROOT/repo-gates"
+	: >"$gates"
+	sibling_dotfiles_update_all() { printf '%s\n' gated >>"$gates"; }
+	sibling_dotfiles_launch >/dev/null
+	[[ "$(<"$gates")" == gated ]] && grep -Fq $'sibling\tcaller=agentbot' "$TEST_SIBLING_LOG"
+}
+
+test_repository_gate_failure_stops_child_launch() {
+	prepare_existing
+	sibling_dotfiles_update_all() { return 23; }
+	set +e
+	sibling_dotfiles_launch >/dev/null 2>&1
+	local rc=$?
+	set -e
+	[[ "$rc" -eq 23 && ! -s "$TEST_SIBLING_LOG" ]]
 }
 
 install_alias_git_fake() {
@@ -154,6 +174,8 @@ FAKE
 }
 
 check 'existing allowlisted Dotfiles launches as a child' test_existing_allowed_launch
+check 'existing Dotfiles launch gates both repositories first' test_existing_launch_requires_both_repository_gates
+check 'repository gate failure stops Dotfiles child launch' test_repository_gate_failure_stops_child_launch
 check 'configured SSH alias resolving to Dotfiles is allowed' test_configured_alias_allowed
 check 'configured SSH alias resolving to another path is rejected' test_configured_alias_wrong_path_rejected
 check 'wrong or token-bearing Dotfiles origin is rejected' test_invalid_origin_stops

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 
+# shellcheck source=scripts/lib/repo_update.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/repo_update.sh"
+
 sibling_dotfiles_home() {
 	if [[ -n "${DOTFILES_HOME:-}" ]]; then
 		printf '%s\n' "$DOTFILES_HOME"
@@ -69,6 +72,40 @@ sibling_dotfiles_validate() {
 	fi
 }
 
+sibling_dotfiles_update_decision() {
+	local prompt answer=''
+	case "$1" in
+	pull-behind) prompt='Pull the repository commit(s) with --ff-only?' ;;
+	continue-ahead) prompt='The repository is ahead. Continue with the sibling installer?' ;;
+	*) return 1 ;;
+	esac
+	if [[ -n "${AGENTBOT_UPDATE_CONFIRM:-}" ]]; then
+		[[ "$AGENTBOT_UPDATE_CONFIRM" == yes ]]
+		return
+	fi
+	printf '%s [y/N] ' "$prompt" >/dev/tty || return 1
+	IFS= read -r answer </dev/tty || return 1
+	case "$answer" in y|Y|yes|YES) return 0 ;; esac
+	return 1
+}
+
+sibling_dotfiles_update_all() {
+	local home repo outcome=stopped reason=invalid agent_home
+	agent_home="${AGENTBOT_HOME:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)}"
+	home="$(sibling_dotfiles_home)"
+	for repo in "$agent_home" "$home"; do
+		if [[ "$repo" == "$agent_home" ]]; then
+			repo_update_run "$repo" sibling_dotfiles_update_decision outcome reason agent_bootstrap || return $?
+		else
+			repo_update_run "$repo" sibling_dotfiles_update_decision outcome reason dotfiles || return $?
+		fi
+		[[ "$outcome" != stopped ]] || {
+			printf 'Repository update check stopped: %s (%s).\n' "$repo" "$reason" >&2
+			return 1
+		}
+	done
+}
+
 sibling_dotfiles_confirm() {
 	local answer=''
 	if [[ -n "${SIBLING_DOTFILES_CONFIRM:-}" ]]; then
@@ -97,6 +134,7 @@ sibling_dotfiles_launch() {
 		}
 	fi
 	sibling_dotfiles_validate "$home" || return 1
+	sibling_dotfiles_update_all || return $?
 	(
 		cd "$home" || exit 1
 		SETUP_CALLER=agentbot ./install.sh

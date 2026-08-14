@@ -14,12 +14,17 @@ _repo_update_set_result() {
 }
 
 _repo_update_origin_allowed() {
-  local origin="$1" rewrite_rules="${2:-}"
+  local origin="$1" rewrite_rules="${2:-}" repository="${3:-agent_bootstrap}"
   local key target prefix matched_prefix='' matched_target='' resolved
 
   case "$origin" in
     *://*@*) return 1 ;;
-    git@github.com:PamuduW/agent_bootstrap.git|https://github.com/PamuduW/agent_bootstrap.git) return 0 ;;
+    git@github.com:PamuduW/agent_bootstrap.git|https://github.com/PamuduW/agent_bootstrap.git)
+      [[ "$repository" == agent_bootstrap ]] && return 0
+      ;;
+    git@github.com:PamuduW/dotfiles.git|https://github.com/PamuduW/dotfiles.git)
+      [[ "$repository" == dotfiles ]] && return 0
+      ;;
   esac
 
   while IFS=$' \t' read -r key target; do
@@ -40,9 +45,14 @@ _repo_update_origin_allowed() {
   [[ -n "$matched_prefix" ]] || return 1
   resolved="${matched_target}${origin#"$matched_prefix"}"
   case "$resolved" in
-    git@github.com:PamuduW/agent_bootstrap.git|https://github.com/PamuduW/agent_bootstrap.git) return 0 ;;
-    *) return 1 ;;
+    git@github.com:PamuduW/agent_bootstrap.git|https://github.com/PamuduW/agent_bootstrap.git)
+      [[ "$repository" == agent_bootstrap ]] && return 0
+      ;;
+    git@github.com:PamuduW/dotfiles.git|https://github.com/PamuduW/dotfiles.git)
+      [[ "$repository" == dotfiles ]] && return 0
+      ;;
   esac
+  return 1
 }
 
 _repo_update_read_changes() {
@@ -86,7 +96,7 @@ repo_update_classify_history() {
 }
 
 repo_update_run() {
-  local repo="$1" decision_fn="$2" outcome_name="$3" reason_name="$4"
+  local repo="$1" decision_fn="$2" outcome_name="$3" reason_name="$4" repository="${5:-agent_bootstrap}"
   local worktree bare origin branch upstream state reason rewrite_rules
 
   _repo_update_set_result "$outcome_name" "$reason_name" stopped invalid-repository
@@ -106,9 +116,9 @@ repo_update_run() {
     _repo_update_set_result "$outcome_name" "$reason_name" stopped invalid-origin
     return 0
   }
-  if ! _repo_update_origin_allowed "$origin"; then
+  if ! _repo_update_origin_allowed "$origin" '' "$repository"; then
     rewrite_rules="$(git config --global --get-regexp '^url\..*\.insteadof$' 2>/dev/null || true)"
-    _repo_update_origin_allowed "$origin" "$rewrite_rules" || {
+    _repo_update_origin_allowed "$origin" "$rewrite_rules" "$repository" || {
       _repo_update_set_result "$outcome_name" "$reason_name" stopped invalid-origin
       return 0
     }

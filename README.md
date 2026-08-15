@@ -29,7 +29,7 @@ The supported menu entrypoints are `./install.sh` on a controlling TTY and
 **Prerequisites:** Git, Python 3, Node.js (for `npx`). Install Python deps:
 
 ```bash
-python3 -m pip install -r requirements.txt
+python3 -m pip install -r requirements.txt 
 ```
 
 ### Clone paths

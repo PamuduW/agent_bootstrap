@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import subprocess
@@ -308,6 +309,27 @@ sources:
         self.assertEqual(0, result.returncode)
         self.assertEqual("ok", result.stdout)
         self.assertEqual("update", result.source_id)
+
+    @patch("src.skills_installer.subprocess.Popen")
+    def test_tui_install_command_streams_child_output(self, mock_popen) -> None:
+        from src.skills_installer import run_install_command
+
+        process = MagicMock(returncode=0)
+        process.stdout = iter(("checking source\n", "installed skills\n"))
+        process.wait.return_value = 0
+        mock_popen.return_value = process
+        output = io.StringIO()
+
+        with patch.dict(os.environ, {"AGENTBOT_TUI": "1"}, clear=False), patch(
+            "sys.stdout", output
+        ):
+            result = run_install_command(["npx", "skills", "add", "owner/repo"], source_id="repo")
+
+        mock_popen.assert_called_once()
+        self.assertEqual(0, result.returncode)
+        self.assertIn("checking source", output.getvalue())
+        self.assertIn("installed skills", output.getvalue())
+        self.assertIn("installed skills", result.stdout)
 
     @patch("src.skills_installer.shutil.which", return_value="/usr/bin/npx")
     def test_doctor_reports_manifest_skills_missing_from_global_lock(self, _mock_which) -> None:

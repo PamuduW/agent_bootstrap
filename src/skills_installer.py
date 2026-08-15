@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import os
+import queue
 import shutil
 import subprocess
 import tempfile
-from datetime import datetime, timezone
+import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 import re
@@ -52,6 +56,9 @@ class InstallSummary:
     ok: int
     failed: int
     skipped: int
+
+
+InstallProgress = Callable[[str], None]
 
 
 def summarize_install_results(results: list[InstallResult]) -> InstallSummary:
@@ -317,6 +324,14 @@ def run_install_command(
     if timeout_seconds is None:
         timeout_seconds = _npx_timeout_seconds()
 
+    if os.environ.get("AGENTBOT_TUI"):
+        return _run_install_command_streaming(
+            argv,
+            source_id=source_id,
+            cwd=cwd,
+            timeout_seconds=timeout_seconds,
+        )
+
     try:
         completed = subprocess.run(
             argv,
@@ -340,6 +355,77 @@ def run_install_command(
     )
 
 
+def _run_install_command_streaming(
+    argv: list[str], *, source_id: str, cwd: Path | None, timeout_seconds: int
+) -> InstallResult:
+    """Run a TUI child while keeping its output visible and reportable."""
+    process = subprocess.Popen(
+        argv,
+        cwd=str(cwd) if cwd is not None else None,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+    output: list[str] = []
+
+    lines: queue.Queue[str | None] = queue.Queue()
+
+    def read_output() -> None:
+        try:
+            if process.stdout is not None:
+                for line in process.stdout:
+                    lines.put(line)
+        finally:
+            lines.put(None)
+
+    reader = threading.Thread(target=read_output, daemon=True)
+    reader.start()
+    deadline = time.monotonic() + timeout_seconds
+    try:
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                process.kill()
+                process.wait()
+                source = f" source {source_id!r}" if source_id else ""
+                raise SkillsInstallError(
+                    f"npx skills{source} timed out after {timeout_seconds} seconds: {' '.join(argv)}"
+                )
+            try:
+                line = lines.get(timeout=remaining)
+            except queue.Empty as error:
+                process.kill()
+                process.wait()
+                source = f" source {source_id!r}" if source_id else ""
+                raise SkillsInstallError(
+                    f"npx skills{source} timed out after {timeout_seconds} seconds: {' '.join(argv)}"
+                ) from error
+            if line is None:
+                break
+            output.append(line)
+            print(line, end="", flush=True)
+        returncode = process.wait()
+    except KeyboardInterrupt:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+        raise
+    finally:
+        reader.join(timeout=1)
+
+    return InstallResult(
+        source_id=source_id,
+        command=argv,
+        returncode=returncode,
+        stdout="".join(output),
+        stderr="",
+    )
+
+
 def install_source(
     source: SkillSourceEntry,
     *,
@@ -349,6 +435,7 @@ def install_source(
     npx: str = DEFAULT_NPX,
     cwd: Path | None = None,
     global_lock_file: Path | None = None,
+    progress: InstallProgress | None = None,
 ) -> InstallResult:
     if not source.enabled or not source.repo or not source.skills:
         return InstallResult(
@@ -363,12 +450,18 @@ def install_source(
     argv = build_add_argv(source, agents=agents, global_scope=global_scope, npx=npx)
     clone_url = _github_clone_url(source.repo)
     if dry_run or clone_url is None:
+        if progress is not None:
+            progress(f"Installing skill source: {source.id} ({source.repo})")
         result = run_install_command(argv, source_id=source.id, dry_run=dry_run, cwd=cwd)
     else:
+        if progress is not None:
+            progress(f"Fetching skill source: {source.id} ({source.repo})")
         with tempfile.TemporaryDirectory(prefix="agentbot-skill-") as temp_dir:
             checkout = Path(temp_dir) / source.id
             _clone_github_source(source.repo, checkout)
             argv[3] = str(checkout)
+            if progress is not None:
+                progress(f"Installing selected skills: {source.id}")
             result = run_install_command(argv, source_id=source.id, cwd=cwd)
             if result.returncode == 0 and global_scope:
                 _record_github_checkout_lock(
@@ -397,6 +490,7 @@ def install_all(
     npx: str = DEFAULT_NPX,
     cwd: Path | None = None,
     global_lock_file: Path | None = None,
+    progress: InstallProgress | None = None,
 ) -> list[InstallResult]:
     global_scope = config.scope == "global"
     return [
@@ -408,6 +502,7 @@ def install_all(
             npx=npx,
             cwd=cwd,
             global_lock_file=global_lock_file,
+            progress=progress,
         )
         for source in config.active_sources()
     ]
@@ -430,12 +525,18 @@ def update_all(
 
 def install_skills(paths: AgentbotPaths, *, dry_run: bool = False) -> list[InstallResult]:
     config = load_skills_sources(paths.skills_sources_file)
+    progress = _print_install_progress if os.environ.get("AGENTBOT_TUI") else None
     return install_all(
         config,
         dry_run=dry_run,
         cwd=paths.root,
         global_lock_file=paths.global_skill_lock,
+        progress=progress,
     )
+
+
+def _print_install_progress(message: str) -> None:
+    print(f"  {message}", flush=True)
 
 
 def update_skills(paths: AgentbotPaths, *, dry_run: bool = False) -> InstallResult:

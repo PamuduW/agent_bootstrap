@@ -120,10 +120,14 @@ def _github_clone_timeout_seconds() -> int:
 
 def _command_error_detail(stdout: str, stderr: str) -> str:
     """Keep command failures useful without replaying a child CLI transcript."""
-    raw = stderr.strip() or stdout.strip()
-    if not raw:
+    lines: list[str] = []
+    for output in (stdout, stderr):
+        for raw_line in output.splitlines():
+            line = _ANSI_ESCAPE_RE.sub("", raw_line).strip()
+            if line and not line.lower().startswith("npm notice"):
+                lines.append(line)
+    if not lines:
         return "no diagnostic output"
-    lines = [line.strip() for line in raw.splitlines() if line.strip()]
     detail = " | ".join(lines[-3:])
     if len(detail) > MAX_COMMAND_ERROR_DETAIL_LENGTH:
         detail = f"...{detail[-MAX_COMMAND_ERROR_DETAIL_LENGTH + 3:]}"

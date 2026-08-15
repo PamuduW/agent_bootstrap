@@ -472,7 +472,11 @@ sources:
         from src.skills_installer import SkillsInstallError, run_install_command
 
         child_output = "\n".join(f"child log line {index}" for index in range(20))
-        completed = MagicMock(returncode=1, stdout=child_output, stderr="")
+        completed = MagicMock(
+            returncode=1,
+            stdout=child_output,
+            stderr="npm notice run npx\nnpm notice run 'skills' update -g -y",
+        )
         with patch("src.skills_installer.subprocess.run", return_value=completed):
             result = run_install_command(["npx", "skills", "add"], source_id="superpowers")
 
@@ -487,6 +491,7 @@ sources:
                 install_source(source, agents=["codex"])
         self.assertIn("child log line 19", str(raised.exception))
         self.assertNotIn("child log line 0", str(raised.exception))
+        self.assertNotIn("npm notice", str(raised.exception))
 
 
 if __name__ == "__main__":

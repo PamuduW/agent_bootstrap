@@ -95,6 +95,142 @@ repo_update_classify_history() {
   REPO_UPDATE_STATE="$classified_state"
 }
 
+repo_update_change_count() {
+  if [[ -z "${REPO_UPDATE_CHANGES:-}" ]]; then
+    printf '0\n'
+    return
+  fi
+  awk 'END { print NR }' <<<"$REPO_UPDATE_CHANGES"
+}
+
+repo_update_history_detail() {
+  case "${REPO_UPDATE_STATE:-stopped}" in
+    current) printf 'current' ;;
+    ahead) printf '%s local commit(s) ahead' "${REPO_UPDATE_AHEAD:-0}" ;;
+    behind) printf '%s commit(s) behind' "${REPO_UPDATE_BEHIND:-0}" ;;
+    diverged) printf '%s ahead / %s behind' "${REPO_UPDATE_AHEAD:-0}" "${REPO_UPDATE_BEHIND:-0}" ;;
+    *) printf 'freshness unknown' ;;
+  esac
+}
+
+_repo_update_report_fit() {
+  local text="$1" width="$2"
+  if (( ${#text} > width )); then
+    if (( width <= 3 )); then
+      printf '%s' "${text:0:width}"
+    else
+      printf '%s...' "${text:0:$((width - 3))}"
+    fi
+  else
+    printf '%s' "$text"
+  fi
+}
+
+_repo_update_report_rule() {
+  local width="$1" rule
+  printf -v rule '%*s' "$width" ''
+  printf '%s' "${rule// /-}"
+}
+
+_repo_update_report_plain_cell() {
+  local text="$1" width="$2" fit padding
+  fit="$(_repo_update_report_fit "$text" "$width")"
+  printf '%s' "$fit"
+  padding=$((width - ${#fit}))
+  (( padding > 0 )) && printf '%*s' "$padding" ''
+}
+
+_repo_update_report_colored_cell() {
+  local text="$1" width="$2" color="$3" reset="$4" fit padding
+  fit="$(_repo_update_report_fit "$text" "$width")"
+  printf '%s%s%s' "$color" "$fit" "$reset"
+  padding=$((width - ${#fit}))
+  (( padding > 0 )) && printf '%*s' "$padding" ''
+}
+
+repo_update_print_report() {
+  local repo="$1"
+  local branch local_rev history action upstream change_count remote_result
+  local bold='' dim='' reset='' yellow='' cyan='' green='' red=''
+  local available_color action_color
+  if [[ -z "${NO_COLOR:-}" && ( -t 1 || -t 0 || -n "${AGENTBOT_TUI:-}" || -n "${FORCE_COLOR:-}" ) ]]; then
+    bold=$'\033[1m'
+    dim=$'\033[2m'
+    reset=$'\033[0m'
+    yellow=$'\033[33m'
+    cyan=$'\033[36m'
+    green=$'\033[32m'
+    red=$'\033[31m'
+  fi
+  branch="$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+  local_rev="$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  history="$(repo_update_history_detail)"
+  change_count="$(repo_update_change_count)"
+  upstream="${REPO_UPDATE_UPSTREAM:-upstream}"
+  case "${REPO_UPDATE_STATE:-stopped}" in
+    current|ahead|behind|diverged) remote_result='verified' ;;
+    *) remote_result='unchecked' ;;
+  esac
+  if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
+    action='blocked'
+  else
+    case "${REPO_UPDATE_STATE:-stopped}" in
+      behind) action='pull --ff-only' ;;
+      ahead) action='continue' ;;
+      current) action='current' ;;
+      *) action='check' ;;
+    esac
+  fi
+  case "$history" in
+    current|none|up\ to\ date|freshness\ unknown) available_color="$dim" ;;
+    *behind|*ahead) available_color="$yellow" ;;
+    *) available_color="$cyan" ;;
+  esac
+  case "$action" in
+    current) action_color="$green" ;;
+    pull*|verified) action_color="$cyan" ;;
+    blocked) action_color="$red" ;;
+    *) action_color="$yellow" ;;
+  esac
+
+  printf '\n%s%sRepository update%s\n\n' "$bold" "$yellow" "$reset"
+  printf '%s%-18s | %-28s | %-22s | %-16s%s\n' "$bold" component installed available action "$reset"
+  printf '%s%s-+-%s-+-%s-+-%s%s\n' \
+    "$dim" \
+    "$(_repo_update_report_rule 18)" \
+    "$(_repo_update_report_rule 28)" \
+    "$(_repo_update_report_rule 22)" \
+    "$(_repo_update_report_rule 16)" \
+    "$reset"
+  if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
+    _repo_update_report_plain_cell 'agentbot repo' 18
+    printf ' | '
+    _repo_update_report_plain_cell "${branch}@${local_rev}" 28
+    printf ' | '
+    _repo_update_report_colored_cell "${change_count} local change(s)" 22 "$red" "$reset"
+    printf ' | '
+    _repo_update_report_colored_cell "$action" 16 "$action_color" "$reset"
+    printf '\n'
+  else
+    _repo_update_report_plain_cell 'agentbot repo' 18
+    printf ' | '
+    _repo_update_report_plain_cell "${branch}@${local_rev}" 28
+    printf ' | '
+    _repo_update_report_colored_cell "$history" 22 "$available_color" "$reset"
+    printf ' | '
+    _repo_update_report_colored_cell "$action" 16 "$action_color" "$reset"
+    printf '\n'
+  fi
+  _repo_update_report_plain_cell "$upstream" 18
+  printf ' | '
+  _repo_update_report_plain_cell 'remote history' 28
+  printf ' | '
+  _repo_update_report_colored_cell "$history" 22 "$available_color" "$reset"
+  printf ' | '
+  _repo_update_report_colored_cell "$remote_result" 16 "$cyan" "$reset"
+  printf '\n\n'
+}
+
 repo_update_run() {
   local repo="$1" decision_fn="$2" outcome_name="$3" reason_name="$4" repository="${5:-agent_bootstrap}"
   local worktree bare origin branch upstream state reason rewrite_rules

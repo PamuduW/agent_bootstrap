@@ -203,7 +203,12 @@ test_python_install_backend_child() (
   reset_state
   write_token_file "$(active_file)" "$(token saved)"
   mkdir -p "$HOME/bin"
-  run_install_script install >/dev/null || return 1
+  AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+  repo_update_run() {
+    printf -v "$3" '%s' current
+    printf -v "$4" '%s' current
+  }
+  run_install >/dev/null || return 1
   grep -q $'^python3\t-m\tsrc\.cli\t--root\t[^\t]*\tbootstrap\tvalid=yes\tsource=saved$' "$TEST_COMMAND_LOG" || return 1
   ! grep -q $'\tbootstrap\t.*\tGITHUB_TOKEN=' "$TEST_COMMAND_LOG"
 )

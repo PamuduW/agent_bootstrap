@@ -112,6 +112,10 @@ test_boot_validation_is_atomic() {
 
 test_install_link_and_owned_cleanup() (
 	AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+	repo_update_run() {
+		printf -v "$3" '%s' current
+		printf -v "$4" '%s' current
+	}
 	run_bootstrap_backend() { :; }
 	mkdir -p "$HOME/bin"
 	ln -s "$ROOT/bin/agentboot" "$HOME/bin/agentboot"
@@ -121,6 +125,10 @@ test_install_link_and_owned_cleanup() (
 
 test_install_reports_backend_failure() (
 	AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+	repo_update_run() {
+		printf -v "$3" '%s' current
+		printf -v "$4" '%s' current
+	}
 	run_bootstrap_backend() { return 7; }
 	local output rc
 	set +e
@@ -130,6 +138,22 @@ test_install_reports_backend_failure() (
 	[[ "$rc" -eq 7 ]] || return 1
 	[[ "$output" != *"Agentbot install complete"* ]] || return 1
 	[[ "$output" == *"Agentbot install failed (exit 7)"* ]]
+)
+
+test_install_checks_repository_before_backend() (
+	AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+	local calls="$TEST_ROOT/install-repo-gate.calls"
+	: >"$calls"
+	repo_update_run() {
+		printf 'repo\n' >>"$calls"
+		printf -v "$3" '%s' current
+		printf -v "$4" '%s' current
+	}
+	run_bootstrap_backend() { printf 'backend\n' >>"$calls"; }
+	link_agentbot() { :; }
+	cleanup_owned_old_agentboot_link() { :; }
+	run_install >/dev/null || return 1
+	[[ "$(<"$calls")" == $'repo\nbackend' ]]
 )
 
 test_foreign_old_paths_are_preserved() (
@@ -175,6 +199,7 @@ if [[ -x "$AGENTBOT" ]]; then
 	check 'boot rejects invalid inputs before partial writes' test_boot_validation_is_atomic
 	check 'explicit install links agentbot and cleans owned old link' test_install_link_and_owned_cleanup
 	check 'install reports backend failures without claiming completion' test_install_reports_backend_failure
+	check 'install gates backend work on the repository state' test_install_checks_repository_before_backend
 	check 'foreign and regular old paths are preserved' test_foreign_old_paths_are_preserved
 	check 'help and executable expose no old public surface' test_environment_and_no_old_binary
 	check 'agentbot help describes full command options and configuration' test_agentbot_help_describes_full_command_options

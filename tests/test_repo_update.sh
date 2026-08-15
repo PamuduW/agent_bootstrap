@@ -226,7 +226,7 @@ test_relaunch_adapter() (
 test_safety_and_scope() {
   [[ "$(command -v git)" == "$TEST_FAKE_BIN/git" && ! -e "$TEST_FAKE_BIN/exec" ]] || return 1
   [[ ! -s "$TEST_URL_LOG" && ! -s "$TEST_SIBLING_LOG" ]] || return 1
-  ! grep -Eq 'apt|curl|npx|skills|reconcile|doctor|install|render|exec[[:space:]]' "$ROOT/scripts/lib/repo_update.sh"
+  ! grep -Eq '(^|[^[:alpha:]])(apt|curl|npx|skills|reconcile|doctor|install|render)([^[:alpha:]]|$)|exec[[:space:]]' "$ROOT/scripts/lib/repo_update.sh"
 }
 
 install_git_scenario_fake

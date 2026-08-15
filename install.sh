@@ -18,6 +18,9 @@ if [[ -z "${NO_COLOR:-}" && ( -t 1 || -t 0 || -n "${AGENTBOT_TUI:-}" || -n "${FO
   AGENTBOT_OUT_RED=$'\033[31m'
 fi
 
+# shellcheck source=scripts/lib/repo_update.sh
+source "${REPO_ROOT}/scripts/lib/repo_update.sh"
+
 SKILLS_INSTALL_SH="${REPO_ROOT}/bin/skills-install.sh"
 CLAUDE_BRIDGE_SH="${REPO_ROOT}/bin/claude-skills-bridge.sh"
 
@@ -252,6 +255,7 @@ run_bootstrap_backend() {
 }
 
 run_install() {
+  run_install_repo_gate || return $?
   local rc=0
   run_bootstrap_backend || rc=$?
   cleanup_owned_old_agentboot_link
@@ -275,24 +279,6 @@ run_update_decision() {
   esac
 }
 
-repo_update_change_count() {
-  if [[ -z "${REPO_UPDATE_CHANGES:-}" ]]; then
-    printf '0\n'
-    return
-  fi
-  awk 'END { print NR }' <<<"$REPO_UPDATE_CHANGES"
-}
-
-repo_update_history_detail() {
-  case "${REPO_UPDATE_STATE:-stopped}" in
-    current) printf 'current' ;;
-    ahead) printf '%s local commit(s) ahead' "${REPO_UPDATE_AHEAD:-0}" ;;
-    behind) printf '%s commit(s) behind' "${REPO_UPDATE_BEHIND:-0}" ;;
-    diverged) printf '%s ahead / %s behind' "${REPO_UPDATE_AHEAD:-0}" "${REPO_UPDATE_BEHIND:-0}" ;;
-    *) printf 'freshness unknown' ;;
-  esac
-}
-
 print_repo_update_changes() {
   local max_lines=20 total shown=0 omitted quoted_repo line
   [[ -n "${REPO_UPDATE_CHANGES:-}" ]] || return 0
@@ -312,50 +298,16 @@ print_repo_update_changes() {
 }
 
 print_repo_update_table() {
-  local branch local_rev history action change_count upstream remote_result remote_color
-  local bold='' reset='' yellow='' orange='' red='' cyan=''
-  if [[ -z "${NO_COLOR:-}" && ( -t 1 || -t 0 || -n "${AGENTBOT_TUI:-}" || -n "${FORCE_COLOR:-}" ) ]]; then
-    bold=$'\033[1m'; reset=$'\033[0m'; yellow=$'\033[33m'; orange=$'\033[38;5;208m'
-    red=$'\033[31m'; cyan=$'\033[36m'
-  fi
-  branch="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
-  local_rev="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-  history="$(repo_update_history_detail)"
-  change_count="$(repo_update_change_count)"
-  upstream="${REPO_UPDATE_UPSTREAM:-upstream}"
-  case "${REPO_UPDATE_STATE:-stopped}" in
-    current|ahead|behind|diverged) remote_result='verified'; remote_color="$cyan" ;;
-    *) remote_result='unchecked'; remote_color="$yellow" ;;
-  esac
-  if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
-    action='blocked'
-  else
-    case "${REPO_UPDATE_STATE:-stopped}" in
-      behind) action='pull --ff-only' ;;
-      ahead) action='continue' ;;
-      current) action='current' ;;
-      *) action='check' ;;
-    esac
-  fi
-  printf '\n  %s%sRepository update%s\n' "$bold" "$orange" "$reset"
-  printf '  %s%-22s | %-40s | %s%s\n' "$bold" component detail result "$reset"
-  printf '  %s\n' '-----------------------+------------------------------------------+----------'
-  if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
-    printf '  %-22s | %-40s | %s%s%s\n' 'agent_bootstrap repo' "${branch}@${local_rev} / ${change_count} local change(s)" "$red" "$action" "$reset"
-  else
-    printf '  %-22s | %-40s | %s%s%s\n' 'agent_bootstrap repo' "${branch}@${local_rev}" "$yellow" "$action" "$reset"
-  fi
-  printf '  %-22s | %-40s | %s%s%s\n' "$upstream" "$history" "$remote_color" "$remote_result" "$reset"
-  printf '\n'
+  repo_update_print_report "$REPO_ROOT"
 }
 
-run_update_prompt() {
+run_repo_update_prompt() {
   local action="$1" prompt answer=''
   local tty_input="${AGENTBOT_UPDATE_TTY_INPUT:-/dev/tty}"
   local tty_output="${AGENTBOT_UPDATE_TTY_OUTPUT:-/dev/tty}"
   case "$action" in
-    pull-behind) prompt='Pull the available repository commit(s) with --ff-only?' ;;
-    continue-ahead) prompt='The local repository is ahead. Continue with the Agentbot update?' ;;
+    pull-behind) prompt="Pull ${REPO_UPDATE_BEHIND:-0} commit(s) with --ff-only?" ;;
+    continue-ahead) prompt='The repository is ahead. Continue with the Agentbot update?' ;;
     *) return 1 ;;
   esac
   print_repo_update_table >"$tty_output"
@@ -364,6 +316,49 @@ run_update_prompt() {
   case "$answer" in
     y|Y|yes|YES) return 0 ;;
     *) return 1 ;;
+  esac
+}
+
+run_update_prompt() {
+  run_repo_update_prompt "$1"
+}
+
+run_install_decision() {
+  if [[ -n "${AGENTBOT_INSTALL_CONFIRM:-}" ]]; then
+    [[ "$AGENTBOT_INSTALL_CONFIRM" == yes ]]
+    return
+  fi
+  run_repo_update_prompt "$1"
+}
+
+run_install_relaunch() {
+  exec "$@"
+}
+
+run_install_repo_gate() {
+  local update_outcome update_reason
+  repo_update_run "$REPO_ROOT" run_install_decision update_outcome update_reason agent_bootstrap
+  case "$update_outcome" in
+    current|ahead-approved) return 0 ;;
+    relaunch-required)
+      info 'repository pulled; restarting Agentbot install from the updated checkout.'
+      run_install_relaunch "$REPO_ROOT/install.sh" install
+      return $?
+      ;;
+    stopped)
+      if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
+        print_repo_update_table >&2
+        print_repo_update_changes >&2
+        warn 'Repository pull and Agentbot install stopped.'
+      else
+        warn "repository update stopped: $update_reason"
+      fi
+      return 1
+      ;;
+    *)
+      warn "repository update returned an unknown outcome: $update_outcome"
+      return 1
+      ;;
   esac
 }
 

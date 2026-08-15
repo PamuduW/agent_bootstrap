@@ -175,7 +175,7 @@ test_repo_prompt_renders_after_table_on_the_tty_stream() (
   run_update_prompt pull-behind >"$captured_stdout" || return 1
 
   table_line="$(grep -n 'Repository update' "$tty_output" | cut -d: -f1)"
-  prompt_line="$(grep -n 'Pull the available repository commit(s)' "$tty_output" | cut -d: -f1)"
+  prompt_line="$(grep -n 'Pull 6 commit(s) with --ff-only' "$tty_output" | cut -d: -f1)"
   [[ -n "$table_line" && -n "$prompt_line" && "$table_line" -lt "$prompt_line" ]] || return 1
   [[ ! -s "$captured_stdout" ]]
 )
@@ -191,7 +191,8 @@ test_repo_update_table_honors_tui_color_mode() (
     esac
   }
   NO_COLOR='' AGENTBOT_TUI=1 output="$(print_repo_update_table)"
-  [[ "$output" == *$'\033[1m\033[38;5;208mRepository update\033[0m'* ]] || return 1
+  [[ "$output" == *$'\033[1m\033[33mRepository update\033[0m'* ]] || return 1
+  [[ "$output" != *$'\033[38;5;208mRepository update\033[0m'* ]] || return 1
   [[ "$output" == *$'\033[33mcheck\033[0m'* ]]
 )
 

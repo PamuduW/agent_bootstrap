@@ -14,6 +14,7 @@ github_token_child() (
 
 AGENT_FLAGS=(-a cursor -a codex -a claude-code -a github-copilot)
 GLOBAL_FLAGS=(-g -y)
+NPX_FLAGS=(--yes)
 
 die() {
   printf '[err] %s\n' "$*" >&2
@@ -94,7 +95,7 @@ install_source() {
   done
 
   if [[ -n "${AGENTBOT_QUIET:-}${AGENTBOT_TUI:-}" ]]; then
-    if github_token_child npx skills add "$repo" --full-depth "${skill_flags[@]}" "${AGENT_FLAGS[@]}" "${GLOBAL_FLAGS[@]}" </dev/null >/dev/null 2>&1; then
+    if github_token_child npx "${NPX_FLAGS[@]}" skills add "$repo" --full-depth "${skill_flags[@]}" "${AGENT_FLAGS[@]}" "${GLOBAL_FLAGS[@]}" </dev/null >/dev/null 2>&1; then
       info "installed skills from ${repo}"
     else
       die "failed installing skills from ${repo}"
@@ -103,7 +104,7 @@ install_source() {
   fi
 
   info "installing skills from ${repo}"
-  github_token_child npx skills add "$repo" --full-depth "${skill_flags[@]}" "${AGENT_FLAGS[@]}" "${GLOBAL_FLAGS[@]}" </dev/null
+  github_token_child npx "${NPX_FLAGS[@]}" skills add "$repo" --full-depth "${skill_flags[@]}" "${AGENT_FLAGS[@]}" "${GLOBAL_FLAGS[@]}" </dev/null
 }
 
 install_all() {
@@ -129,12 +130,12 @@ install_all() {
 update_all() {
   require_npx
 
-  if github_token_child npx skills update --help >/dev/null 2>&1; then
+  if github_token_child npx "${NPX_FLAGS[@]}" skills update --help >/dev/null 2>&1; then
     if [[ -n "${AGENTBOT_QUIET:-}${AGENTBOT_TUI:-}" ]]; then
-      github_token_child npx skills update -g -y </dev/null >/dev/null 2>&1
+      github_token_child npx "${NPX_FLAGS[@]}" skills update -g -y </dev/null >/dev/null 2>&1
     else
-      info "running npx skills update -g"
-      github_token_child npx skills update -g -y </dev/null
+      info "running npx --yes skills update -g"
+      github_token_child npx "${NPX_FLAGS[@]}" skills update -g -y </dev/null
     fi
     return 0
   fi

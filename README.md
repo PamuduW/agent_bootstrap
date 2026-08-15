@@ -77,7 +77,7 @@ Curated upstreams are listed in [`skills.sources.yaml`](skills.sources.yaml). In
 
 ```bash
 ./install.sh skills install   # idempotent install from manifest, then refresh Claude/Codex outputs
-./install.sh skills update    # npx skills update -g + Claude bridge + Codex symlinks
+./install.sh skills update    # npx --yes skills update -g + Claude bridge + Codex symlinks
 ./install.sh skills upgrade   # alias for skills update
 ./install.sh update --dry-run # write-free reconciliation and managed-surface preview
 ./install.sh update --yes     # pre-approve source-owned skill/manifest deltas
@@ -98,7 +98,7 @@ inventory is available with `agentbot skills list` (or
 | File | Role |
 | ---- | ---- |
 | [`skills-lock.json`](skills-lock.json) | **Project stub** — committed placeholder (`sources: []`, v1). Not populated by `-g` installs. |
-| `~/.agents/.skill-lock.json` | **Authoritative for global installs** — v3 per-skill pins written by `npx skills add … -g`. |
+| `~/.agents/.skill-lock.json` | **Authoritative for global installs** — v3 per-skill pins written by `npx --yes skills add … -g`. |
 
 Do not copy the global lock into the repo by hand (schemas differ). **Future:** populate `skills-lock.json` from the manifest for CI/reproducible project-scoped installs.
 

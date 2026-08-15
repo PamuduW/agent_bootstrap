@@ -306,7 +306,7 @@ def print_skills_report(results: list, *, title: str) -> int:
         if result.skipped:
             rows.append((result.source_id, "—", "skipped"))
             continue
-        repo = result.command[3] if len(result.command) > 3 else ""
+        repo = result.command[4] if len(result.command) > 4 else ""
         if result.returncode == 0:
             rows.append((result.source_id, repo, "ok"))
             continue

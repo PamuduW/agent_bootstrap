@@ -109,6 +109,7 @@ sources:
         self.assertEqual(
             [
                 "npx",
+                "--yes",
                 "skills",
                 "add",
                 "owner/personal-skills",
@@ -173,6 +174,7 @@ sources:
         self.assertEqual(
             [
                 "npx",
+                "--yes",
                 "skills",
                 "add",
                 "obra/superpowers",

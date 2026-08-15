@@ -285,7 +285,7 @@ def build_add_argv(
     if not source.repo:
         raise ValueError(f"source {source.id!r} has no repo")
 
-    argv = [npx, "skills", "add", source.repo, "--full-depth"]
+    argv = [npx, "--yes", "skills", "add", source.repo, "--full-depth"]
     for skill in source.skills:
         argv.extend(["--skill", skill])
     for agent in agents:
@@ -297,7 +297,7 @@ def build_add_argv(
 
 
 def build_update_argv(*, npx: str = DEFAULT_NPX, global_scope: bool = True) -> list[str]:
-    argv = [npx, "skills", "update"]
+    argv = [npx, "--yes", "skills", "update"]
     if global_scope:
         argv.append("-g")
     argv.append("-y")
@@ -459,7 +459,7 @@ def install_source(
         with tempfile.TemporaryDirectory(prefix="agentbot-skill-") as temp_dir:
             checkout = Path(temp_dir) / source.id
             _clone_github_source(source.repo, checkout)
-            argv[3] = str(checkout)
+            argv[4] = str(checkout)
             if progress is not None:
                 progress(f"Installing selected skills: {source.id}")
             result = run_install_command(argv, source_id=source.id, cwd=cwd)

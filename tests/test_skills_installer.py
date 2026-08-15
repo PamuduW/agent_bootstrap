@@ -105,9 +105,10 @@ sources:
         self.assertEqual(1, mock_run.call_count)
         command = mock_run.call_args.args[0]
         self.assertEqual("npx", command[0])
-        self.assertEqual("skills", command[1])
-        self.assertEqual("add", command[2])
-        self.assertEqual("superpowers", Path(command[3]).name)
+        self.assertEqual("--yes", command[1])
+        self.assertEqual("skills", command[2])
+        self.assertEqual("add", command[3])
+        self.assertEqual("superpowers", Path(command[4]).name)
         self.assertIn("--skill", command)
         self.assertIn("brainstorming", command)
         self.assertIn("-a", command)
@@ -143,7 +144,7 @@ sources:
             clone_command[:4],
         )
         self.assertEqual("npx", install_command[0])
-        self.assertNotEqual("obra/superpowers", install_command[3])
+        self.assertNotEqual("obra/superpowers", install_command[4])
 
     @patch("src.skills_installer.run_install_command")
     def test_install_source_records_remote_provenance_after_local_checkout(self, mock_install) -> None:
@@ -221,7 +222,7 @@ sources:
 
         self.assertEqual(1, mock_run.call_count)
         command = mock_run.call_args.args[0]
-        self.assertEqual(["npx", "skills", "update", "-g", "-y"], command)
+        self.assertEqual(["npx", "--yes", "skills", "update", "-g", "-y"], command)
         self.assertEqual("update", result.source_id)
 
     def test_parse_update_output_reports_updated_and_deleted_skills(self) -> None:

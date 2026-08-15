@@ -106,12 +106,12 @@ test_saved_add_normal_and_quiet() (
   write_token_file "$(active_file)" "$(token saved)"
   run_skills_script install >/dev/null || return 1
   [[ -z "${GITHUB_TOKEN:-}" ]] || return 1
-  grep -q $'^npx\tskills\tadd\t.*\tvalid=yes\tsource=saved$' "$TEST_COMMAND_LOG" || return 1
-  ! grep -q $'^npx\tskills\tadd\t.*\tvalid=no' "$TEST_COMMAND_LOG" || return 1
+  grep -q $'^npx\t--yes\tskills\tadd\t.*\tvalid=yes\tsource=saved$' "$TEST_COMMAND_LOG" || return 1
+  ! grep -q $'^npx\t--yes\tskills\tadd\t.*\tvalid=no' "$TEST_COMMAND_LOG" || return 1
   reset_state
   write_token_file "$(active_file)" "$(token saved)"
   AGENTBOT_QUIET=1 run_skills_script install >"$TEST_ROOT/quiet.out" 2>"$TEST_ROOT/quiet.err" || return 1
-  grep -q $'^npx\tskills\tadd\t.*\tvalid=yes\tsource=saved$' "$TEST_COMMAND_LOG" || return 1
+  grep -q $'^npx\t--yes\tskills\tadd\t.*\tvalid=yes\tsource=saved$' "$TEST_COMMAND_LOG" || return 1
   [[ ! -s "$TEST_ROOT/quiet.err" ]]
 )
 
@@ -119,23 +119,23 @@ test_saved_update_probe_normal_and_quiet() (
   reset_state
   write_token_file "$(active_file)" "$(token saved)"
   run_skills_script update >/dev/null || return 1
-  grep -Fqx $'npx\tskills\tupdate\t--help\tvalid=yes\tsource=saved' "$TEST_COMMAND_LOG" || return 1
-  grep -Fqx $'npx\tskills\tupdate\t-g\t-y\tvalid=yes\tsource=saved' "$TEST_COMMAND_LOG" || return 1
+  grep -Fqx $'npx\t--yes\tskills\tupdate\t--help\tvalid=yes\tsource=saved' "$TEST_COMMAND_LOG" || return 1
+  grep -Fqx $'npx\t--yes\tskills\tupdate\t-g\t-y\tvalid=yes\tsource=saved' "$TEST_COMMAND_LOG" || return 1
   reset_state
   write_token_file "$(active_file)" "$(token saved)"
   AGENTBOT_TUI=1 run_skills_script update >"$TEST_ROOT/update-quiet.out" 2>"$TEST_ROOT/update-quiet.err" || return 1
-  grep -Fqx $'npx\tskills\tupdate\t--help\tvalid=yes\tsource=saved' "$TEST_COMMAND_LOG" || return 1
-  grep -Fqx $'npx\tskills\tupdate\t-g\t-y\tvalid=yes\tsource=saved' "$TEST_COMMAND_LOG"
+  grep -Fqx $'npx\t--yes\tskills\tupdate\t--help\tvalid=yes\tsource=saved' "$TEST_COMMAND_LOG" || return 1
+  grep -Fqx $'npx\t--yes\tskills\tupdate\t-g\t-y\tvalid=yes\tsource=saved' "$TEST_COMMAND_LOG"
 )
 
 test_npx_argv_contract() (
   reset_state
   run_skills_script install >/dev/null || return 1
-  grep -q $'^npx\tskills\tadd\t[^\t]*\t--full-depth\t--skill\t.*\t-a\tcursor\t-a\tcodex\t-a\tclaude-code\t-a\tgithub-copilot\t-g\t-y\tvalid=no\tsource=none$' "$TEST_COMMAND_LOG" || return 1
+  grep -q $'^npx\t--yes\tskills\tadd\t[^\t]*\t--full-depth\t--skill\t.*\t-a\tcursor\t-a\tcodex\t-a\tclaude-code\t-a\tgithub-copilot\t-g\t-y\tvalid=no\tsource=none$' "$TEST_COMMAND_LOG" || return 1
   reset_state
   run_skills_script update >/dev/null || return 1
-  grep -Fqx $'npx\tskills\tupdate\t--help\tvalid=no\tsource=none' "$TEST_COMMAND_LOG" || return 1
-  grep -Fqx $'npx\tskills\tupdate\t-g\t-y\tvalid=no\tsource=none' "$TEST_COMMAND_LOG"
+  grep -Fqx $'npx\t--yes\tskills\tupdate\t--help\tvalid=no\tsource=none' "$TEST_COMMAND_LOG" || return 1
+  grep -Fqx $'npx\t--yes\tskills\tupdate\t-g\t-y\tvalid=no\tsource=none' "$TEST_COMMAND_LOG"
 )
 
 test_python_skills_children() (

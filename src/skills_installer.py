@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 import os
-import queue
 import shutil
 import subprocess
 import tempfile
-import threading
-import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -76,7 +73,9 @@ def summarize_install_results(results: list[InstallResult]) -> InstallSummary:
 DEFAULT_NPX = "npx"
 DEFAULT_NPX_TIMEOUT_SECONDS = 900
 NPX_TIMEOUT_ENV = "AGENTBOT_NPX_TIMEOUT_SECONDS"
-GITHUB_CLONE_TIMEOUT_SECONDS = 120
+DEFAULT_GITHUB_CLONE_TIMEOUT_SECONDS = 300
+GITHUB_CLONE_TIMEOUT_ENV = "AGENTBOT_GITHUB_CLONE_TIMEOUT_SECONDS"
+MAX_COMMAND_ERROR_DETAIL_LENGTH = 240
 _ANSI_ESCAPE_RE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 _UPDATE_LINE_RE = re.compile(r"^✓\s+Updated\s+(.+?)$")
 _DELETED_HEADER_RE = re.compile(
@@ -100,6 +99,35 @@ def _npx_timeout_seconds() -> int:
             f"{NPX_TIMEOUT_ENV} must be a positive integer, got {raw_timeout!r}"
         )
     return timeout_seconds
+
+
+def _github_clone_timeout_seconds() -> int:
+    raw_timeout = os.environ.get(GITHUB_CLONE_TIMEOUT_ENV)
+    if raw_timeout is None:
+        return DEFAULT_GITHUB_CLONE_TIMEOUT_SECONDS
+    try:
+        timeout_seconds = int(raw_timeout)
+    except ValueError as error:
+        raise SkillsInstallError(
+            f"{GITHUB_CLONE_TIMEOUT_ENV} must be a positive integer, got {raw_timeout!r}"
+        ) from error
+    if timeout_seconds <= 0:
+        raise SkillsInstallError(
+            f"{GITHUB_CLONE_TIMEOUT_ENV} must be a positive integer, got {raw_timeout!r}"
+        )
+    return timeout_seconds
+
+
+def _command_error_detail(stdout: str, stderr: str) -> str:
+    """Keep command failures useful without replaying a child CLI transcript."""
+    raw = stderr.strip() or stdout.strip()
+    if not raw:
+        return "no diagnostic output"
+    lines = [line.strip() for line in raw.splitlines() if line.strip()]
+    detail = " | ".join(lines[-3:])
+    if len(detail) > MAX_COMMAND_ERROR_DETAIL_LENGTH:
+        detail = f"...{detail[-MAX_COMMAND_ERROR_DETAIL_LENGTH + 3:]}"
+    return detail
 
 
 def parse_update_output(*outputs: str) -> SkillsUpdateReport:
@@ -159,6 +187,7 @@ def _clone_github_source(repo: str, destination: Path) -> None:
     if shutil.which("git") is None:
         raise SkillsInstallError("git is required to install GitHub skill sources")
 
+    timeout_seconds = _github_clone_timeout_seconds()
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     try:
         completed = subprocess.run(
@@ -166,15 +195,17 @@ def _clone_github_source(repo: str, destination: Path) -> None:
             capture_output=True,
             text=True,
             check=False,
-            timeout=GITHUB_CLONE_TIMEOUT_SECONDS,
+            timeout=timeout_seconds,
             env=env,
         )
     except subprocess.TimeoutExpired as error:
         raise SkillsInstallError(
-            f"GitHub clone for source {repo!r} timed out after {GITHUB_CLONE_TIMEOUT_SECONDS} seconds"
+            f"GitHub clone for source {repo!r} timed out after {timeout_seconds} seconds"
         ) from error
     if completed.returncode != 0:
-        detail = completed.stderr.strip() or completed.stdout.strip() or f"exit code {completed.returncode}"
+        detail = _command_error_detail(completed.stdout, completed.stderr)
+        if detail == "no diagnostic output":
+            detail = f"exit code {completed.returncode}"
         raise SkillsInstallError(f"failed to clone GitHub source {repo!r}: {detail}")
 
 
@@ -324,14 +355,6 @@ def run_install_command(
     if timeout_seconds is None:
         timeout_seconds = _npx_timeout_seconds()
 
-    if os.environ.get("AGENTBOT_TUI"):
-        return _run_install_command_streaming(
-            argv,
-            source_id=source_id,
-            cwd=cwd,
-            timeout_seconds=timeout_seconds,
-        )
-
     try:
         completed = subprocess.run(
             argv,
@@ -352,77 +375,6 @@ def run_install_command(
         returncode=completed.returncode,
         stdout=completed.stdout,
         stderr=completed.stderr,
-    )
-
-
-def _run_install_command_streaming(
-    argv: list[str], *, source_id: str, cwd: Path | None, timeout_seconds: int
-) -> InstallResult:
-    """Run a TUI child while keeping its output visible and reportable."""
-    process = subprocess.Popen(
-        argv,
-        cwd=str(cwd) if cwd is not None else None,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-    )
-    output: list[str] = []
-
-    lines: queue.Queue[str | None] = queue.Queue()
-
-    def read_output() -> None:
-        try:
-            if process.stdout is not None:
-                for line in process.stdout:
-                    lines.put(line)
-        finally:
-            lines.put(None)
-
-    reader = threading.Thread(target=read_output, daemon=True)
-    reader.start()
-    deadline = time.monotonic() + timeout_seconds
-    try:
-        while True:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                process.kill()
-                process.wait()
-                source = f" source {source_id!r}" if source_id else ""
-                raise SkillsInstallError(
-                    f"npx skills{source} timed out after {timeout_seconds} seconds: {' '.join(argv)}"
-                )
-            try:
-                line = lines.get(timeout=remaining)
-            except queue.Empty as error:
-                process.kill()
-                process.wait()
-                source = f" source {source_id!r}" if source_id else ""
-                raise SkillsInstallError(
-                    f"npx skills{source} timed out after {timeout_seconds} seconds: {' '.join(argv)}"
-                ) from error
-            if line is None:
-                break
-            output.append(line)
-            print(line, end="", flush=True)
-        returncode = process.wait()
-    except KeyboardInterrupt:
-        process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait()
-        raise
-    finally:
-        reader.join(timeout=1)
-
-    return InstallResult(
-        source_id=source_id,
-        command=argv,
-        returncode=returncode,
-        stdout="".join(output),
-        stderr="",
     )
 
 
@@ -448,38 +400,43 @@ def install_source(
         )
 
     argv = build_add_argv(source, agents=agents, global_scope=global_scope, npx=npx)
+    if progress is not None:
+        progress(f"[STEP] Installing skill source: {source.id} ({source.repo})")
     clone_url = _github_clone_url(source.repo)
-    if dry_run or clone_url is None:
-        if progress is not None:
-            progress(f"Installing skill source: {source.id} ({source.repo})")
-        result = run_install_command(argv, source_id=source.id, dry_run=dry_run, cwd=cwd)
-    else:
-        if progress is not None:
-            progress(f"Fetching skill source: {source.id} ({source.repo})")
-        with tempfile.TemporaryDirectory(prefix="agentbot-skill-") as temp_dir:
-            checkout = Path(temp_dir) / source.id
-            _clone_github_source(source.repo, checkout)
-            argv[4] = str(checkout)
-            if progress is not None:
-                progress(f"Installing selected skills: {source.id}")
-            result = run_install_command(argv, source_id=source.id, cwd=cwd)
-            if result.returncode == 0 and global_scope:
-                _record_github_checkout_lock(
-                    source,
-                    checkout,
-                    global_lock_file or Path.home() / ".agents" / ".skill-lock.json",
+    try:
+        if dry_run or clone_url is None:
+            result = run_install_command(argv, source_id=source.id, dry_run=dry_run, cwd=cwd)
+        else:
+            with tempfile.TemporaryDirectory(prefix="agentbot-skill-") as temp_dir:
+                checkout = Path(temp_dir) / source.id
+                _clone_github_source(source.repo, checkout)
+                argv[4] = str(checkout)
+                result = run_install_command(argv, source_id=source.id, cwd=cwd)
+                if result.returncode == 0 and global_scope:
+                    _record_github_checkout_lock(
+                        source,
+                        checkout,
+                        global_lock_file or Path.home() / ".agents" / ".skill-lock.json",
+                    )
+                result = InstallResult(
+                    source_id=result.source_id,
+                    command=build_add_argv(source, agents=agents, global_scope=global_scope, npx=npx),
+                    returncode=result.returncode,
+                    stdout=result.stdout,
+                    stderr=result.stderr,
+                    skipped=result.skipped,
                 )
-            result = InstallResult(
-                source_id=result.source_id,
-                command=build_add_argv(source, agents=agents, global_scope=global_scope, npx=npx),
-                returncode=result.returncode,
-                stdout=result.stdout,
-                stderr=result.stderr,
-                skipped=result.skipped,
-            )
-    if not dry_run and result.returncode != 0:
-        detail = result.stderr.strip() or result.stdout.strip() or f"exit code {result.returncode}"
-        raise SkillsInstallError(f"failed to install source {source.id!r}: {detail}")
+        if not dry_run and result.returncode != 0:
+            detail = _command_error_detail(result.stdout, result.stderr)
+            if detail == "no diagnostic output":
+                detail = f"exit code {result.returncode}"
+            raise SkillsInstallError(f"failed to install source {source.id!r}: {detail}")
+    except Exception:
+        if progress is not None:
+            progress(f"[FAIL] Skill source: {source.id}")
+        raise
+    if progress is not None:
+        progress(f"[OK] Skill source installed: {source.id}")
     return result
 
 
@@ -518,7 +475,9 @@ def update_all(
     argv = build_update_argv(npx=npx, global_scope=config.scope == "global")
     result = run_install_command(argv, source_id="update", dry_run=dry_run, cwd=cwd)
     if not dry_run and result.returncode != 0:
-        detail = result.stderr.strip() or result.stdout.strip() or f"exit code {result.returncode}"
+        detail = _command_error_detail(result.stdout, result.stderr)
+        if detail == "no diagnostic output":
+            detail = f"exit code {result.returncode}"
         raise SkillsInstallError(f"failed to update skills: {detail}")
     return result
 

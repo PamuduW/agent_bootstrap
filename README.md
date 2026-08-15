@@ -106,7 +106,7 @@ See [`archive/docs/LOCKFILE-NOTES.md`](archive/docs/LOCKFILE-NOTES.md) for histo
 
 To add a skill: add an entry under `sources` in `skills.sources.yaml`, then run `./install.sh skills install` (not `update`).
 
-GitHub skill sources are shallow-cloned locally with a two-minute bound before `npx skills` installs from that checkout. This avoids the Skills CLI's unbounded GitHub API preflight on fresh machines. The subsequent `npx` operation has a 15-minute bound; set `AGENTBOT_NPX_TIMEOUT_SECONDS` to a positive number of seconds when needed. Clone failures now report a Git error instead of silently waiting for the outer timeout.
+GitHub skill sources are shallow-cloned locally with a five-minute bound before `npx skills` installs from that checkout. This avoids the Skills CLI's unbounded GitHub API preflight on fresh machines. Set `AGENTBOT_GITHUB_CLONE_TIMEOUT_SECONDS` or `AGENTBOT_NPX_TIMEOUT_SECONDS` to positive values when a slow network needs longer bounds. In the interactive Agentbot install, each source emits only one start line and one completion line; child CLI output is captured and failures show only a short diagnostic.
 
 ### Manual skill folders
 

@@ -1,4 +1,6 @@
 import json
+import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -44,7 +46,12 @@ class ClaudeStatuslineTests(unittest.TestCase):
             capture_output=True,
             text=True,
             check=False,
+            env={**os.environ, "TZ": "UTC"},
         )
+
+    @staticmethod
+    def _plain_output(result: subprocess.CompletedProcess[str]) -> str:
+        return re.sub(r"\033\[[0-9;]*m", "", result.stdout).strip()
 
     def test_real_statusline_preserves_sparse_fields(self) -> None:
         result = self._run_real_statusline(
@@ -58,7 +65,7 @@ class ClaudeStatuslineTests(unittest.TestCase):
         self.assertEqual(0, result.returncode)
         self.assertEqual("", result.stderr)
         self.assertIn("High", result.stdout)
-        self.assertIn("(42%)", result.stdout)
+        self.assertIn("Context 42% used", self._plain_output(result))
         self.assertNotIn("High (42)", result.stdout)
 
     def test_real_statusline_accepts_null_pre_response_fields(self) -> None:
@@ -92,18 +99,52 @@ class ClaudeStatuslineTests(unittest.TestCase):
                 "output_style": {"name": "default"},
                 "context_window": {
                     "used_percentage": 42,
+                    "remaining_percentage": 58,
                     "total_input_tokens": 420000,
                     "context_window_size": 1000000,
                 },
                 "effort": {"level": "high"},
                 "thinking": {"enabled": True},
+                "rate_limits": {
+                    "five_hour": {
+                        "used_percentage": 24,
+                        "resets_at": 4102444800,
+                    },
+                    "seven_day": {
+                        "used_percentage": 41,
+                        "resets_at": 4102444800,
+                    },
+                },
             }
         )
 
         self.assertEqual(0, result.returncode)
         self.assertEqual("", result.stderr)
-        self.assertIn("Opus 4.1 High (1M context)", result.stdout)
-        self.assertIn("420k/1m (42%)", result.stdout)
+        self.assertEqual(
+            f"Opus 4.1 High (1M context) · {self.root} · "
+            "Context 42% used · 5h 76% left (reset Jan 1 00:00) · "
+            "7d 59% left (reset Jan 1 00:00)",
+            self._plain_output(result),
+        )
+
+    def test_real_statusline_hides_unavailable_rate_limits(self) -> None:
+        result = self._run_real_statusline(
+            {
+                "workspace": {"current_dir": str(self.root)},
+                "model": {"display_name": "Opus"},
+                "context_window": {
+                    "used_percentage": 10,
+                    "remaining_percentage": 90,
+                },
+            }
+        )
+
+        self.assertEqual(0, result.returncode)
+        self.assertEqual("", result.stderr)
+        self.assertEqual(
+            f"Opus · {self.root} · Context 10% used",
+            self._plain_output(result),
+        )
 
     def test_install_creates_executable_script_and_settings(self) -> None:
         from src.claude_statusline import install_claude_statusline

@@ -225,7 +225,7 @@ repo_update_print_report() {
   printf '\n\n'
 }
 
-repo_update_run() {
+_repo_update_run() {
   local repo="$1" decision_fn="$2" outcome_name="$3" reason_name="$4" repository="${5:-agent_bootstrap}"
   local worktree bare origin branch upstream state reason rewrite_rules
 
@@ -302,7 +302,7 @@ repo_update_run() {
       if ! "$decision_fn" pull-behind; then
         _repo_update_set_result "$outcome_name" "$reason_name" stopped behind-declined
       elif git -C "$repo" pull --ff-only; then
-        _repo_update_set_result "$outcome_name" "$reason_name" relaunch-required pulled
+        _repo_update_set_result "$outcome_name" "$reason_name" repository_changed pulled
       else
         _repo_update_set_result "$outcome_name" "$reason_name" stopped pull-failed
       fi
@@ -314,9 +314,16 @@ repo_update_run() {
   esac
 }
 
-repo_update_invoke_relaunch() {
-  local relaunch_fn="$1"
-  shift
-  [[ "$(type -t "$relaunch_fn" 2>/dev/null)" == function ]] || return 1
-  "$relaunch_fn" "$@"
+repo_update_run() {
+  # Contract: 0 means callers may continue, 1 means the update stopped, and
+  # 2 means a fast-forward changed this checkout and all higher-level work
+  # must stop so the user can rerun from the new repository state.
+  local outcome_name="$3" rc=0 outcome
+  _repo_update_run "$@" || rc=$?
+  outcome="${!outcome_name:-stopped}"
+  case "$outcome" in
+    repository_changed) return 2 ;;
+    stopped) return 1 ;;
+    *) return "$rc" ;;
+  esac
 }

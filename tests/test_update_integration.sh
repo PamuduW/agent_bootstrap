@@ -20,12 +20,17 @@ test_repo_gate_short_circuits_unsafe_states() (
     repo_update_run() {
       printf -v "$3" '%s' "$gate_outcome"
       printf -v "$4" '%s' "$gate_reason"
+      case "$gate_outcome" in
+        stopped) return 1 ;;
+        repository_changed) return 2 ;;
+      esac
+      return 0
     }
     run_update_backend --dry-run >/dev/null 2>&1
   }
   set +e
   run_update_backend_for stopped dirty; dirty_rc=$?
-  run_update_backend_for relaunch-required pulled; pulled_rc=$?
+  run_update_backend_for repository_changed pulled; pulled_rc=$?
   run_update_backend_for current current; current_rc=$?
   set -e
   [[ "$dirty_rc" -ne 0 && "$pulled_rc" -eq 2 && "$current_rc" -eq 0 ]] || return 1
@@ -66,6 +71,7 @@ test_dirty_state_reports_changes_remote_history_and_blocks_backend() (
     REPO_UPDATE_CHANGES=$' M scripts/example.sh\n?? .cursor/rules/agentbot-policy.mdc'
     printf -v "$3" '%s' stopped
     printf -v "$4" '%s' dirty
+    return 1
   }
   local output rc
   set +e; output="$(run_update_backend --dry-run 2>&1)"; rc=$?; set -e
@@ -96,6 +102,7 @@ test_dirty_current_reports_verified_current_and_stops() (
     REPO_UPDATE_CHANGES='?? local-file'
     printf -v "$3" '%s' stopped
     printf -v "$4" '%s' dirty
+    return 1
   }
   local output rc
   set +e; output="$(run_update_backend --dry-run 2>&1)"; rc=$?; set -e
@@ -119,6 +126,7 @@ test_dirty_fetch_failure_reports_paths_and_unknown_freshness() (
     REPO_UPDATE_CHANGES='?? local-file'
     printf -v "$3" '%s' stopped
     printf -v "$4" '%s' fetch-failed
+    return 1
   }
   local output rc
   set +e; output="$(run_update_backend --dry-run 2>&1)"; rc=$?; set -e
@@ -196,7 +204,7 @@ test_repo_update_table_honors_tui_color_mode() (
   [[ "$output" == *$'\033[33mcheck\033[0m'* ]]
 )
 
-check 'repo gate short-circuits stopped and relaunch states' test_repo_gate_short_circuits_unsafe_states
+  check 'repo gate short-circuits stopped and changed-repository states' test_repo_gate_short_circuits_unsafe_states
 check 'dirty update reports changes and remote history before blocking backend work' test_dirty_state_reports_changes_remote_history_and_blocks_backend
 check 'dirty current repository reports verified current and stops' test_dirty_current_reports_verified_current_and_stops
 check 'dirty fetch failure reports paths and unknown remote freshness' test_dirty_fetch_failure_reports_paths_and_unknown_freshness

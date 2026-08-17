@@ -73,6 +73,7 @@ agentbot_menu_dispatch() {
 agentbot_menu_loop() {
 	local choice rc
 	export AGENTBOT_TUI=1
+	AGENTBOT_MENU_QUIT=false
 	while true; do
 		_agentbot_menu_setup
 		if ! menu_simple_run; then
@@ -83,6 +84,7 @@ agentbot_menu_loop() {
 		ui_clear
 		rc=0
 		agentbot_menu_dispatch "$choice" || rc=$?
+		[[ "${AGENTBOT_MENU_QUIT:-false}" == true ]] && return 0
 		# Nested menus own their action pauses and return directly to this menu;
 		# do not add a stale parent pause after they exit. Failed child launches
 		# still pause so their error remains visible before the parent redraws.

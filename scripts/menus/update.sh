@@ -10,10 +10,9 @@ agentbot_menu_update() {
 	fi
 	if ((rc != 0)); then
 		if ((rc == 2)); then
-			printf '%s[info]%s repository pull complete; press %sEnter%s to reload Agentbot from the updated checkout.\n' "$C_CYAN" "$C_RESET" "$C_CYAN" "$C_RESET"
-			ui_pause
-			agentbot_menu_relaunch
-			return $?
+			printf '%s[info]%s repository pull complete; Agentbot update stopped. Run Update again when ready.\n' "$C_CYAN" "$C_RESET"
+			AGENTBOT_MENU_QUIT=true
+			return 0
 		fi
 		return "$rc"
 	fi
@@ -29,8 +28,4 @@ agentbot_menu_update() {
 			;;
 		*) printf '%sUpdate cancelled.%s\n' "$C_DIM" "$C_RESET"; return 0 ;;
 	esac
-}
-
-agentbot_menu_relaunch() {
-	exec "$AGENTBOT_HOME/install.sh"
 }

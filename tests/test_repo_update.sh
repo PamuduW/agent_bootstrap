@@ -77,7 +77,12 @@ reset_case() {
   OUTCOME=unset REASON=unset
 }
 
-run_case() { reset_case "$1" "${2:-no}"; repo_update_run "$TEST_ROOT/repo" decision OUTCOME REASON >/dev/null 2>&1; }
+run_case() {
+  reset_case "$1" "${2:-no}"
+  repo_update_run "$TEST_ROOT/repo" decision OUTCOME REASON >/dev/null 2>&1
+  RUN_RC=$?
+  return 0
+}
 pull_count() { grep -c $'git\t-C\t.*\tpull\t--ff-only$' "$TEST_COMMAND_LOG" 2>/dev/null || true; }
 decision_count() { wc -l <"$TEST_ROOT/decisions.log"; }
 
@@ -88,7 +93,7 @@ test_no_upstream() { run_case no-upstream; [[ "$OUTCOME/$REASON" == stopped/no-u
 test_ahead_approved() { run_case ahead yes; [[ "$OUTCOME/$REASON" == ahead-approved/ahead && "$(pull_count)" -eq 0 ]] && grep -Fqx continue-ahead "$TEST_ROOT/decisions.log"; }
 test_ahead_declined() { run_case ahead no; [[ "$OUTCOME/$REASON" == stopped/ahead-declined && "$(pull_count)" -eq 0 ]]; }
 test_behind_declined() { run_case behind no; [[ "$OUTCOME/$REASON" == stopped/behind-declined && "$(pull_count)" -eq 0 ]] && grep -Fqx pull-behind "$TEST_ROOT/decisions.log"; }
-test_behind_pulled() { run_case behind yes; [[ "$OUTCOME/$REASON" == relaunch-required/pulled && "$(pull_count)" -eq 1 ]]; }
+test_behind_pulled() { run_case behind yes; [[ "$OUTCOME/$REASON" == repository_changed/pulled && "$RUN_RC" -eq 2 && "$(pull_count)" -eq 1 ]]; }
 test_pull_failed() { run_case pull-failed yes; [[ "$OUTCOME/$REASON" == stopped/pull-failed && "$(pull_count)" -eq 1 ]]; }
 test_diverged() { run_case diverged yes; [[ "$OUTCOME/$REASON" == stopped/diverged && "$(decision_count)" -eq 0 && "$(pull_count)" -eq 0 ]]; }
 test_fetch_failed() { run_case fetch-failed yes; [[ "$OUTCOME/$REASON" == stopped/fetch-failed ]] && grep -q $'\tstatus\t--short\t--untracked-files=all$' "$TEST_COMMAND_LOG"; }
@@ -207,21 +212,19 @@ TABLE
 
 test_success_returns_at_pull_boundary() (
   run_case behind yes
-  [[ "$OUTCOME/$REASON" == relaunch-required/pulled ]] || return 1
+  [[ "$OUTCOME/$REASON" == repository_changed/pulled && "$RUN_RC" -eq 2 ]] || return 1
   [[ "$(tail -n 1 "$TEST_COMMAND_LOG")" == *$'\tpull\t--ff-only' ]] || return 1
   [[ ! -s "$TEST_RELAUNCH_LOG" && ! -s "$TEST_SIBLING_LOG" && ! -s "$TEST_URL_LOG" ]]
 )
 
-test_relaunch_adapter() (
-  reset_case current
-  HARNESS_RELAUNCH_EXIT=41
-  export HARNESS_RELAUNCH_EXIT
-  set +e
-  repo_update_invoke_relaunch harness_relaunch "$TEST_ROOT/bin/agentbot" update --dry-run
-  rc=$?
-  set -e
-  [[ "$rc" -eq 41 ]] && assert_relaunch_call "$TEST_ROOT/bin/agentbot" update --dry-run
-)
+test_exit_contract() {
+  run_case current
+  [[ "$RUN_RC" -eq 0 ]] || return 1
+  run_case dirty yes
+  [[ "$RUN_RC" -eq 1 ]] || return 1
+  run_case behind yes
+  [[ "$RUN_RC" -eq 2 ]]
+}
 
 test_safety_and_scope() {
   [[ "$(command -v git)" == "$TEST_FAKE_BIN/git" && ! -e "$TEST_FAKE_BIN/exec" ]] || return 1
@@ -233,7 +236,6 @@ install_git_scenario_fake
 mkdir -p "$TEST_ROOT/repo"
 [[ -f "$ROOT/scripts/lib/repo_update.sh" ]] && source "$ROOT/scripts/lib/repo_update.sh"
 declare -F repo_update_run >/dev/null || repo_update_run() { printf -v "$3" stopped; printf -v "$4" missing; return 1; }
-declare -F repo_update_invoke_relaunch >/dev/null || repo_update_invoke_relaunch() { return 1; }
 
 expect 'current returns current without decision or pull' test_current
 expect 'dirty stops without pull' test_dirty
@@ -242,7 +244,7 @@ expect 'missing upstream stops before fetch' test_no_upstream
 expect 'ahead approval continues without pull' test_ahead_approved
 expect 'ahead decline stops without pull' test_ahead_declined
 expect 'behind decline stops without pull' test_behind_declined
-expect 'behind approval pulls ff-only once and requires relaunch' test_behind_pulled
+expect 'behind approval pulls ff-only once and reports a changed repository' test_behind_pulled
 expect 'failed confirmed pull stops with pull-failed' test_pull_failed
 expect 'diverged stops without decision or pull' test_diverged
 expect 'fetch failure stops before classification' test_fetch_failed
@@ -257,7 +259,7 @@ expect 'dirty fetch failure preserves local changes and stops' test_dirty_fetch_
 expect 'Git sequence is validate origin branch upstream status fetch classify pull' test_git_ordering
 expect 'only clean confirmed behind state pulls across full table' test_pull_only_complete_table
 expect 'successful pull returns at adapter boundary without relaunch or extra commands' test_success_returns_at_pull_boundary
-expect 'relaunch adapter preserves argv and status' test_relaunch_adapter
+expect 'repository update uses one exit contract for continue, stop, and changed states' test_exit_contract
 expect 'harness prevents exec network skills home and repository mutation' test_safety_and_scope
 
 test_harness_verify_safety || failed=$((failed + 1))

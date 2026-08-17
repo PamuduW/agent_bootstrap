@@ -331,21 +331,16 @@ run_install_decision() {
   run_repo_update_prompt "$1"
 }
 
-run_install_relaunch() {
-  exec "$@"
-}
-
 run_install_repo_gate() {
-  local update_outcome update_reason
-  repo_update_run "$REPO_ROOT" run_install_decision update_outcome update_reason agent_bootstrap
-  case "$update_outcome" in
-    current|ahead-approved) return 0 ;;
-    relaunch-required)
-      info 'repository pulled; restarting Agentbot install from the updated checkout.'
-      run_install_relaunch "$REPO_ROOT/install.sh" install
-      return $?
+  local update_outcome update_reason repo_rc=0
+  repo_update_run "$REPO_ROOT" run_install_decision update_outcome update_reason agent_bootstrap || repo_rc=$?
+  case "$repo_rc" in
+    0) return 0 ;;
+    2)
+      info 'repository pulled; Agentbot install stopped. Run agentbot install again when ready.'
+      return 2
       ;;
-    stopped)
+    *)
       if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
         print_repo_update_table >&2
         print_repo_update_changes >&2
@@ -353,10 +348,6 @@ run_install_repo_gate() {
       else
         warn "repository update stopped: $update_reason"
       fi
-      return 1
-      ;;
-    *)
-      warn "repository update returned an unknown outcome: $update_outcome"
       return 1
       ;;
   esac
@@ -369,7 +360,7 @@ run_update_backend() {
 run_update_backend_as() {
   local update_command="$1"
   shift
-  local confirm=no dry_run=false arg update_outcome update_reason
+  local confirm=no dry_run=false arg update_outcome update_reason repo_rc=0
   for arg in "$@"; do
     case "$arg" in
       --yes) confirm=yes ;;
@@ -383,13 +374,13 @@ run_update_backend_as() {
     # shellcheck source=scripts/lib/repo_update.sh
     source "$REPO_ROOT/scripts/lib/repo_update.sh"
   fi
-  repo_update_run "$REPO_ROOT" run_update_decision update_outcome update_reason
-  case "$update_outcome" in
-    relaunch-required)
-      info 'repository pulled; restart Agentbot from the updated checkout.'
+  repo_update_run "$REPO_ROOT" run_update_decision update_outcome update_reason || repo_rc=$?
+  case "$repo_rc" in
+    2)
+      info 'repository pulled; Agentbot update stopped. Run agentbot update again when ready.'
       return 2
       ;;
-    stopped)
+    1)
       if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
         print_repo_update_table >&2
         print_repo_update_changes >&2

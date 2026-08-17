@@ -243,6 +243,20 @@ test_main_menu_rebuilds_after_workspaces_returns() (
 	[[ "$(<"$capture")" == 'Agentbot|Agentbot|Check status Install Agentbot Update Configure GitHub token Workspaces Libraries Quit' ]]
 )
 
+test_repository_change_exits_agentbot_menu_without_redraw() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local choice_index=0 pauses=0
+	menu_simple_run() {
+		[[ "$choice_index" -eq 0 ]] || return 1
+		choice_index=$((choice_index + 1))
+		MENU_SIMPLE_RESULT=update
+	}
+	agentbot_menu_dispatch() { AGENTBOT_MENU_QUIT=true; }
+	ui_clear() { :; }
+	ui_pause() { pauses=$((pauses + 1)); }
+	agentbot_menu_loop || return 1
+	[[ "$choice_index" -eq 1 && "$pauses" -eq 0 ]]
+)
 test_agentbot_libraries_submenu_uses_q_back() (
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
 	local capture="$TEST_ROOT/agentbot-libraries-menu.capture"
@@ -538,9 +552,9 @@ FAKE
 	[[ ! -s "$inherited_output" ]]
 )
 
-test_update_pull_restarts_fresh_install_menu() (
+test_update_pull_quits_without_restarting_the_menu() (
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
-	local calls="$TEST_ROOT/update-relaunch.calls" fake_home="$TEST_ROOT/fake-agentbot-relaunch"
+	local calls="$TEST_ROOT/update-changed.calls" fake_home="$TEST_ROOT/fake-agentbot-changed"
 	: >"$calls"
 	mkdir -p "$fake_home"
 	cat >"$fake_home/install.sh" <<'FAKE'
@@ -555,10 +569,9 @@ FAKE
 	chmod +x "$fake_home/install.sh"
 	AGENTBOT_HOME="$fake_home" TEST_UPDATE_CALLS="$calls"
 	export AGENTBOT_HOME TEST_UPDATE_CALLS
-	ui_pause() { printf 'pause\n' >>"$calls"; }
-	agentbot_menu_relaunch() { printf 'relaunch\n' >>"$calls"; }
 	agentbot_menu_update || return 1
-	[[ "$(<"$calls")" == $'install:update --dry-run\npause\nrelaunch' ]]
+	[[ "$(<"$calls")" == 'install:update --dry-run' ]]
+	[[ "${AGENTBOT_MENU_QUIT:-false}" == true ]]
 )
 
 check 'Agentbot menu source exists' test_menu_source_exists
@@ -576,6 +589,7 @@ if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'Agentbot menu dispatches actions in order and returns on Quit' test_dispatch_order_and_return
 	check 'Graphify Lib is a read-only platform-aware reference' test_graphify_lib_is_read_only_and_documents_platform_forms
 	check 'Agentbot menu rebuilds after returning from Workspaces' test_main_menu_rebuilds_after_workspaces_returns
+	check 'repository changes exit the Agentbot menu without a redraw' test_repository_change_exits_agentbot_menu_without_redraw
 	check 'Workspaces menu exposes actions and keeps apply confirmation safe' test_workspaces_menu_actions
 	check 'Workspaces removal forgets the exact record and reloads the registry' test_workspaces_remove_forgets_exact_record_and_reloads
 	check 'declined Workspaces removal is non-destructive' test_workspaces_remove_decline_is_non_destructive
@@ -589,7 +603,7 @@ if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'Update preserves the detailed dirty-worktree report' test_update_action_preserves_detailed_dirty_report
 	check 'TUI Update routes the complete dirty report to the controlling terminal' test_tui_update_routes_dirty_report_to_tty
 	check 'TUI Install routes the complete backend report to the controlling terminal' test_tui_install_routes_backend_output_to_tty
-	check 'Update restarts the fresh install menu after a repository pull' test_update_pull_restarts_fresh_install_menu
+	check 'Update quits without restarting the menu after a repository pull' test_update_pull_quits_without_restarting_the_menu
 else
 	fail 'Agentbot menu snapshot has title, breadcrumb, spacing, and all actions'
 	fail 'Agentbot menu clears stale line tails during in-place redraw'

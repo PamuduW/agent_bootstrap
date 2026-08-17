@@ -8,5 +8,9 @@ agentbot_menu_install() {
 	else
 		agentbot_run_backend install || rc=$?
 	fi
+	if ((rc == 2)); then
+		AGENTBOT_MENU_QUIT=true
+		return 0
+	fi
 	return "$rc"
 }

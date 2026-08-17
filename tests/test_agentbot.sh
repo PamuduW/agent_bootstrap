@@ -156,6 +156,24 @@ test_install_checks_repository_before_backend() (
 	[[ "$(<"$calls")" == $'repo\nbackend' ]]
 )
 
+test_install_stops_after_repository_change() (
+	AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+	local calls="$TEST_ROOT/install-repository-changed.calls"
+	: >"$calls"
+	repo_update_run() {
+		printf 'repo\n' >>"$calls"
+		printf -v "$3" '%s' repository_changed
+		printf -v "$4" '%s' pulled
+		return 2
+	}
+	run_bootstrap_backend() { printf 'backend\n' >>"$calls"; }
+	set +e
+	run_install
+	local rc=$?
+	set -e
+	[[ "$rc" -eq 2 && "$(<"$calls")" == repo ]]
+)
+
 test_foreign_old_paths_are_preserved() (
 	AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
 	mkdir -p "$HOME/bin"
@@ -200,6 +218,7 @@ if [[ -x "$AGENTBOT" ]]; then
 	check 'explicit install links agentbot and cleans owned old link' test_install_link_and_owned_cleanup
 	check 'install reports backend failures without claiming completion' test_install_reports_backend_failure
 	check 'install gates backend work on the repository state' test_install_checks_repository_before_backend
+	check 'install stops after a repository change without rerunning' test_install_stops_after_repository_change
 	check 'foreign and regular old paths are preserved' test_foreign_old_paths_are_preserved
 	check 'help and executable expose no old public surface' test_environment_and_no_old_binary
 	check 'agentbot help describes full command options and configuration' test_agentbot_help_describes_full_command_options

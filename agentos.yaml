@@ -4,6 +4,9 @@ active_profile: safe-default
 profiles:
   safe-default:
     description: Complete repository-policy exports; no MCP or executable-skill policy.
-    default_targets: [agents, claude, copilot, cursor]
+    # Cursor and Copilot read AGENTS.md natively and have no import syntax, so a
+    # copilot/cursor adapter is a second full copy of the same policy in context.
+    # They stay available in allowed_targets for repos that opt in explicitly.
+    default_targets: [agents, claude]
     allowed_targets: [agents, claude, copilot, cursor]
     allow_community_skill_scripts: false

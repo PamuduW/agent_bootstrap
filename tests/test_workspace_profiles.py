@@ -25,10 +25,9 @@ class WorkspaceProfilesTests(unittest.TestCase):
         profile = select_workspace_profile(config, None)
 
         self.assertEqual("safe-default", profile.name)
-        self.assertEqual(
-            ("agents", "claude", "copilot", "cursor"),
-            profile.default_targets,
-        )
+        # Cursor and Copilot read AGENTS.md natively; rendering their adapters
+        # by default would put a second full copy of the policy in context.
+        self.assertEqual(("agents", "claude"), profile.default_targets)
         self.assertEqual(
             ("agents", "claude", "copilot", "cursor"),
             profile.allowed_targets,

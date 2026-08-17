@@ -91,7 +91,6 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         paths = self._paths()
         outputs = (
             paths.codex_home / "AGENTS.md",
-            paths.claude_home / "AGENTS.md",
             paths.claude_home / "CLAUDE.md",
         )
         for output in outputs:

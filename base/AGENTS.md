@@ -1,163 +1,78 @@
 # AGENTS.md
 
-Repository-level instructions. These refine the global Agentbot baseline and
-should stay practical, current, provider-neutral, and specific to this
-repository.
+Engineering policy for this repository. Keep it specific and verifiable —
+prefer "run `pytest tests/`" over "test your changes".
 
-## Scope and ownership
+## Policy files
 
-- Verify the active environment, shell, repository root, available tools,
-  permissions, sandbox constraints, and repository-local instructions before
-  running environment-sensitive commands.
-- `AGENTS.md` is the canonical repository policy for an Agentbot-managed
-  workspace.
-- Agentbot may render or link harness-specific instruction adapters from this
-  policy.
-- Treat Agentbot-managed adapters as generated outputs. Edit canonical policy,
-  then use the supported Agentbot workflow to refresh them.
-- Do not overwrite user-authored instruction files.
-- Do not assume every harness uses the same file names, syntax, skills, agents,
-  tools, or precedence model.
+- This file is canonical. Every other instruction file Agentbot renders for
+  this repo (see the enabled targets in `agentos.yaml`) is a generated adapter
+  — edit this file and re-render, never edit an adapter.
+- Resync rewrites the prefix between the Agentbot baseline markers and keeps
+  everything after them. An `AGENTS.md` with no markers whose prefix no longer
+  matches the base template is treated as custom and left untouched.
+- Put anything repo-specific under `## Project`.
 
-## Default task workflow
+## Non-negotiables
 
-1. Read the complete request, relevant implementation, tests, documentation,
-   repository instructions, and git state before changing files.
-2. For complex work, maintain a requirement ledger covering:
-   - goal;
-   - current state;
-   - required behavior;
-   - constraints and non-goals;
-   - edge cases;
-   - acceptance criteria;
-   - deliverables;
-   - unresolved decisions.
-3. For long numbered requests, map each requirement to affected components,
-   implementation or plan steps, and validation.
-4. Plan cross-repository, multi-phase, architectural, migration,
-   security-sensitive, infrastructure, deployment, or ambiguous work before
-   coding.
-5. Proceed directly only for small, well-scoped changes.
-6. Make the smallest coherent change, validate it, inspect the complete diff,
-   and report evidence.
-7. Respect requested review or approval checkpoints.
+- Never claim a command, test, commit, or external action ran or succeeded
+  without evidence in this session.
+- Never commit or push without explicit authorization for this task.
+- Never print, log, or write a secret value.
 
-## Agentbot-managed capabilities
+## When to plan first
 
-- Agentbot's enabled manifest and installed skill metadata are the source of
-  truth for reusable capabilities.
-- Discover available compatible skills through the active harness before
-  selecting capabilities. When Agentbot is available, its installed inventory
-  and manifest provide the durable capability catalog.
-- Select only the capabilities needed for the current phase.
-- Use portable skills for shared methodology.
-- Use a harness-compatible skill for native council behavior, model routing,
-  permissions, or delegation.
-- Do not assume a skill written for a different harness works in the active one.
-- Follow the active harness's skill discovery and invocation mechanism.
+Write a plan before touching code if any of these hold:
 
-## Optional Graphify evidence
+- the change spans more than ~5 files or more than one repository;
+- it touches auth, permissions, secrets, CI/CD, deployment, or data migration;
+- it changes a public interface, a schema, or a cross-service contract;
+- the requirements are ambiguous enough that two readings give different code.
 
-- Use the installed Graphify skill for repository-wide relationship,
-  architecture, or impact questions only when the active harness exposes the
-  skill and `graphify-out/graph.json` exists and is readable.
-- Treat `graphify-out/graph.json` as belonging to the current project root;
-  do not implicitly use a graph from a sibling or unrelated repository.
-- Prefer a scoped Graphify query before a broad repository scan, then inspect
-  primary source files for claims that affect code changes.
-- Fall back to `rg`, direct file reads, and normal repository analysis when the
-  graph is absent, stale, incomplete, or the query fails.
-- Never install Graphify, build or purge a graph, add hooks, enable strict
-  mode, or commit graph output without an explicit request.
-- Treat Graphify output as derived evidence, not as a replacement for current
-  source and tests.
+Otherwise implement directly. If the deliverable is a plan, do not implement.
 
-## Delegation and planning
+A plan states: objective, non-goals, evidence gathered, assumptions, affected
+files, phases with dependencies, compatibility and migration, failure handling,
+tests, rollback, and completion criteria. Update it when reality diverges.
 
-- Delegation is opt-in. Use it only when the user explicitly requests it or
-  explicitly invokes a compatible workflow; task complexity alone is not
-  authorization.
-- Do not delegate routine work merely because delegation is available.
-- This shared policy does not name or require a particular council
-  implementation.
-- If no compatible workflow exists, use the active harness directly rather than
-  emulating subagents with extra CLI processes.
+## When to keep a requirement ledger
 
-When delegation is used:
+For any request with 3+ numbered requirements, or any multi-phase plan, track:
+goal, current state, required behavior, non-goals, edge cases, acceptance
+criteria, unresolved decisions. Map each numbered requirement to the code that
+implements it and the check that proves it. Audit against this ledger before
+reporting completion — passing tests do not excuse a requirement mismatch.
 
-- The parent owns requirements, decisions, synthesis, final artifacts,
-  integration, validation, and the final response.
-- The parent directly handles known-file reads, routine commands, simple file
-  operations, small or tightly coupled edits, final plan writing, integration,
-  diff inspection, and final validation.
-- Delegate only bounded independent work with explicit scope, evidence, and
-  validation expectations.
-- Planning or reconnaissance: normally 2–3 delegates; maximum 4.
-- Implementation: normally 0–2 delegates; maximum 3 per phase.
-- Concurrent writers: maximum 2 with non-overlapping ownership.
-- Deep reviewer or conflict resolver: maximum 1.
-- After the initial fan-out: maximum 1 targeted follow-up.
-- Nested delegation, overlapping writers, and unlimited fan-out are prohibited.
-- Provide task-local context rather than copying the complete parent
-  conversation into every delegate.
-- Inspect delegated evidence and diffs before accepting them.
+## Working in this repo
 
-Interpret “act as the higher brain” as:
+1. Read the request in full, plus the relevant code, tests, and `git status`,
+   before editing.
+2. Change the smallest coherent surface. Avoid unrelated cleanup.
+3. Preserve existing architecture and user-authored content unless an approved
+   plan changes them.
+4. Validate each phase before widening scope; respect requested checkpoints.
 
-> Keep requirements, architectural judgment, synthesis, final artifacts,
-> integration, and validation in the parent. Delegate only bounded independent
-> work where a separate context materially improves the result.
+## Definition of done
 
-A substantial plan should state objectives, non-goals, current evidence,
-assumptions, decisions, affected repositories and files, phases, dependencies,
-ownership boundaries, compatibility, migration, security and failure handling,
-testing, rollout or rollback, completion criteria, and requirement
-traceability.
+- Format/lint checks for the changed files pass.
+- Focused tests for the changed behavior pass; broaden when a shared contract,
+  infrastructure, or deployment path changed.
+- Stated edge cases are exercised; tests updated when behavior changed.
+- Both sides of any cross-repo or cross-service contract are verified.
+- `git diff` and `git status` reviewed — nothing unrelated is staged.
+- Durable docs updated when commands, interfaces, setup, or ops behavior
+  changed.
+- The report names the checks that ran, the checks that could not run, and the
+  remaining risk.
 
-The planning parent writes and audits the final plan. If the requested
-deliverable is a plan, do not implement.
+## Git
 
-## Implementation, validation, and safety
-
-- Preserve established architecture and user-authored content unless an approved
-  plan explicitly changes them.
-- Avoid unrelated cleanup.
-- Work in reviewable phases and validate each phase before widening scope.
-- Give each implementation delegate a non-overlapping file or directory
-  boundary.
-- Inspect every delegated diff before accepting it.
-- Update the plan when implementation reality differs from it.
-- Verify both sides of cross-repository or cross-service contracts.
-- Run formatting or lint checks relevant to changed files.
-- Run focused behavior tests and broader checks when shared contracts,
-  infrastructure, or deployment behavior changes.
-- Exercise stated edge cases.
-- Inspect git diff and status.
-- State checks that could not run.
-- Passing tests do not excuse a requirement mismatch. Audit the result against
-  the original requirement ledger.
-- Update durable documentation when commands, interfaces, setup, deployment, or
-  operational behavior changes.
-- Use primary sources for current external facts when suitable access exists.
-
-## Git, secrets, and interaction
-
-- Do not commit or push without explicit authorization.
-- Never stage unrelated files, overwrite user changes, or perform destructive
-  cleanup without approval.
-- Keep credentials out of tracked files, prompts, logs, command history, and
-  output.
-- Mask stored secret values by default.
-- Treat CI/CD, authentication, permissions, dependencies, releases,
-  deployments, package management, and infrastructure as high-risk.
-- Lead with material problems or unsupported assumptions.
-- Separate facts, assumptions, and recommendations.
-- Do not claim a file, test, command, commit, deployment, or external action
-  exists or succeeded without checking it.
+- No commit or push without explicit authorization for this task.
+- Never stage unrelated files. Keep credentials out of tracked files, prompts,
+  logs, and command history.
 
 ## Project
 
-<!-- Project-owned section. Add purpose, supported environments, stack, key
-paths, setup/run/test commands, generated files, architecture constraints,
-external services, deployment notes, hazards, approval checkpoints, and the
-definition of done. Agentbot preserves this section during baseline resync. -->
+Purpose, stack, key paths, setup/run/test commands, generated files,
+architecture constraints, external services, deployment notes, hazards,
+approval checkpoints. Agentbot preserves this section on resync.

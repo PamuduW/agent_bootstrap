@@ -43,8 +43,8 @@ def render_global_outputs(paths: AgentbotPaths) -> None:
     _sync_codex_skills(paths)
 
     paths.claude_home.mkdir(parents=True, exist_ok=True)
+    # Claude Code reads CLAUDE.md, not AGENTS.md, at the user scope.
     _render_global_output(paths.claude_home / "CLAUDE.md", merged)
-    _render_global_output(paths.claude_home / "AGENTS.md", merged)
     install_claude_statusline(paths)
     run_claude_bridge(paths)
 
@@ -66,11 +66,6 @@ def plan_global_resync_actions(paths: AgentbotPaths) -> tuple[RenderAction, ...]
         _plan_global_instruction_action(
             _display_managed_path(paths, paths.codex_home / "AGENTS.md"),
             paths.codex_home / "AGENTS.md",
-            desired,
-        ),
-        _plan_global_instruction_action(
-            _display_managed_path(paths, paths.claude_home / "AGENTS.md"),
-            paths.claude_home / "AGENTS.md",
             desired,
         ),
         _plan_global_instruction_action(

@@ -38,8 +38,9 @@ class GlobalResyncTests(unittest.TestCase):
 
         actions = {action.relative_path: action for action in plan_global_resync_actions(self._paths())}
         self.assertEqual("create", actions["~/.codex/AGENTS.md"].kind)
-        self.assertEqual("create", actions["~/.claude/AGENTS.md"].kind)
         self.assertEqual("create", actions["~/.claude/CLAUDE.md"].kind)
+        # Claude Code reads CLAUDE.md, not AGENTS.md, at the user scope.
+        self.assertNotIn("~/.claude/AGENTS.md", actions)
         self.assertEqual("create", actions["~/.claude/statusline-command.sh"].kind)
 
     def test_resync_apply_writes_global_outputs_and_statusline(self) -> None:
@@ -58,7 +59,7 @@ class GlobalResyncTests(unittest.TestCase):
         self.assertEqual("create", kinds["~/.codex/AGENTS.md"])
         self.assertEqual("create", kinds["~/.claude/statusline-command.sh"])
         self.assertTrue((self.codex_home / "AGENTS.md").is_file())
-        self.assertTrue((self.claude_home / "AGENTS.md").is_file())
+        self.assertFalse((self.claude_home / "AGENTS.md").exists())
         self.assertTrue((self.claude_home / "CLAUDE.md").is_file())
         self.assertTrue((self.claude_home / "statusline-command.sh").is_file())
         settings = json.loads((self.claude_home / "settings.json").read_text(encoding="utf-8"))

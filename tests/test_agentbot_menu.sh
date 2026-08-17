@@ -596,6 +596,27 @@ FAKE
 	[[ "${AGENTBOT_MENU_QUIT:-false}" == true ]]
 )
 
+test_update_menu_does_not_duplicate_repository_success_message() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local fake_home="$TEST_ROOT/fake-agentbot-success" tty_output="$TEST_ROOT/update-success.tty" output rc
+	mkdir -p "$fake_home"
+	cat >"$fake_home/install.sh" <<'FAKE'
+#!/usr/bin/env bash
+printf '%s\n\n%s\n' 'Repository fast-forward succeeded' 'Run setup again when ready.'
+exit 2
+FAKE
+	chmod +x "$fake_home/install.sh"
+	: >"$tty_output"
+	AGENTBOT_HOME="$fake_home" AGENTBOT_TUI=1 AGENTBOT_UPDATE_TTY_OUTPUT="$tty_output"
+	export AGENTBOT_HOME AGENTBOT_TUI AGENTBOT_UPDATE_TTY_OUTPUT
+	set +e
+	output="$(agentbot_menu_update 2>&1)"
+	rc=$?
+	set -e
+	[[ "$rc" -eq 0 && -z "$output" ]] || return 1
+	[[ "$(grep -c '^Repository fast-forward succeeded$' "$tty_output")" -eq 1 ]]
+)
+
 check 'Agentbot menu source exists' test_menu_source_exists
 if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'Agentbot menu snapshot has title, breadcrumb, spacing, and all actions' test_menu_snapshot
@@ -627,6 +648,7 @@ if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'TUI Update routes the complete dirty report to the controlling terminal' test_tui_update_routes_dirty_report_to_tty
 	check 'TUI Install routes the complete backend report to the controlling terminal' test_tui_install_routes_backend_output_to_tty
 	check 'Update quits without restarting the menu after a repository pull' test_update_pull_quits_without_restarting_the_menu
+	check 'Update does not duplicate the repository success message' test_update_menu_does_not_duplicate_repository_success_message
 else
 	fail 'Agentbot menu snapshot has title, breadcrumb, spacing, and all actions'
 	fail 'Agentbot menu clears stale line tails during in-place redraw'

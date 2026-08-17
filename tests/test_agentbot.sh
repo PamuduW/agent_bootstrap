@@ -174,6 +174,67 @@ test_install_stops_after_repository_change() (
 	[[ "$rc" -eq 2 && "$(<"$calls")" == repo ]]
 )
 
+test_repository_decline_uses_dotfiles_style_message() (
+	AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+	local input="$TEST_ROOT/repo-decline.input" output_file="$TEST_ROOT/repo-decline.output" output rc
+	printf 'n\n' >"$input"
+	REPO_UPDATE_BEHIND=1
+	AGENTBOT_UPDATE_TTY_INPUT="$input"
+	AGENTBOT_UPDATE_TTY_OUTPUT="$output_file"
+	print_repo_update_table() { printf 'Repository update\n' >"$output_file"; }
+	export AGENTBOT_UPDATE_TTY_INPUT AGENTBOT_UPDATE_TTY_OUTPUT
+	set +e
+	run_repo_update_prompt pull-behind
+	rc=$?
+	set -e
+	output="$(<"$output_file")"
+	[[ "$rc" -eq 1 ]] || return 1
+	[[ "$output" == *'Pull 1 commit(s) with --ff-only? [y/N]: '* ]] || return 1
+	[[ "$output" == *$'\n\nPull declined; update stopped.'* ]] || return 1
+	[[ "$output" != *'[warn]'* ]]
+)
+
+test_declined_repository_update_is_handled_without_warning() (
+	AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+	local output_file="$TEST_ROOT/declined-update.output" output rc
+	repo_update_run() {
+		printf -v "$3" '%s' stopped
+		printf -v "$4" '%s' behind-declined
+		return 1
+	}
+	set +e
+	run_update_backend_as update --dry-run >"$output_file" 2>&1
+	rc=$?
+	set -e
+	output="$(<"$output_file")"
+	[[ "$rc" -eq 0 ]] || return 1
+	[[ "$output" == *'Pull declined; update stopped.'* ]] || return 1
+	[[ "$output" != *'[warn]'* ]] || return 1
+	[[ "${AGENTBOT_REPOSITORY_UPDATE_DECLINED:-false}" == true ]]
+)
+
+test_install_and_update_changed_use_one_success_message() (
+	AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+	repo_update_run() {
+		printf -v "$3" '%s' repository_changed
+		printf -v "$4" '%s' pulled
+		return 2
+	}
+	local install_output update_output install_rc update_rc
+	set +e
+	install_output="$(run_install_repo_gate 2>&1)"
+	install_rc=$?
+	update_output="$(run_update_backend_as update --dry-run 2>&1)"
+	update_rc=$?
+	set -e
+	for output in "$install_output" "$update_output"; do
+		[[ "$output" == *'Repository fast-forward succeeded'* ]] || return 1
+		[[ "$output" == *'Run setup again when ready.'* ]] || return 1
+		[[ "$output" != *'repository pulled; Agentbot'* ]] || return 1
+		done
+	[[ "$install_rc" -eq 2 && "$update_rc" -eq 2 ]]
+)
+
 test_foreign_old_paths_are_preserved() (
 	AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
 	mkdir -p "$HOME/bin"
@@ -219,6 +280,9 @@ if [[ -x "$AGENTBOT" ]]; then
 	check 'install reports backend failures without claiming completion' test_install_reports_backend_failure
 	check 'install gates backend work on the repository state' test_install_checks_repository_before_backend
 	check 'install stops after a repository change without rerunning' test_install_stops_after_repository_change
+	check 'repository decline uses the shared Dotfiles-style message' test_repository_decline_uses_dotfiles_style_message
+	check 'declined repository update is handled without a warning' test_declined_repository_update_is_handled_without_warning
+	check 'install and update use one fast-forward success message' test_install_and_update_changed_use_one_success_message
 	check 'foreign and regular old paths are preserved' test_foreign_old_paths_are_preserved
 	check 'help and executable expose no old public surface' test_environment_and_no_old_binary
 	check 'agentbot help describes full command options and configuration' test_agentbot_help_describes_full_command_options

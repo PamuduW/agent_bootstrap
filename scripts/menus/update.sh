@@ -10,8 +10,10 @@ agentbot_menu_update() {
 	fi
 	if ((rc != 0)); then
 		if ((rc == 2)); then
-			printf '%s[info]%s repository pull complete; Agentbot update stopped. Run Update again when ready.\n' "$C_CYAN" "$C_RESET"
 			AGENTBOT_MENU_QUIT=true
+			return 0
+		fi
+		if ((rc == 3)); then
 			return 0
 		fi
 		return "$rc"

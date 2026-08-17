@@ -256,6 +256,7 @@ run_bootstrap_backend() {
 
 run_install() {
   run_install_repo_gate || return $?
+  [[ "${AGENTBOT_REPOSITORY_UPDATE_DECLINED:-false}" == true ]] && return 0
   local rc=0
   run_bootstrap_backend || rc=$?
   cleanup_owned_old_agentboot_link
@@ -315,7 +316,11 @@ run_repo_update_prompt() {
   IFS= read -r answer <"$tty_input" || true
   case "$answer" in
     y|Y|yes|YES) return 0 ;;
-    *) return 1 ;;
+    *)
+      repo_update_print_declined "$action" >>"$tty_output"
+      AGENTBOT_REPOSITORY_UPDATE_DECLINE_REPORTED=true
+      return 1
+      ;;
   esac
 }
 
@@ -333,14 +338,24 @@ run_install_decision() {
 
 run_install_repo_gate() {
   local update_outcome update_reason repo_rc=0
+  AGENTBOT_REPOSITORY_UPDATE_DECLINED=false
+  AGENTBOT_REPOSITORY_UPDATE_DECLINE_REPORTED=false
   repo_update_run "$REPO_ROOT" run_install_decision update_outcome update_reason agent_bootstrap || repo_rc=$?
   case "$repo_rc" in
     0) return 0 ;;
     2)
-      info 'repository pulled; Agentbot install stopped. Run agentbot install again when ready.'
+      repo_update_print_changed
       return 2
       ;;
     *)
+      if repo_update_is_declined "$update_reason"; then
+        if [[ "${AGENTBOT_REPOSITORY_UPDATE_DECLINE_REPORTED:-false}" != true ]]; then
+          repo_update_print_declined pull-behind
+        fi
+        AGENTBOT_REPOSITORY_UPDATE_DECLINED=true
+        [[ -n "${AGENTBOT_TUI:-}" ]] && return 3
+        return 0
+      fi
       if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
         print_repo_update_table >&2
         print_repo_update_changes >&2
@@ -361,6 +376,8 @@ run_update_backend_as() {
   local update_command="$1"
   shift
   local confirm=no dry_run=false arg update_outcome update_reason repo_rc=0
+  AGENTBOT_REPOSITORY_UPDATE_DECLINED=false
+  AGENTBOT_REPOSITORY_UPDATE_DECLINE_REPORTED=false
   for arg in "$@"; do
     case "$arg" in
       --yes) confirm=yes ;;
@@ -377,10 +394,18 @@ run_update_backend_as() {
   repo_update_run "$REPO_ROOT" run_update_decision update_outcome update_reason || repo_rc=$?
   case "$repo_rc" in
     2)
-      info 'repository pulled; Agentbot update stopped. Run agentbot update again when ready.'
+      repo_update_print_changed
       return 2
       ;;
     1)
+      if repo_update_is_declined "$update_reason"; then
+        if [[ "${AGENTBOT_REPOSITORY_UPDATE_DECLINE_REPORTED:-false}" != true ]]; then
+          repo_update_print_declined pull-behind
+        fi
+        AGENTBOT_REPOSITORY_UPDATE_DECLINED=true
+        [[ -n "${AGENTBOT_TUI:-}" ]] && return 3
+        return 0
+      fi
       if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
         print_repo_update_table >&2
         print_repo_update_changes >&2

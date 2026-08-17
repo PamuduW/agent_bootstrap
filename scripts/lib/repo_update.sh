@@ -225,6 +225,43 @@ repo_update_print_report() {
   printf '\n\n'
 }
 
+_repo_update_color_output_enabled() {
+  [[ -z "${NO_COLOR:-}" && ( -t 1 || -t 0 || -n "${AGENTBOT_TUI:-}" || -n "${FORCE_COLOR:-}" ) ]]
+}
+
+repo_update_is_declined() {
+  case "${1:-unknown}" in
+    behind-declined|ahead-declined) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+repo_update_print_declined() {
+  local action="${1:-pull-behind}" red="${C_RED:-}" reset="${C_RESET:-}"
+  if [[ -z "$red" ]] && _repo_update_color_output_enabled; then
+    red=$'\033[31m'
+    reset=$'\033[0m'
+  fi
+  case "$action" in
+    pull-behind)
+      printf '\n\n%sPull declined; update stopped.%s\n' "$red" "$reset"
+      ;;
+    *)
+      printf '\n\n%sUpdate stopped; no downstream work was run.%s\n' "$red" "$reset"
+      ;;
+  esac
+}
+
+repo_update_print_changed() {
+  local green="${C_GREEN:-}" reset="${C_RESET:-}"
+  if [[ -z "$green" ]] && _repo_update_color_output_enabled; then
+    green=$'\033[32m'
+    reset=$'\033[0m'
+  fi
+  printf '%sRepository fast-forward succeeded%s\n\n' "$green" "$reset"
+  printf 'Run setup again when ready.\n'
+}
+
 _repo_update_run() {
   local repo="$1" decision_fn="$2" outcome_name="$3" reason_name="$4" repository="${5:-agent_bootstrap}"
   local worktree bare origin branch upstream state reason rewrite_rules

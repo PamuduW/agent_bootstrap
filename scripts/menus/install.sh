@@ -12,5 +12,8 @@ agentbot_menu_install() {
 		AGENTBOT_MENU_QUIT=true
 		return 0
 	fi
+	if ((rc == 3)); then
+		return 0
+	fi
 	return "$rc"
 }

@@ -88,7 +88,7 @@ agentbot_menu_loop() {
 		# Nested menus own their action pauses and return directly to this menu;
 		# do not add a stale parent pause after they exit. Failed child launches
 		# still pause so their error remains visible before the parent redraws.
-		if ((rc != 0)) || [[ "$choice" != workspaces ]]; then
+		if ((rc != 0)) || [[ "$choice" != workspaces && "$choice" != libraries ]]; then
 			ui_pause
 		fi
 	done

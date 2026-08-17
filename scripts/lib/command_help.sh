@@ -95,7 +95,7 @@ _agentbot_help_print_token_field() {
 }
 
 _agentbot_help_print_section() {
-	printf '\n  %s%s%s\n' "$AH_BOLD$AH_YELLOW" "$1" "$AH_RESET"
+	printf '\n  %s%s=== %s ===%s\n' "$AH_BOLD" "$AH_ORANGE" "$1" "$AH_RESET"
 }
 
 _agentbot_help_print_behavior() {
@@ -165,7 +165,7 @@ _agentbot_help_print_option_block() {
 _agentbot_help_print_command_block() {
 	local key="$1" cols="$2"
 
-	printf '\n  %sCommand: %s%s\n' "$AH_BOLD$AH_ORANGE" "$key" "$AH_RESET"
+	printf '\n  %s%sCommand: %s%s\n' "$AH_BOLD" "$AH_YELLOW" "$key" "$AH_RESET"
 	_agentbot_help_print_field 'Usage' "${AGENTBOT_COMMAND_USAGE[$key]}" "$cols"
 	_agentbot_help_print_field 'Entry point' "${AGENTBOT_COMMAND_ENTRYPOINT[$key]}" "$cols"
 	_agentbot_help_print_field 'Purpose' "${AGENTBOT_COMMAND_SUMMARY[$key]}" "$cols"
@@ -180,7 +180,7 @@ _agentbot_help_print_command_block() {
 _agentbot_help_print_backend_block() {
 	local key="$1" cols="$2"
 
-	printf '\n  %sBackend command: %s%s\n' "$AH_BOLD$AH_ORANGE" "$key" "$AH_RESET"
+	printf '\n  %s%sBackend command: %s%s\n' "$AH_BOLD" "$AH_YELLOW" "$key" "$AH_RESET"
 	_agentbot_help_print_field 'Usage' "${AGENTBOT_BACKEND_USAGE[$key]}" "$cols"
 	_agentbot_help_print_field 'Purpose' "${AGENTBOT_BACKEND_SUMMARY[$key]}" "$cols"
 	printf '  %sOptions%s\n' "$AH_BOLD" "$AH_RESET"
@@ -190,8 +190,8 @@ _agentbot_help_print_backend_block() {
 _agentbot_help_render_body() {
 	local cols="$1" key
 
-	_agentbot_help_print_section 'Command index'
 	_agentbot_help_print_index "$cols"
+	_agentbot_help_print_section 'Command details'
 	_agentbot_help_print_section 'Agentbot commands'
 	for key in "${AGENTBOT_COMMAND_KEYS[@]}"; do
 		_agentbot_help_print_command_block "$key" "$cols"

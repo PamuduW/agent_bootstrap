@@ -93,7 +93,11 @@ test_command_lib_matches_colored_table_contract() (
 	[[ "$output" == *$'\033[1m\033[38;5;208m=== Command Lib ===\033[0m'* ]] || return 1
 	[[ "$output" == *'command              | behavior   | description'* ]] || return 1
 	grep -Eq '^  -+\+-+\+-+' <<<"$output" || return 1
-	[[ "$output" == *$'\033[33mmutating\033[0m'* ]]
+	[[ "$output" == *$'\033[33mmutating\033[0m'* ]] || return 1
+	[[ "$output" == *$'\033[1m\033[38;5;208m=== Command details ===\033[0m'* ]] || return 1
+	[[ "$output" == *$'\033[1m\033[33mCommand: boot\033[0m'* ]] || return 1
+	[[ "$output" == *$'\033[1m\033[38;5;208m=== Configuration and environment ===\033[0m'* ]] || return 1
+	[[ "$output" == *$'\033[1m\033[38;5;208m=== System surfaces ===\033[0m'* ]] || return 1
 )
 
 test_command_lib_documents_full_help_catalog() (
@@ -188,7 +192,7 @@ test_dispatch_order_and_return() (
 	agentbot_menu_workspaces() { printf 'workspaces\n' >>"$calls"; }
 	agentbot_menu_libraries() { printf 'libraries\n' >>"$calls"; }
 	agentbot_menu_loop
-	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\npause\nworkspaces\nlibraries\npause' ]]
+	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\npause\nworkspaces\nlibraries' ]]
 )
 
 test_graphify_lib_is_read_only_and_documents_platform_forms() (
@@ -267,6 +271,24 @@ test_agentbot_libraries_submenu_uses_q_back() (
 	}
 	agentbot_menu_libraries
 	[[ "$(<"$capture")" == 'Libraries|Agentbot › Libraries|Command Lib Graphify Lib|command_lib graphify_lib' ]]
+)
+
+test_libraries_q_returns_directly_to_main_menu() (
+	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
+	local choice_index=0 pauses=0
+	menu_simple_run() {
+		local current="$choice_index"
+		choice_index=$((choice_index + 1))
+		case "$current" in
+		0) MENU_SIMPLE_RESULT=libraries; return 0 ;;
+		1) MENU_SIMPLE_RESULT=''; return 1 ;;
+		*) MENU_SIMPLE_RESULT=quit; return 0 ;;
+		esac
+	}
+	ui_clear() { :; }
+	ui_pause() { pauses=$((pauses + 1)); }
+	agentbot_menu_loop
+	[[ "$choice_index" -eq 3 && "$pauses" -eq 0 ]]
 )
 
 test_workspaces_menu_actions() (
@@ -585,6 +607,7 @@ if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'Agentbot Command Lib wraps details to the terminal width' test_command_lib_details_fit_narrow_terminal
 	check 'Agentbot input hints color the interactive key tokens' test_menu_hint_colors_key_tokens
 	check 'Workspaces uses the scrollable submenu title and breadcrumb contract' test_workspaces_menu_uses_scrollable_submenu_contract
+	check 'q from Libraries returns directly to the main menu' test_libraries_q_returns_directly_to_main_menu
 	check 'Agentbot pauses use the shared blank-line contract' test_pause_has_global_blank_line_contract
 	check 'Agentbot menu dispatches actions in order and returns on Quit' test_dispatch_order_and_return
 	check 'Graphify Lib is a read-only platform-aware reference' test_graphify_lib_is_read_only_and_documents_platform_forms

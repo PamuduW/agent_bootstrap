@@ -36,7 +36,6 @@ agentbot_run_menu() {
   agentbot_menu_loop
 }
 agentbot_run_token() { agentbot_die 'Agentbot token screen is not available until the TUI slice.'; }
-agentbot_run_dotfiles() { agentbot_die 'Dotfiles integration is not available until the sibling integration slice.'; }
 agentbot_run_backend() { "$AGENTBOT_HOME/install.sh" "$@"; }
 
 AGENTBOT_BOOT_OPTIONAL_FLAGS=(--claude --copilot --cursor)
@@ -112,7 +111,6 @@ agentbot_main() {
     workspace|workspaces|resync) agentbot_run_backend "$command" "$@" ;;
     graphify) agentbot_run_backend graphify "$@" ;;
     token) agentbot_run_token "$@" ;;
-    dotfiles) agentbot_run_dotfiles "$@" ;;
     update|upgrade) agentbot_run_backend "$command" "$@" ;;
     help|-h|--help) agentbot_usage ;;
     *) agentbot_die "unknown command: $command (run agentbot help)" ;;

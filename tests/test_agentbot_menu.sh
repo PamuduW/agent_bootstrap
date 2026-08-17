@@ -23,8 +23,9 @@ test_menu_snapshot() {
 	[[ "$output" == *'=== Agentbot ==='* ]] || return 1
 	[[ "$output" == *$'\033[1m\033[38;5;208m=== Agentbot ===\033[0m'* ]] || return 1
 	[[ "$output" == *'Agentbot'* ]] || return 1
-	[[ "$output" == *'1. Check status'* && "$output" == *'8. Quit'* ]] || return 1
-	[[ "$output" == *$'8. Quit\n\n'* ]] || return 1
+	[[ "$output" == *'1. Check status'* && "$output" == *'7. Quit'* ]] || return 1
+	[[ "$output" == *$'7. Quit\n\n'* ]] || return 1
+	[[ "$output" != *'Dotfiles'* ]] || return 1
 	[[ "$output" == *'Libraries'* ]] || return 1
 	[[ "$output" != *'Repo setup (agentbot)'* ]] || return 1
 	[[ "$output" == *'Workspaces'* ]] || return 1
@@ -113,34 +114,13 @@ test_command_lib_documents_full_help_catalog() (
 		'AGENTBOT_HOME' \
 		'XDG_CONFIG_HOME' \
 		'GITHUB_TOKEN' \
-		'AGENTS.md' \
-		'Dotfiles integration'; do
+		'AGENTS.md'; do
 		[[ "$output" == *"$needle"* ]] || {
 			printf 'missing Command Lib detail: %s\n' "$needle" >&2
 			return 1
 		}
 	done
-)
-
-test_failed_dotfiles_launch_pauses_before_redraw() (
-	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
-	local dispatches=0 pauses=0
-	MENU_SIMPLE_RESULT=''
-	menu_simple_run() {
-		if ((dispatches == 0)); then
-			MENU_SIMPLE_RESULT=dotfiles
-		else
-			MENU_SIMPLE_RESULT=quit
-		fi
-		dispatches=$((dispatches + 1))
-		return 0
-	}
-	sibling_dotfiles_launch() { return 23; }
-	ui_clear() { :; }
-	ui_pause() { pauses=$((pauses + 1)); }
-
-	agentbot_menu_loop
-	[[ "$dispatches" -eq 2 && "$pauses" -eq 1 ]]
+	[[ "$output" != *'Dotfiles integration'* && "$output" != *'DOTFILES_HOME'* ]] || return 1
 )
 
 test_command_lib_details_fit_narrow_terminal() (
@@ -192,7 +172,7 @@ test_dispatch_order_and_return() (
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
 	local calls="$TEST_ROOT/menu.calls"
 	: >"$calls"
-	MENU_TEST_CHOICES=(status install update token workspaces libraries dotfiles quit)
+	MENU_TEST_CHOICES=(status install update token workspaces libraries quit)
 	MENU_TEST_INDEX=0
 	menu_simple_run() {
 		local choice="${MENU_TEST_CHOICES[$MENU_TEST_INDEX]}"
@@ -207,9 +187,8 @@ test_dispatch_order_and_return() (
 	agentbot_menu_token() { printf 'token\n' >>"$calls"; }
 	agentbot_menu_workspaces() { printf 'workspaces\n' >>"$calls"; }
 	agentbot_menu_libraries() { printf 'libraries\n' >>"$calls"; }
-	agentbot_menu_dotfiles() { printf 'dotfiles\n' >>"$calls"; }
 	agentbot_menu_loop
-	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\npause\nworkspaces\nlibraries\npause\ndotfiles' ]]
+	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\npause\nworkspaces\nlibraries\npause' ]]
 )
 
 test_graphify_lib_is_read_only_and_documents_platform_forms() (
@@ -261,7 +240,7 @@ test_main_menu_rebuilds_after_workspaces_returns() (
 	ui_clear() { :; }
 	ui_pause() { :; }
 	agentbot_menu_loop
-	[[ "$(<"$capture")" == 'Agentbot|Agentbot|Check status Install Agentbot Update Configure GitHub token Workspaces Libraries Dotfiles Quit' ]]
+	[[ "$(<"$capture")" == 'Agentbot|Agentbot|Check status Install Agentbot Update Configure GitHub token Workspaces Libraries Quit' ]]
 )
 
 test_agentbot_libraries_submenu_uses_q_back() (
@@ -451,7 +430,7 @@ test_failed_action_reports_red() (
 	[[ "$output" == *$'\033[31mAction failed (exit 17).\033[0m'* ]]
 )
 
-test_update_action_calls_real_backend_and_dotfiles_stays_guarded() (
+test_update_action_calls_real_backend() (
 	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
 	local output fake_home="$TEST_ROOT/fake-agentbot"
 	ui_pause() { :; }
@@ -468,11 +447,6 @@ FAKE
 	export AGENTBOT_HOME
 	output="$(agentbot_menu_update 2>&1)"
 	[[ "$output" == *'real-update-backend update --dry-run'* ]] || return 1
-	DOTFILES_HOME="$TEST_ROOT/missing-dotfiles"
-	SIBLING_DOTFILES_CONFIRM=no
-	export DOTFILES_HOME SIBLING_DOTFILES_CONFIRM
-	output="$(agentbot_menu_dotfiles 2>&1)"
-	[[ "$output" == *'Dotfiles is not cloned'* && "$output" == *'launch cancelled'* ]]
 )
 
 test_update_action_preserves_detailed_dirty_report() (
@@ -587,16 +561,6 @@ FAKE
 	[[ "$(<"$calls")" == $'install:update --dry-run\npause\nrelaunch' ]]
 )
 
-test_caller_guard_hides_dotfiles_entry() (
-	AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
-	SETUP_CALLER=dotfiles
-	export SETUP_CALLER
-	_agentbot_menu_setup
-	! printf '%s\n' "${MENU_SIMPLE_KEYS[@]}" | grep -Fxq dotfiles || return 1
-	[[ "${#MENU_SIMPLE_LABELS[@]}" -eq "${#MENU_SIMPLE_KEYS[@]}" ]] || return 1
-	[[ "${#MENU_SIMPLE_LABELS[@]}" -eq "${#MENU_SIMPLE_DESCS[@]}" ]]
-)
-
 check 'Agentbot menu source exists' test_menu_source_exists
 if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'Agentbot menu snapshot has title, breadcrumb, spacing, and all actions' test_menu_snapshot
@@ -605,7 +569,6 @@ if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'Agentbot menu exports TUI render mode to backend reports' test_menu_exports_tui_render_mode_to_backend
 	check 'Agentbot Command Lib matches the colored table contract' test_command_lib_matches_colored_table_contract
 	check 'Agentbot Command Lib documents the full command/config catalog' test_command_lib_documents_full_help_catalog
-	check 'failed Dotfiles launch pauses before the Agentbot menu redraws' test_failed_dotfiles_launch_pauses_before_redraw
 	check 'Agentbot Command Lib wraps details to the terminal width' test_command_lib_details_fit_narrow_terminal
 	check 'Agentbot input hints color the interactive key tokens' test_menu_hint_colors_key_tokens
 	check 'Workspaces uses the scrollable submenu title and breadcrumb contract' test_workspaces_menu_uses_scrollable_submenu_contract
@@ -622,12 +585,11 @@ if [[ -f "$ROOT/scripts/menu.sh" ]]; then
 	check 'declined Workspaces apply never invokes --yes' test_workspaces_menu_apply_decline_is_safe
 	check 'failed Agentbot action pauses once and returns' test_failed_action_pauses_once
 	check 'failed Agentbot actions use the red failure color' test_failed_action_reports_red
-	check 'Update calls the real backend and Dotfiles remains guarded' test_update_action_calls_real_backend_and_dotfiles_stays_guarded
+	check 'Update calls the real Agentbot backend' test_update_action_calls_real_backend
 	check 'Update preserves the detailed dirty-worktree report' test_update_action_preserves_detailed_dirty_report
 	check 'TUI Update routes the complete dirty report to the controlling terminal' test_tui_update_routes_dirty_report_to_tty
 	check 'TUI Install routes the complete backend report to the controlling terminal' test_tui_install_routes_backend_output_to_tty
 	check 'Update restarts the fresh install menu after a repository pull' test_update_pull_restarts_fresh_install_menu
-	check 'SETUP_CALLER=dotfiles hides the reciprocal menu entry' test_caller_guard_hides_dotfiles_entry
 else
 	fail 'Agentbot menu snapshot has title, breadcrumb, spacing, and all actions'
 	fail 'Agentbot menu clears stale line tails during in-place redraw'
@@ -641,7 +603,7 @@ else
 	fail 'Agentbot menu dispatches actions in order and returns on Quit'
 	fail 'failed Agentbot action pauses once and returns'
 	fail 'failed Agentbot actions use the red failure color'
-	fail 'deferred Update and Dotfiles actions are explicitly unavailable'
+	fail 'deferred Agentbot actions are explicitly unavailable'
 fi
 
 printf '\nRan %d Agentbot menu test(s); %d failure(s).\n' "$((passed + failed))" "$failed"

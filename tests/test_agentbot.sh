@@ -35,7 +35,6 @@ test_dispatch_matrix() (
 	agentbot_has_tty() { return 0; }
 	agentbot_run_menu() { printf 'menu\n' >>"$calls"; return 11; }
 	agentbot_run_token() { printf 'token\n' >>"$calls"; return 12; }
-	agentbot_run_dotfiles() { printf 'dotfiles\n' >>"$calls"; return 13; }
 	agentbot_run_backend() { printf 'backend:%s\n' "$*" >>"$calls"; return 14; }
 	set +e
 	agentbot_main; [[ $? -eq 11 ]] || exit 1
@@ -43,7 +42,8 @@ test_dispatch_matrix() (
 	agentbot_main install; [[ $? -eq 14 ]] || exit 1
 	agentbot_main doctor; [[ $? -eq 14 ]] || exit 1
 	agentbot_main token; [[ $? -eq 12 ]] || exit 1
-	agentbot_main dotfiles; [[ $? -eq 13 ]] || exit 1
+	agentbot_main dotfiles >/dev/null 2>&1
+	[[ $? -ne 0 ]] || exit 1
 	agentbot_main graphify status; [[ $? -eq 14 ]] || exit 1
 	agentbot_main update; [[ $? -eq 14 ]] || exit 1
 	agentbot_main upgrade; [[ $? -eq 14 ]] || exit 1
@@ -51,7 +51,7 @@ test_dispatch_matrix() (
 	agentbot_main workspaces; [[ $? -eq 14 ]] || exit 1
 	agentbot_main resync --all; [[ $? -eq 14 ]] || exit 1
 	set -e
-	[[ "$(<"$calls")" == $'menu\nbackend:status\nbackend:install\nbackend:doctor\ntoken\ndotfiles\nbackend:graphify status\nbackend:update\nbackend:upgrade\nbackend:workspace /tmp/project\nbackend:workspaces\nbackend:resync --all' ]]
+	[[ "$(<"$calls")" == $'menu\nbackend:status\nbackend:install\nbackend:doctor\ntoken\nbackend:graphify status\nbackend:update\nbackend:upgrade\nbackend:workspace /tmp/project\nbackend:workspaces\nbackend:resync --all' ]]
 )
 
 test_install_graphify_dispatch_does_not_require_full_skill_dependencies() (

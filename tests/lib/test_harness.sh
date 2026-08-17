@@ -67,17 +67,6 @@ harness_fake_dispatch() {
   return "$exit_value"
 }
 
-harness_fake_sibling_dispatch() {
-  _harness_append_sanitized \
-    "$TEST_SIBLING_LOG" \
-    sibling \
-    "caller=${SETUP_CALLER:-}" \
-    "$@"
-  _harness_emit_sanitized "${FAKE_SIBLING_STDOUT:-}" /dev/stdout
-  _harness_emit_sanitized "${FAKE_SIBLING_STDERR:-}" /dev/stderr
-  return "${FAKE_SIBLING_EXIT:-0}"
-}
-
 _harness_write_fake_command() {
   local command_name="$1"
   local target="${TEST_FAKE_BIN}/${command_name}"
@@ -87,18 +76,6 @@ _harness_write_fake_command() {
     'set -u' \
     'source "${TEST_HARNESS_LIB:?}"' \
     "harness_fake_dispatch ${command_name} \"\$@\"" \
-    >"$target"
-  chmod 0700 "$target"
-}
-
-_harness_write_fake_sibling() {
-  local target="${TEST_FAKE_SIBLING}/install.sh"
-
-  printf '%s\n' \
-    '#!/usr/bin/env bash' \
-    'set -u' \
-    'source "${TEST_HARNESS_LIB:?}"' \
-    'harness_fake_sibling_dispatch "$@"' \
     >"$target"
   chmod 0700 "$target"
 }
@@ -183,14 +160,12 @@ test_harness_setup() {
   TEST_URL_LOG="${TEST_LOG_DIR}/urls.log"
   TEST_SIBLING_LOG="${TEST_LOG_DIR}/sibling.log"
   TEST_RELAUNCH_LOG="${TEST_LOG_DIR}/relaunch.log"
-  TEST_FAKE_SIBLING="${TEST_ROOT}/siblings/dotfiles"
 
   mkdir -p \
     "$TEST_HOME" \
     "$TEST_XDG_CONFIG_HOME" \
     "$TEST_FAKE_BIN" \
-    "$TEST_LOG_DIR" \
-    "$TEST_FAKE_SIBLING"
+    "$TEST_LOG_DIR"
   : >"$TEST_COMMAND_LOG"
   : >"$TEST_URL_LOG"
   : >"$TEST_SIBLING_LOG"
@@ -204,18 +179,16 @@ test_harness_setup() {
 
   export TEST_ROOT TEST_HOME TEST_XDG_CONFIG_HOME TEST_FAKE_BIN TEST_LOG_DIR
   export TEST_COMMAND_LOG TEST_URL_LOG TEST_SIBLING_LOG TEST_RELAUNCH_LOG
-  export TEST_FAKE_SIBLING TEST_REAL_GIT TEST_REPOSITORY_ROOT
+  export TEST_REAL_GIT TEST_REPOSITORY_ROOT
   export HOME XDG_CONFIG_HOME TMPDIR PATH
   export FAKE_GIT_STDOUT="" FAKE_GIT_STDERR="" FAKE_GIT_EXIT=0
   export FAKE_CURL_STDOUT="" FAKE_CURL_STDERR="" FAKE_CURL_EXIT=0
   export FAKE_NPX_STDOUT="" FAKE_NPX_STDERR="" FAKE_NPX_EXIT=0
-  export FAKE_SIBLING_STDOUT="" FAKE_SIBLING_STDERR="" FAKE_SIBLING_EXIT=0
   export HARNESS_RELAUNCH_EXIT=0
 
   _harness_write_fake_command git
   _harness_write_fake_command curl
   _harness_write_fake_command npx
-  _harness_write_fake_sibling
   _HARNESS_ACTIVE=1
 }
 
@@ -223,20 +196,17 @@ harness_relaunch() {
   _harness_append_sanitized \
     "$TEST_RELAUNCH_LOG" \
     relaunch \
-    "caller=${SETUP_CALLER:-}" \
     "$@"
   return "${HARNESS_RELAUNCH_EXIT:-0}"
 }
 
 assert_relaunch_call() {
-  local expected_caller="$1"
-  shift
   local expected_file="${TEST_ROOT}/expected-relaunch.log"
   local actual
   local expected
 
   : >"$expected_file"
-  _harness_append_sanitized "$expected_file" relaunch "caller=${expected_caller}" "$@"
+  _harness_append_sanitized "$expected_file" relaunch "$@"
   actual="$(tail -n 1 "$TEST_RELAUNCH_LOG")"
   expected="$(tail -n 1 "$expected_file")"
   [[ "$actual" == "$expected" ]]

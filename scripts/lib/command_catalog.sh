@@ -4,7 +4,7 @@
 # Authoritative public Agentbot command, configuration, and surface catalog.
 
 AGENTBOT_COMMAND_KEYS=(
-	status install update token boot workspace workspaces resync command_lib doctor graphify dotfiles
+	status install update token boot workspace workspaces resync command_lib doctor graphify
 )
 AGENTBOT_BACKEND_COMMAND_KEYS=(
 	install 'skills install' 'skills update' 'skills upgrade' 'skills list' 'skills doctor'
@@ -12,7 +12,7 @@ AGENTBOT_BACKEND_COMMAND_KEYS=(
 )
 AGENTBOT_CONFIG_KEYS=(
 	AGENTBOT_HOME XDG_CONFIG_HOME GITHUB_TOKEN AGENTBOT_TUI AGENTBOT_QUIET
-	AGENTBOT_MENU_COLS DOTFILES_HOME
+	AGENTBOT_MENU_COLS
 )
 AGENTBOT_SURFACE_KEYS=(canonical_sources rendered_outputs skill_store workspace_registry github_config)
 
@@ -28,7 +28,6 @@ declare -A AGENTBOT_COMMAND_USAGE=(
 	[command_lib]='Agentbot menu: Command Lib'
 	[doctor]='agentbot doctor'
 	[graphify]='agentbot graphify status|setup'
-	[dotfiles]='agentbot dotfiles'
 )
 
 declare -A AGENTBOT_COMMAND_CLASS=(
@@ -43,7 +42,6 @@ declare -A AGENTBOT_COMMAND_CLASS=(
 	[command_lib]='read-only'
 	[doctor]='read-only'
 	[graphify]='mutating'
-	[dotfiles]='mutating'
 )
 
 declare -A AGENTBOT_COMMAND_ENTRYPOINT=(
@@ -58,7 +56,6 @@ declare -A AGENTBOT_COMMAND_ENTRYPOINT=(
 	[command_lib]='Agentbot menu reference'
 	[doctor]='agentbot wrapper -> ./install.sh doctor'
 	[graphify]='agentbot wrapper -> ./install.sh graphify'
-	[dotfiles]='Agentbot -> sibling Dotfiles bridge seam'
 )
 
 declare -A AGENTBOT_COMMAND_SUMMARY=(
@@ -73,7 +70,6 @@ declare -A AGENTBOT_COMMAND_SUMMARY=(
 	[command_lib]='Show this complete command and configuration reference.'
 	[doctor]='Validate skills, rendered outputs, links, and configuration.'
 	[graphify]='Inspect or set up the optional Graphify Agent Skills integration.'
-	[dotfiles]='Open the sibling Dotfiles installer when the bridge is available.'
 )
 
 declare -A AGENTBOT_COMMAND_OPTIONS=(
@@ -88,7 +84,6 @@ declare -A AGENTBOT_COMMAND_OPTIONS=(
 	[command_lib]=$'(none)|The Command Lib is read-only and takes no options.|always'
 	[doctor]=$'(none)|Doctor reads state and reports issues; it takes no options.|always'
 	[graphify]=$'status|Read Graphify CLI, skill, and assistant-link state without writing.|default\nsetup|Run Graphify\'s generic Agent Skills installer and refresh Agentbot outputs.|explicit'
-	[dotfiles]=$'(none)|The bridge opens the sibling installer when that integration is installed.|always'
 )
 
 declare -A AGENTBOT_COMMAND_DEFAULTS=(
@@ -103,7 +98,6 @@ declare -A AGENTBOT_COMMAND_DEFAULTS=(
 	[command_lib]='Prints the complete catalog without changing state.'
 	[doctor]='Reports issues without repairing them.'
 	[graphify]='Status is read-only; setup requires the Graphify CLI and only installs the generic Agent Skills copy.'
-	[dotfiles]='Requires a resolvable sibling Dotfiles installer.'
 )
 
 declare -A AGENTBOT_COMMAND_EFFECTS=(
@@ -118,7 +112,6 @@ declare -A AGENTBOT_COMMAND_EFFECTS=(
 	[command_lib]='Performs no external command, file, network, or installer action.'
 	[doctor]='Reads installed skills, rendered outputs, links, and configuration.'
 	[graphify]='Status reads local Graphify state; setup may write ~/.agents/skills/graphify and refresh managed links.'
-	[dotfiles]='May leave Agentbot and launch the sibling Dotfiles menu; availability is checked first.'
 )
 
 declare -A AGENTBOT_COMMAND_EXAMPLES=(
@@ -133,7 +126,6 @@ declare -A AGENTBOT_COMMAND_EXAMPLES=(
 	[command_lib]='Select Command Lib from the Agentbot menu'
 	[doctor]='agentbot doctor'
 	[graphify]='agentbot graphify status'
-	[dotfiles]='agentbot dotfiles'
 )
 
 declare -A AGENTBOT_COMMAND_RELATED=(
@@ -147,8 +139,7 @@ declare -A AGENTBOT_COMMAND_RELATED=(
 	[resync]='Use workspace for one path or workspaces to inspect the registry.'
 	[command_lib]='The same catalog is available through agentbot help.'
 	[doctor]='Use status for a non-diagnostic snapshot.'
-	[graphify]='Install the optional CLI through Dotfiles first; setup does not install Graphify or create project rules.'
-	[dotfiles]='The reciprocal entry is exposed by the Dotfiles Agents menu.'
+	[graphify]='Install the optional CLI separately; setup does not install Graphify or create project rules.'
 )
 
 declare -A AGENTBOT_BACKEND_USAGE=(
@@ -209,7 +200,6 @@ declare -A AGENTBOT_CONFIG_DESCRIPTION=(
 	[AGENTBOT_TUI]='Marks menu-driven execution so backend reports use the TUI presentation.'
 	[AGENTBOT_QUIET]='Suppresses selected non-interactive backend report output.'
 	[AGENTBOT_MENU_COLS]='Overrides the detected Agentbot menu width for rendering/tests.'
-	[DOTFILES_HOME]='Optional validated sibling Dotfiles repository override.'
 )
 
 declare -A AGENTBOT_CONFIG_DEFAULT=(
@@ -219,7 +209,6 @@ declare -A AGENTBOT_CONFIG_DEFAULT=(
 	[AGENTBOT_TUI]='Unset for direct commands; set to 1 by the Agentbot menu.'
 	[AGENTBOT_QUIET]='Unset.'
 	[AGENTBOT_MENU_COLS]='Detected terminal width, otherwise 80.'
-	[DOTFILES_HOME]='Sibling dotfiles directory next to AGENTBOT_HOME.'
 )
 
 declare -A AGENTBOT_CONFIG_LOCATION=(
@@ -229,7 +218,6 @@ declare -A AGENTBOT_CONFIG_LOCATION=(
 	[AGENTBOT_TUI]='Process environment only.'
 	[AGENTBOT_QUIET]='Process environment only.'
 	[AGENTBOT_MENU_COLS]='Process environment only.'
-	[DOTFILES_HOME]='Process environment; sibling repository path.'
 )
 
 declare -A AGENTBOT_SURFACE_DESCRIPTION=(

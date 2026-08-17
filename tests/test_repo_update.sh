@@ -217,10 +217,10 @@ test_relaunch_adapter() (
   HARNESS_RELAUNCH_EXIT=41
   export HARNESS_RELAUNCH_EXIT
   set +e
-  SETUP_CALLER=dotfiles repo_update_invoke_relaunch harness_relaunch "$TEST_ROOT/bin/agentbot" update --dry-run
+  repo_update_invoke_relaunch harness_relaunch "$TEST_ROOT/bin/agentbot" update --dry-run
   rc=$?
   set -e
-  [[ "$rc" -eq 41 ]] && assert_relaunch_call dotfiles "$TEST_ROOT/bin/agentbot" update --dry-run
+  [[ "$rc" -eq 41 ]] && assert_relaunch_call "$TEST_ROOT/bin/agentbot" update --dry-run
 )
 
 test_safety_and_scope() {
@@ -257,7 +257,7 @@ expect 'dirty fetch failure preserves local changes and stops' test_dirty_fetch_
 expect 'Git sequence is validate origin branch upstream status fetch classify pull' test_git_ordering
 expect 'only clean confirmed behind state pulls across full table' test_pull_only_complete_table
 expect 'successful pull returns at adapter boundary without relaunch or extra commands' test_success_returns_at_pull_boundary
-expect 'relaunch adapter preserves argv caller context and status' test_relaunch_adapter
+expect 'relaunch adapter preserves argv and status' test_relaunch_adapter
 expect 'harness prevents exec network skills home and repository mutation' test_safety_and_scope
 
 test_harness_verify_safety || failed=$((failed + 1))

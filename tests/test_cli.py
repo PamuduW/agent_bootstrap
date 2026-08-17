@@ -247,7 +247,7 @@ class CliTests(unittest.TestCase):
             None,
             "missing",
             "missing",
-            "Graphify CLI and Agent Skills integration are not installed. Install it from Dotfiles > Install Dotfiles > Graphify CLI, or run: uv tool install graphifyy",
+            "Graphify CLI and Agent Skills integration are not installed. Install it separately, or run: uv tool install graphifyy",
         )
         service_type.return_value = service
 

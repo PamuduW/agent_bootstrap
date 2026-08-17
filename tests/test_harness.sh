@@ -95,23 +95,15 @@ assert_text_lacks "$TEST_CANARY_SECRET" "$secret_capture" "canary is absent from
 assert_file_lacks "$TEST_CANARY_SECRET" "$TEST_COMMAND_LOG" "canary is absent from argv logs"
 assert_file_lacks "$TEST_CANARY_SECRET" "$TEST_URL_LOG" "canary is absent from URL logs"
 
-export FAKE_SIBLING_STDOUT="fake-sibling"
-export FAKE_SIBLING_EXIT=0
-SETUP_CALLER=agentbot sibling_output="$(SETUP_CALLER=agentbot "$TEST_FAKE_SIBLING/install.sh" status)"
-assert_eq "fake-sibling" "$sibling_output" "fake sibling output is configurable"
-grep -Fq $'sibling\tcaller=agentbot\tstatus' "$TEST_SIBLING_LOG" \
-  && pass "fake sibling records caller context and argv" \
-  || fail "fake sibling records caller context and argv"
-
 export HARNESS_RELAUNCH_EXIT=19
 set +e
-SETUP_CALLER=dotfiles harness_relaunch "$TEST_ROOT/bin/agentbot" update --dry-run
+harness_relaunch "$TEST_ROOT/bin/agentbot" update --dry-run
 relaunch_rc=$?
 set -e
 assert_eq "19" "$relaunch_rc" "injected relaunch propagates status"
-assert_relaunch_call dotfiles "$TEST_ROOT/bin/agentbot" update --dry-run \
-  && pass "injected relaunch records argv and caller context" \
-  || fail "injected relaunch records argv and caller context"
+assert_relaunch_call "$TEST_ROOT/bin/agentbot" update --dry-run \
+  && pass "injected relaunch records argv" \
+  || fail "injected relaunch records argv"
 
 [[ ! -e "$TEST_FAKE_BIN/exec" ]] \
   && pass "harness never places a fake exec on PATH" \

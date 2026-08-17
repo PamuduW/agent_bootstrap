@@ -211,7 +211,6 @@ _agentbot_help_render_body() {
 			"${AGENTBOT_SURFACE_DESCRIPTION[$key]} Location: ${AGENTBOT_SURFACE_LOCATION[$key]}" "$cols"
 	done
 	_agentbot_help_print_section 'Integrations'
-	_agentbot_help_print_field 'Dotfiles integration' 'Agentbot resolves the sibling Dotfiles repository through DOTFILES_HOME or the canonical sibling path; the Dotfiles Agents menu can launch this Agentbot menu.' "$cols"
 	_agentbot_help_print_field 'Agent surfaces' 'Canonical sources are rendered into global Codex and Claude locations plus selected repository-local AGENTS, Claude, Copilot, and Cursor files.' "$cols"
 }
 

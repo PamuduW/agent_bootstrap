@@ -22,9 +22,6 @@ _repo_update_origin_allowed() {
     git@github.com:PamuduW/agent_bootstrap.git|https://github.com/PamuduW/agent_bootstrap.git)
       [[ "$repository" == agent_bootstrap ]] && return 0
       ;;
-    git@github.com:PamuduW/dotfiles.git|https://github.com/PamuduW/dotfiles.git)
-      [[ "$repository" == dotfiles ]] && return 0
-      ;;
   esac
 
   while IFS=$' \t' read -r key target; do
@@ -47,9 +44,6 @@ _repo_update_origin_allowed() {
   case "$resolved" in
     git@github.com:PamuduW/agent_bootstrap.git|https://github.com/PamuduW/agent_bootstrap.git)
       [[ "$repository" == agent_bootstrap ]] && return 0
-      ;;
-    git@github.com:PamuduW/dotfiles.git|https://github.com/PamuduW/dotfiles.git)
-      [[ "$repository" == dotfiles ]] && return 0
       ;;
   esac
   return 1

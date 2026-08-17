@@ -11,8 +11,6 @@ source "$_AGENTBOT_MENU_DIR/lib/command_help.sh"
 # shellcheck disable=SC1091
 source "$_AGENTBOT_MENU_DIR/lib/github_token.sh"
 # shellcheck disable=SC1091
-source "$_AGENTBOT_MENU_DIR/lib/sibling_dotfiles.sh"
-# shellcheck disable=SC1091
 source "$_AGENTBOT_MENU_DIR/menus/status.sh"
 # shellcheck disable=SC1091
 source "$_AGENTBOT_MENU_DIR/menus/install.sh"
@@ -28,8 +26,6 @@ source "$_AGENTBOT_MENU_DIR/menus/command_lib.sh"
 source "$_AGENTBOT_MENU_DIR/menus/graphify.sh"
 # shellcheck disable=SC1091
 source "$_AGENTBOT_MENU_DIR/menus/libraries.sh"
-# shellcheck disable=SC1091
-source "$_AGENTBOT_MENU_DIR/menus/dotfiles.sh"
 
 # shellcheck disable=SC2034
 _agentbot_menu_setup() {
@@ -42,10 +38,9 @@ _agentbot_menu_setup() {
 		'Configure GitHub token'
 		'Workspaces'
 		'Libraries'
-		'Dotfiles'
 		'Quit'
 	)
-	MENU_SIMPLE_KEYS=(status install update token workspaces libraries dotfiles quit)
+	MENU_SIMPLE_KEYS=(status install update token workspaces libraries quit)
 	MENU_SIMPLE_DESCS=(
 		$'Check the installed Agentbot components and baseline.\nRead-only status; no updates or writes are performed.'
 		$'Install skills, refresh rendered outputs, run Doctor, and link agentbot.\nUse the explicit install action when changes are intended.'
@@ -53,30 +48,8 @@ _agentbot_menu_setup() {
 		$'Configure the optional shared GitHub API token.\nThe token is stored outside this repository.'
 		$'List, preview, and resync locally registered workspaces.\nApply actions require explicit confirmation.'
 		$'Open the Agentbot and Graphify command reference libraries.\nRead-only command and safety information.'
-		$'Open the sibling Dotfiles installer.\nUnavailable until the reciprocal bridge slice is installed.'
 		$'Exit the Agentbot menu.\nReturn to the calling process.'
 	)
-	if [[ "${SETUP_CALLER:-}" == dotfiles ]]; then
-		MENU_SIMPLE_LABELS=(
-			'Check status'
-			'Install Agentbot'
-			'Update'
-			'Configure GitHub token'
-			'Workspaces'
-			'Libraries'
-			'Quit'
-		)
-		MENU_SIMPLE_KEYS=(status install update token workspaces libraries quit)
-		MENU_SIMPLE_DESCS=(
-			"${MENU_SIMPLE_DESCS[0]}"
-			"${MENU_SIMPLE_DESCS[1]}"
-			"${MENU_SIMPLE_DESCS[2]}"
-			"${MENU_SIMPLE_DESCS[3]}"
-			"${MENU_SIMPLE_DESCS[4]}"
-			"${MENU_SIMPLE_DESCS[5]}"
-			"${MENU_SIMPLE_DESCS[7]}"
-		)
-	fi
 }
 
 agentbot_menu_dispatch() {
@@ -89,7 +62,6 @@ agentbot_menu_dispatch() {
 	workspaces) agentbot_menu_workspaces || rc=$? ;;
 	libraries) agentbot_menu_libraries || rc=$? ;;
 	doctor) agentbot_menu_doctor || rc=$? ;;
-	dotfiles) agentbot_menu_dotfiles || rc=$? ;;
 	*) printf 'Unknown Agentbot menu action: %s\n' "$choice" >&2; rc=2 ;;
 	esac
 	if ((rc != 0)); then
@@ -114,7 +86,7 @@ agentbot_menu_loop() {
 		# Nested menus own their action pauses and return directly to this menu;
 		# do not add a stale parent pause after they exit. Failed child launches
 		# still pause so their error remains visible before the parent redraws.
-		if ((rc != 0)) || [[ "$choice" != dotfiles && "$choice" != workspaces ]]; then
+		if ((rc != 0)) || [[ "$choice" != workspaces ]]; then
 			ui_pause
 		fi
 	done

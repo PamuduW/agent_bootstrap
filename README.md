@@ -4,7 +4,7 @@ Personal AI-agent tooling installer. The Git repository and clone directory rema
 `agent_bootstrap`; the installed product and command are Agentbot / `agentbot`.
 
 - **Skills** — curated upstreams in [`skills.sources.yaml`](skills.sources.yaml), installed globally via [`npx skills`](https://www.npmjs.com/package/skills)
-- **Optional Graphify** — Dotfiles owns the `graphifyy` CLI; Agentbot owns the skill-only assistant setup
+- **Optional Graphify** — Agentbot owns the optional skill-only assistant setup; install the CLI separately
 - **agentbot boot** — register a folder or Git repo and render `AGENTS.md` plus selected agent surfaces from [`base/`](base/)
 - **Global baseline** — machine-level policy in [`global/AGENTS.md`](global/AGENTS.md), rendered to agent home dirs
 
@@ -17,8 +17,8 @@ memory retirement gate (Slice 4M) is merged and complete. Slice 4.0A is next.
 Phase 3 remains deferred. 
 The live surface includes the standalone Agentbot menu, profile-driven
 workspace rendering, local workspace registration/resync, global baseline
-rendering, curated skills management, the Dotfiles sibling bridge, and the
-optional Graphify CLI/skill integration. The detailed, implementation-aware roadmap is
+rendering, curated skills management, and the optional Graphify skill
+integration. The detailed, implementation-aware roadmap is
 [`archive/docs/stuff3.md`](archive/docs/stuff3.md).
 
 The supported menu entrypoints are `./install.sh` on a controlling TTY and
@@ -34,21 +34,8 @@ python3 -m pip install -r requirements.txt
 
 ### Clone paths
 
-**With dotfiles (recommended):** clone as a **sibling** of the dotfiles repo so the Agents menu finds the canonical path:
-
-```text
-parent/
-├── dotfiles/
-└── agent_bootstrap/    # e.g. ~/Dev/agent_bootstrap next to ~/Dev/dotfiles
-```
-
-```bash
-git clone <your-remote>/agent_bootstrap ~/Dev/agent_bootstrap   # sibling of dotfiles
-cd ~/Dev/agent_bootstrap
-./install.sh install
-```
-
-**Standalone:** clone anywhere; `AGENTBOT_HOME` derives from the clone path:
+Clone Agentbot anywhere; it has no runtime dependency on the Dotfiles
+repository:
 
 ```bash
 git clone <your-remote>/agent_bootstrap /any/path/agent_bootstrap
@@ -114,9 +101,8 @@ A folder copied into `~/.agents/skills/` is a valid **manual local skill**. `./i
 
 ### Optional Graphify integration
 
-Graphify is opt-in through CLI installation. Select the `graphify_cli`
-component in the sibling Dotfiles installer first; Agentbot never installs or
-upgrades the Python package. When that optional CLI exists, main Agentbot
+Install the optional `graphifyy` CLI through your preferred package workflow;
+Agentbot never installs or upgrades the Python package. When that optional CLI exists, main Agentbot
 Install and successful Update run only the generic Agent Skills synchronization.
 
 Use the direct Agentbot commands to inspect or repair that integration:
@@ -129,8 +115,8 @@ agentbot graphify setup
 `status` is read-only. `setup` requires the `graphify` executable and invokes
 only Graphify's generic skill-only command,
 `graphify install --platform agents`. If the CLI is missing, Agentbot reports
-the Dotfiles route and the manual `uv tool install graphifyy` command rather
-than installing it itself.
+the manual `uv tool install graphifyy` command rather than installing it
+itself.
 
 The canonical integration is `~/.agents/skills/graphify/`, including its
 `.graphify_version` stamp. Agentbot refreshes its existing Codex/global link
@@ -251,7 +237,6 @@ agentbot workspaces [--paths0 | --remove PATH]
 agentbot resync [--all | PATH ...] [--yes | --dry-run]
 agentbot doctor
 agentbot graphify status|setup
-agentbot dotfiles
 agentbot help
 ```
 
@@ -274,9 +259,7 @@ tracked manifest or policy changes are handed back as
 
 Repository origin validation accepts the canonical Agentbot GitHub URLs and
 global `url.*.insteadOf` aliases only when the resolved URL is that exact
-repository. The reciprocal Dotfiles bridge applies the same rule to the
-Dotfiles repository. Other hosts, paths, and credential-bearing URLs remain
-rejected.
+repository. Other hosts, paths, and credential-bearing URLs remain rejected.
 
 The update report lists the individual skills that were updated and removed.
 When `npx skills` reports that a source repository deleted a skill, Agentbot

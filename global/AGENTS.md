@@ -14,11 +14,16 @@ owns project-specific engineering rules. Keep this provider-neutral and concise.
 - Treat pre-existing modified, staged, and untracked files as user-owned. Do not
   revert, unstage, stage, delete, reformat, or overwrite unrelated changes.
 - Never commit, push, force-push, rewrite history, delete branches, rotate
-  credentials, install or uninstall software, delete out-of-scope files, or
-  change production without explicit authorization for that action in this task.
+  credentials, install or uninstall system/global software, delete out-of-scope
+  files, or change production without explicit authorization for that action in
+  this task.
+- Repository-local dependency installation is allowed when required by
+  documented setup or validation. Do not add, remove, or upgrade dependencies
+  unless the task requires it.
 - Never edit a generated file or instruction adapter when a canonical source
-  exists. Edit the source and re-render. Do not build, purge, or commit
-  generated artifacts unasked.
+  exists. Edit the source and regenerate through the repository's documented
+  workflow. Do not regenerate, purge, or commit generated artifacts unless the
+  task or repository workflow requires it.
 - Do not introduce dependencies or auth, permission, CI/CD, or deployment
   changes as incidental cleanup.
 

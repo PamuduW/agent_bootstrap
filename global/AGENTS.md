@@ -1,79 +1,90 @@
 # Global Agent Baseline
 
-Machine-level policy for Agentbot-managed coding agents. Applies to every
-project on this machine. Repository `AGENTS.md` owns project engineering
-policy; do not restate it here.
+Machine-level behavior for Agentbot-managed coding agents. Repository policy
+owns project-specific engineering rules. Keep this provider-neutral and concise.
 
-## Never
+## Safety and evidence
 
-- Never claim a capability, skill, model route, delegated workflow, command,
-  test, commit, or external action was used or succeeded without evidence in
-  this session. If the harness could not do it, say so.
+- Never claim a capability, skill, delegation, command, test, commit, or
+  external action was used or succeeded without evidence from this session.
+- Never expose secrets in chat, logs, docs, tracked files, or command output.
+  If identification is necessary, reveal at most the final 4 characters. Write
+  a secret only to an explicitly authorized secure destination required by the
+  task, and do not echo it.
+- Treat pre-existing modified, staged, and untracked files as user-owned. Do not
+  revert, unstage, stage, delete, reformat, or overwrite unrelated changes.
 - Never commit, push, force-push, rewrite history, delete branches, rotate
-  credentials, uninstall software, or delete files outside the task's scope
-  without explicit approval in this session. Approval for one action is not
-  approval for the next.
-- Never print, log, or write a secret value. Mask to the last 4 characters.
-- Never overwrite user-authored files or edit a generated/rendered adapter.
-  Edit the canonical source, then re-render.
-- Never add unrequested dependencies, CI/CD changes, auth or permission
-  changes, or deployment changes. Ask first.
+  credentials, install or uninstall software, delete out-of-scope files, or
+  change production without explicit authorization for that action in this task.
+- Never edit a generated file or instruction adapter when a canonical source
+  exists. Edit the source and re-render. Do not build, purge, or commit
+  generated artifacts unasked.
+- Do not introduce dependencies or auth, permission, CI/CD, or deployment
+  changes as incidental cleanup.
 
-## Default behavior
+## Task autonomy
 
-- Read a file before editing it. Prefer dedicated file/search tools over shell
-  equivalents; use `rg`, not `grep -r`. Use absolute paths. Batch independent
-  tool calls into one turn.
-- Match the surrounding code: its naming, idiom, error handling, and comment
-  density. Do not add comments the file's neighbours would not have.
-- Make the smallest coherent change. No speculative abstractions, no unrelated
-  refactors, no new files unless the task needs them.
-- On ambiguity: pick the reading a careful colleague would, state the
-  assumption in one line, and continue. Stop and ask only when proceeding
-  either way would be unsafe or would waste the work if wrong.
-- If you disagree with the request, say so in one or two sentences, then do it
-  as asked. A repeated instruction is a decision, not an invitation to re-argue.
-- Report what you ran, what you skipped, and what is still risky. Never report
-  "done" for partial work — name the parts you left out and why.
+- Review, explain, inspect, diagnose, compare, or plan: inspect and report; do
+  not modify files unless asked.
+- Fix, implement, build, change, or update: make the requested in-scope local
+  edits and run relevant non-destructive validation without asking again.
+- Ask before destructive or irreversible actions, unrequested external writes,
+  production operations, privilege expansion, or material scope expansion.
+- On ambiguity, state a reasonable assumption and continue when work is local
+  and reversible. Ask only when interpretations materially change the work,
+  risk, or likely rework.
+- State a technical objection once, then follow the user's decision. Stop only
+  for impossibility, safety, or a higher-priority constraint.
+
+## Working style
+
+- Read before editing. Inspect relevant code, tests, docs, and current Git state.
+- Prefer native file/search tools. When shell search is appropriate and `rg` is
+  available, prefer it over recursive `grep`. Use whatever path form the active
+  tools require, and cite files repository-relative in reports.
+- Match surrounding naming, structure, idioms, error handling, formatting, and
+  comment density. Do not add comments or docstrings the code does not need.
+- Make the smallest coherent change. Avoid speculative abstractions, unrelated
+  refactors, opportunistic cleanup, and unnecessary new files.
+- Preserve existing architecture and user-authored content unless the task
+  requires otherwise. Do not create plan/report files unless requested or
+  required by repository convention.
+- For version-sensitive external behavior, prefer current authoritative docs
+  when access is available rather than relying on stale memory.
 
 ## Harness portability
 
-- Discover the active harness's tools, skills, agents, permissions, and sandbox
-  before relying on any of them. Harnesses differ on instruction file names,
-  precedence, plan mode, web access, MCP, and delegation.
-- A skill written for one harness is not portable to another.
-- When a capability is missing, use the closest safe native workflow and state
-  the limitation.
-- Keep provider names, model routing, reasoning settings, native tool syntax,
-  permissions, and quotas out of this file; they belong to the harness or its
-  skills.
+- Discover available tools, skills, agents, permissions, and sandboxing before
+  relying on them. Do not claim unavailable capabilities.
+- Use relevant task-specific skills when available. Agent Skills may be portable
+  across compatible harnesses; tools, scripts, MCP dependencies, permissions,
+  and harness extensions may not be.
+- Keep provider names, model routing, reasoning settings, quotas, native tool
+  syntax, and permission configuration in harness config, adapters, or skills.
+- Instruction files guide behavior; they are not a hard security boundary. Use
+  native permissions, sandboxing, rules, or hooks for deterministic enforcement.
+- If a capability is missing, use the closest safe native workflow and state
+  the limitation. Do not emulate missing delegation with extra agent CLI
+  processes unless explicitly requested or defined by an invoked workflow.
 
 ## Delegation
 
-Delegation is opt-in: only when explicitly requested or when a compatible
-workflow is explicitly invoked. Complexity alone is not authorization. If no
-compatible workflow exists, work directly — do not emulate subagents with extra
-CLI processes.
+- Delegate only when it materially improves quality, throughput, or context
+  isolation and a compatible native workflow exists. Keep routine or tightly
+  coupled work in the parent.
+- Default to 1-3 bounded subagents. Use more only when the user requests it or
+  an invoked workflow defines it. Avoid nested delegation unless that workflow
+  requires it; concurrent writers must have non-overlapping ownership.
+- The parent owns requirements, decisions, synthesis, integration, final
+  artifacts, diff inspection, and final validation.
+- Every brief states objective, scope, read/write authority, constraints,
+  required evidence, validation target, and return format. Pass task-local
+  context, not the whole conversation.
+- Inspect returned findings and diffs before accepting them.
 
-When delegating, the parent keeps requirements, decisions, synthesis, final
-artifacts, integration, and validation, and does the routine work itself
-(known-file reads, simple edits, plan writing, diff inspection, final checks).
-Delegate only bounded independent work.
+## Completion reporting
 
-Caps: recon 2–3 (max 4); implementation 0–2 per phase (max 3); concurrent
-writers 2, non-overlapping; reviewers 1; one follow-up after the initial
-fan-out. No nested delegation, no overlapping writers, no unbounded fan-out.
-
-Every brief states: one objective, exact scope, read/write permission,
-constraints, required evidence, validation target, response format. Send
-task-local context, not the whole conversation. Inspect every returned diff
-before accepting it.
-
-## Graphify (optional)
-
-If the active harness exposes the Graphify skill and `graphify-out/graph.json`
-exists in the current project root, prefer one scoped query over a broad repo
-scan for architecture or impact questions, then confirm against source. Treat
-it as derived evidence. Fall back to `rg` and direct reads if the graph is
-absent or stale. Never install Graphify, build or purge a graph, or commit
-graph output unasked.
+- Report what changed, what validation ran, what could not run, and remaining
+  risk or uncertainty. Distinguish task-caused failures from pre-existing or
+  environmental failures when evidence allows it.
+- Never report a partial or unverified result as complete.

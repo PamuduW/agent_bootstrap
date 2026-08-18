@@ -14,13 +14,11 @@ class ManifestAgentsSyncTests(unittest.TestCase):
         # baseline only. Repeating it in base/AGENTS.md would double-load it.
         content = self.global_agents.read_text(encoding="utf-8")
         self.assertIn(
-            "Discover the active harness's tools, skills, agents, permissions, and sandbox",
+            "Discover available tools, skills, agents, permissions, and sandboxing",
             content,
         )
-        self.assertIn(
-            "A skill written for one harness is not portable to another.",
-            content,
-        )
+        # Agent Skills are a portable format; the harness-specific parts are not.
+        self.assertIn("Agent Skills may be portable", content)
         for path in self.agents_paths:
             self.assertNotIn("Managed identifiers", path.read_text(encoding="utf-8"))
 
@@ -50,20 +48,14 @@ class ManifestAgentsSyncTests(unittest.TestCase):
         )
         self.assertEqual(base_baseline, root_baseline)
 
-    def test_canonical_policies_define_the_safe_graphify_gate(self) -> None:
-        required = (
-            "graphify-out/graph.json",
-            "active harness exposes",
-            "Fall back to `rg`",
-            "Never install Graphify",
-            "derived evidence",
-        )
-        # The gate lives in the global baseline only; Graphify is a machine-level
-        # optional tool, not repository policy.
+    def test_canonical_policies_keep_the_tool_gate_generic(self) -> None:
+        # Graphify usage guidance belongs to its skill. The baseline keeps only
+        # the generic gate a skill description cannot supply: do not install
+        # tooling or build/purge generated artifacts unasked.
         content = self.global_agents.read_text(encoding="utf-8")
-        for phrase in required:
+        for phrase in ("install or uninstall software", "build, purge, or commit"):
             self.assertIn(phrase, content, msg=f"{phrase!r} missing from {self.global_agents}")
-        for path in self.agents_paths:
+        for path in (self.global_agents, *self.agents_paths):
             self.assertNotIn("graphify-out/graph.json", path.read_text(encoding="utf-8"))
 
     def test_graphify_policy_is_not_added_to_unmarked_user_files(self) -> None:

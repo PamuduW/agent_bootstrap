@@ -1,75 +1,80 @@
 # AGENTS.md
 
-Engineering policy for this repository. Keep it specific and verifiable —
-prefer "run `pytest tests/`" over "test your changes".
+Engineering policy for this repository. Keep it specific and verifiable:
+prefer exact commands and canonical examples over abstract advice.
 
-## Policy files
+## Policy ownership
 
-- This file is canonical. Every other instruction file Agentbot renders for
-  this repo (see the enabled targets in `agentos.yaml`) is a generated adapter
-  — edit this file and re-render, never edit an adapter.
-- Resync rewrites the prefix between the Agentbot baseline markers and keeps
-  everything after them. An `AGENTS.md` with no markers whose prefix no longer
-  matches the base template is treated as custom and left untouched.
-- Put anything repo-specific under `## Project`.
+- This file is canonical for repository-wide agent policy. Agentbot-generated
+  adapters are derived output: edit this file and re-render, never an adapter.
+- Resync rewrites the Agentbot-managed prefix between its baseline markers and
+  preserves content after it. An unmarked `AGENTS.md` whose prefix no longer
+  matches the base template is custom and must be left alone.
+- Put repository-wide facts under `## Project`; put component-specific guidance
+  in the nearest scoped instruction file when needed instead of bloating root.
+- Do not repeat machine policy here except for the safety floor below, which is
+  intentionally retained for agents that run without a personal baseline.
 
-## Non-negotiables
+## Safety floor
 
-- Never claim a command, test, commit, or external action ran or succeeded
-  without evidence in this session.
+- Never claim a command, test, commit, or external action succeeded without
+  evidence from this session.
 - Never commit or push without explicit authorization for this task.
-- Never print, log, or write a secret value.
+- Never expose a secret in chat, logs, documentation, or tracked files.
+- Preserve unrelated pre-existing modified, staged, and untracked work.
 
-## When to plan first
+## Plan first when risk or coupling requires it
 
-Write a plan before touching code if any of these hold:
+Plan before editing when any of these hold:
 
-- the change spans more than ~5 files or more than one repository;
-- it touches auth, permissions, secrets, CI/CD, deployment, or data migration;
-- it changes a public interface, a schema, or a cross-service contract;
-- the requirements are ambiguous enough that two readings give different code.
+- multiple repositories or independently deployable components are involved;
+- auth, permissions, secrets, CI/CD, release/deployment behavior, or data
+  migration changes;
+- a public interface, schema, persistent data, or cross-service contract changes;
+- implementation has dependent phases where order or rollback matters;
+- material ambiguity could cause substantially different work or major rework.
 
-Otherwise implement directly. If the deliverable is a plan, do not implement.
+File count alone does not require a plan. Keep plans proportional. Include only
+applicable items from objective, non-goals, evidence, assumptions, affected
+areas, dependencies, compatibility/migration, validation, failure handling,
+rollback, and completion criteria. Update a plan when reality materially
+diverges. If the requested deliverable is only a plan, do not implement it.
 
-A plan states: objective, non-goals, evidence gathered, assumptions, affected
-files, phases with dependencies, compatibility and migration, failure handling,
-tests, rollback, and completion criteria. Update it when reality diverges.
+## Requirement tracking
 
-## When to keep a requirement ledger
+For multi-phase work or 3+ independently verifiable acceptance criteria, keep a
+lightweight `requirement -> implementation -> validation` mapping in the current
+task or native plan system. Do not create a ledger file unless requested or
+required by repository convention. Audit it before reporting completion;
+passing tests do not excuse a requirement mismatch.
 
-For any request with 3+ numbered requirements, or any multi-phase plan, track:
-goal, current state, required behavior, non-goals, edge cases, acceptance
-criteria, unresolved decisions. Map each numbered requirement to the code that
-implements it and the check that proves it. Audit against this ledger before
-reporting completion — passing tests do not excuse a requirement mismatch.
+## Repository workflow
 
-## Working in this repo
-
-1. Read the request in full, plus the relevant code, tests, and `git status`,
-   before editing.
-2. Change the smallest coherent surface. Avoid unrelated cleanup.
-3. Preserve existing architecture and user-authored content unless an approved
-   plan changes them.
-4. Validate each phase before widening scope; respect requested checkpoints.
+- Follow commands, conventions, generated-file rules, and constraints under
+  `## Project` and any applicable scoped instruction file.
+- Where guidance is absent, infer conventions from code and configuration
+  instead of inventing project rules.
+- Keep cross-service/repository contract changes synchronized. If one side is
+  unavailable, identify exactly what remains unverified.
+- Respect requested checkpoints; validate a risky phase before widening scope.
 
 ## Definition of done
 
-- Format/lint checks for the changed files pass.
-- Focused tests for the changed behavior pass; broaden when a shared contract,
-  infrastructure, or deployment path changed.
-- Stated edge cases are exercised; tests updated when behavior changed.
-- Both sides of any cross-repo or cross-service contract are verified.
-- `git diff` and `git status` reviewed — nothing unrelated is staged.
-- Durable docs updated when commands, interfaces, setup, or ops behavior
-  changed.
-- The report names the checks that ran, the checks that could not run, and the
-  remaining risk.
-
-## Git
-
-- No commit or push without explicit authorization for this task.
-- Never stage unrelated files. Keep credentials out of tracked files, prompts,
-  logs, and command history.
+- Run the narrowest applicable repo-configured format, lint, typecheck, build,
+  and tests for the changed behavior. Broaden when a shared contract,
+  infrastructure path, or deployment path changed.
+- Exercise stated edge cases and update tests when behavior changes.
+- Never delete, skip, weaken, or rewrite validation merely to make work pass;
+  change a check only when the requested behavior legitimately requires it.
+- Verify both sides of changed cross-service/repository contracts when available.
+- Review `git diff` and `git status`; leave unrelated user-owned changes and
+  staging state untouched.
+- Update durable docs when commands, interfaces, setup, generated sources,
+  operations, or deployment behavior change.
+- If a relevant check cannot run or fails for a pre-existing/environmental
+  reason, report the command, evidence, and remaining uncertainty rather than
+  claiming full verification.
+- Report checks run, checks not run, and remaining risk.
 
 ## Project
 

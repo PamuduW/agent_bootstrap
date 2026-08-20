@@ -102,8 +102,10 @@ def inspect_claude_statusline(paths: AgentbotPaths) -> StatuslineState:
     )
 
 
-def doctor_claude_statusline(paths: AgentbotPaths) -> list[DoctorIssue]:
-    state = inspect_claude_statusline(paths)
+def doctor_claude_statusline(
+    paths: AgentbotPaths, *, state: StatuslineState | None = None
+) -> list[DoctorIssue]:
+    state = state or inspect_claude_statusline(paths)
     issues: list[DoctorIssue] = []
     source = statusline_source(paths)
     destination = statusline_destination(paths)

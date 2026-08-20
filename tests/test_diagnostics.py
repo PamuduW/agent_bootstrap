@@ -1,11 +1,76 @@
 import unittest
 from unittest import mock
 
-from tests.support import isolated_agentbot_paths
+from tests.support import isolated_agentbot_paths, write_skills_manifest
 
 
 class DiagnosticsTests(unittest.TestCase):
-    def test_collect_reuses_one_issue_collection_for_summary_and_doctor(self) -> None:
+    def test_collect_reads_shared_general_diagnostics_facts_once(self) -> None:
+        from src.claude_statusline import StatuslineState
+        from src.diagnostics import Diagnostics
+        from src.skills_sources import load_skills_sources
+
+        with isolated_agentbot_paths() as (root, paths):
+            write_skills_manifest(
+                root,
+                sources=(
+                    "sources:\n"
+                    "  - id: curated\n"
+                    "    repo: https://example.invalid/skills.git\n"
+                    "    skills: [alpha]\n"
+                ),
+            )
+            statusline = StatuslineState(True, True, True, True, True, True)
+            diagnostics = Diagnostics(paths)
+
+            with mock.patch(
+                "src.diagnostics.load_skills_sources", wraps=load_skills_sources
+            ) as manifest_load, mock.patch(
+                "src.diagnostics.managed_skill_names", return_value={"alpha"}
+            ) as managed_names, mock.patch(
+                "src.diagnostics.inspect_claude_statusline", return_value=statusline
+            ) as statusline_inspect, mock.patch(
+                "src.claude_statusline.inspect_claude_statusline",
+                return_value=statusline,
+            ) as doctor_statusline_inspect, mock.patch.object(
+                diagnostics, "graphify_status", return_value=mock.Mock(state="ready")
+            ) as graphify_status, mock.patch.object(
+                diagnostics, "skills_doctor_issues", return_value=[]
+            ):
+                snapshot = diagnostics.collect()
+
+            self.assertEqual(1, snapshot.enabled_sources)
+            self.assertEqual(1, snapshot.managed_skill_count)
+            self.assertEqual("ok", snapshot.claude_statusline_state)
+            self.assertEqual(1, manifest_load.call_count)
+            self.assertEqual(1, managed_names.call_count)
+            self.assertEqual(1, statusline_inspect.call_count)
+            self.assertEqual(0, doctor_statusline_inspect.call_count)
+            self.assertEqual(1, graphify_status.call_count)
+
+    def test_statusline_doctor_uses_an_already_inspected_state(self) -> None:
+        from src.claude_statusline import StatuslineState, doctor_claude_statusline
+
+        with isolated_agentbot_paths() as (_, paths):
+            state = StatuslineState(
+                source_exists=True,
+                installed=False,
+                in_sync=False,
+                managed=False,
+                settings_wired=False,
+                jq_available=True,
+            )
+            with mock.patch(
+                "src.claude_statusline.inspect_claude_statusline",
+                side_effect=AssertionError("state was inspected twice"),
+            ):
+                issues = doctor_claude_statusline(paths, state=state)
+
+            self.assertEqual(1, len(issues))
+            self.assertEqual("claude-statusline", issues[0].scope)
+            self.assertIn("not installed", issues[0].message)
+
+    def test_collect_combines_general_and_skills_issues_once(self) -> None:
         from src.diagnostics import Diagnostics
         from src.models import DoctorIssue
         with isolated_agentbot_paths() as (root, paths):
@@ -15,15 +80,13 @@ class DiagnosticsTests(unittest.TestCase):
             statusline = mock.Mock(status_label="ready")
 
             with mock.patch.object(
-                diagnostics, "doctor_issues", return_value=list(general)
+                diagnostics, "_doctor_issues", return_value=list(general)
             ) as doctor, mock.patch.object(
                 diagnostics, "skills_doctor_issues", return_value=list(skills)
             ) as skills_doctor, mock.patch.object(
                 diagnostics, "list_skills", return_value=["alpha", "beta"]
             ) as list_skills, mock.patch(
                 "src.diagnostics.managed_skill_names", return_value={"alpha"}
-            ), mock.patch.object(
-                diagnostics, "_manifest_declared_skill_names", return_value=set()
             ), mock.patch.object(
                 diagnostics, "_unmanaged_skill_dirs", return_value=(root / "manual",)
             ), mock.patch(
@@ -36,7 +99,7 @@ class DiagnosticsTests(unittest.TestCase):
             self.assertEqual(1, snapshot.managed_skill_count)
             self.assertEqual(1, snapshot.manual_skill_count)
             self.assertEqual("ready", snapshot.claude_statusline_state)
-            doctor.assert_called_once_with()
+            doctor.assert_called_once()
             skills_doctor.assert_called_once_with()
             list_skills.assert_called_once_with()
 

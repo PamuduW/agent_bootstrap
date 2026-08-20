@@ -3,9 +3,14 @@ from __future__ import annotations
 import json
 import re
 import stat
+from dataclasses import dataclass
 from pathlib import Path
 
-from .claude_statusline import doctor_claude_statusline, inspect_claude_statusline
+from .claude_statusline import (
+    StatuslineState,
+    doctor_claude_statusline,
+    inspect_claude_statusline,
+)
 from .graphify import GraphifyIntegration, GraphifyStatus
 from .models import DiagnosticsSnapshot, DoctorIssue
 from .paths import AgentbotPaths
@@ -14,47 +19,45 @@ from .skills_installer import doctor_skills, list_installed_skills
 from .skills_sources import load_skills_sources
 
 
+@dataclass(frozen=True)
+class _DiagnosticsFacts:
+    enabled_sources: int
+    managed_names: frozenset[str]
+    declared_names: frozenset[str]
+    statusline: StatuslineState
+    graphify_status: GraphifyStatus
+    graphify_official: bool
+
+
 class Diagnostics:
     def __init__(self, paths: AgentbotPaths) -> None:
         self.paths = paths
 
     def collect(self) -> DiagnosticsSnapshot:
-        enabled_sources = 0
-        if self.paths.skills_sources_file.exists():
-            try:
-                config = load_skills_sources(self.paths.skills_sources_file)
-                enabled_sources = sum(
-                    1
-                    for source in config.sources
-                    if source.enabled and source.repo and source.skills
-                )
-            except ValueError:
-                enabled_sources = -1
-
+        facts = self._collect_facts()
         installed_skills = tuple(self.list_skills())
-        managed_names = set(managed_skill_names(self.paths))
-        declared_names = self._manifest_declared_skill_names()
         claude_bridge_links = 0
         if self.paths.claude_skills_home.is_dir():
             claude_bridge_links = sum(
                 1 for entry in self.paths.claude_skills_home.iterdir() if entry.is_symlink()
             )
-        statusline = inspect_claude_statusline(self.paths)
-        issues = tuple(self.doctor_issues()) + tuple(self.skills_doctor_issues())
+        issues = tuple(self._doctor_issues(facts)) + tuple(self.skills_doctor_issues())
 
         return DiagnosticsSnapshot(
             installed_skills=installed_skills,
-            enabled_sources=enabled_sources,
+            enabled_sources=facts.enabled_sources,
             global_agents_exists=self.paths.global_agents.exists(),
             skills_sources_exists=self.paths.skills_sources_file.exists(),
             global_lock_exists=self.paths.global_skill_lock.exists(),
             global_lock_skills=self._count_global_lock_skills(self.paths),
-            managed_skill_count=len(managed_names),
+            managed_skill_count=len(facts.managed_names),
             manual_skill_count=len(
-                self._unmanaged_skill_dirs(managed_names, declared_names)
+                self._unmanaged_skill_dirs(
+                    set(facts.managed_names), set(facts.declared_names)
+                )
             ),
             claude_bridge_links=claude_bridge_links,
-            claude_statusline_state=statusline.status_label,
+            claude_statusline_state=facts.statusline.status_label,
             issues=issues,
         )
 
@@ -65,6 +68,9 @@ class Diagnostics:
         return doctor_skills(self.paths)
 
     def doctor_issues(self) -> list[DoctorIssue]:
+        return self._doctor_issues(self._collect_facts())
+
+    def _doctor_issues(self, facts: _DiagnosticsFacts) -> list[DoctorIssue]:
         issues: list[DoctorIssue] = []
         issues.extend(self._token_doctor_issues())
 
@@ -85,24 +91,20 @@ class Diagnostics:
                 )
             )
 
-        issues.extend(doctor_claude_statusline(self.paths))
-        managed_names = managed_skill_names(self.paths)
-        declared_names = self._manifest_declared_skill_names()
+        issues.extend(doctor_claude_statusline(self.paths, state=facts.statusline))
+        managed_names = set(facts.managed_names)
+        declared_names = set(facts.declared_names)
         managed_dirs = {
             skill_dir.name: skill_dir for skill_dir in installed_skill_dirs(self.paths)
         }
         codex_skills = self.paths.codex_home / "skills"
-        graphify = GraphifyIntegration(self.paths)
-        graphify_status = self.graphify_status()
-        graphify_official = graphify.version_path.is_file()
-
-        if graphify_official and graphify_status.state != "ready":
-            level = "error" if graphify_status.state == "broken" else "warning"
+        if facts.graphify_official and facts.graphify_status.state != "ready":
+            level = "error" if facts.graphify_status.state == "broken" else "warning"
             issues.append(
                 DoctorIssue(
                     level=level,
                     scope="graphify",
-                    message=self._graphify_doctor_message(graphify_status),
+                    message=self._graphify_doctor_message(facts.graphify_status),
                 )
             )
 
@@ -164,6 +166,34 @@ class Diagnostics:
     def graphify_status(self) -> GraphifyStatus:
         return GraphifyIntegration(self.paths).status()
 
+    def _collect_facts(self) -> _DiagnosticsFacts:
+        enabled_sources = 0
+        declared_names: set[str] = set()
+        if self.paths.skills_sources_file.exists():
+            try:
+                config = load_skills_sources(self.paths.skills_sources_file)
+            except ValueError:
+                enabled_sources = -1
+            else:
+                active_sources = config.active_sources()
+                enabled_sources = len(active_sources)
+                declared_names = {
+                    skill
+                    for source in active_sources
+                    for skill in source.skills
+                    if skill != "*"
+                }
+
+        graphify = GraphifyIntegration(self.paths)
+        return _DiagnosticsFacts(
+            enabled_sources=enabled_sources,
+            managed_names=frozenset(managed_skill_names(self.paths)),
+            declared_names=frozenset(declared_names),
+            statusline=inspect_claude_statusline(self.paths),
+            graphify_status=self.graphify_status(),
+            graphify_official=graphify.version_path.is_file(),
+        )
+
     def status_summary(self) -> dict[str, object]:
         snapshot = self.collect()
         return {
@@ -220,18 +250,6 @@ class Diagnostics:
             target_text = ", ".join(targets) or "an assistant"
             return f"{status.message} Preserved conflicting {target_text} target(s)."
         return status.message
-
-    def _manifest_declared_skill_names(self) -> set[str]:
-        try:
-            config = load_skills_sources(self.paths.skills_sources_file)
-        except (OSError, ValueError):
-            return set()
-        return {
-            skill
-            for source in config.active_sources()
-            for skill in source.skills
-            if skill != "*"
-        }
 
     def _token_doctor_issues(self) -> list[DoctorIssue]:
         token_file = self.paths.config_home / "github.env"

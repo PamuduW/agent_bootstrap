@@ -21,23 +21,29 @@ _agentbot_token_menu_line() {
 }
 
 _agentbot_token_menu_confirm() {
-	local answer=''
-	_agentbot_token_menu_line answer "${C_YELLOW:-}$1${C_RESET:-} [y/N/q]: "
-	case "$answer" in
-	y | Y | yes | YES) return 0 ;;
-	*) return 1 ;;
-	esac
+	AGENTBOT_TUI_IN_FD="$AGENTBOT_TOKEN_MENU_IN_FD" \
+		AGENTBOT_TUI_OUT_FD="$AGENTBOT_TOKEN_MENU_OUT_FD" \
+		tui_confirm "${C_YELLOW:-}$1${C_RESET:-}"
 }
 
 _agentbot_token_menu_pause() {
-	local ignored=''
-	_agentbot_token_menu_line ignored "${C_DIM:-}Press Enter to continue:${C_RESET:-} "
+	AGENTBOT_TUI_IN_FD="$AGENTBOT_TOKEN_MENU_IN_FD" \
+		AGENTBOT_TUI_OUT_FD="$AGENTBOT_TOKEN_MENU_OUT_FD" \
+		tui_pause
+}
+
+_agentbot_token_menu_secret() {
+	local out_var="$1" prompt="$2" value=''
+	printf '%s' "$prompt" >&"$AGENTBOT_TOKEN_MENU_OUT_FD"
+	IFS= read -rs value <&"$AGENTBOT_TOKEN_MENU_IN_FD" || value='q'
+	printf '\n' >&"$AGENTBOT_TOKEN_MENU_OUT_FD"
+	printf -v "$out_var" '%s' "$value"
 }
 
 _agentbot_token_menu_render() {
 	local token='' current='not configured' current_color="${C_DIM:-}"
 	local cols="${AGENTBOT_TOKEN_TTY_COLS:-}"
-	[[ -n "$cols" ]] || cols="$(agentbot_menu_cols)"
+	[[ -n "$cols" ]] || cols="$(tui_cols)"
 	github_token_read token
 	if [[ -n "$token" ]]; then
 		current="$(github_token_fingerprint "$token")"
@@ -46,7 +52,7 @@ _agentbot_token_menu_render() {
 		current='saved state is invalid or unsafe'
 		current_color="${C_RED:-}"
 	fi
-	agentbot_menu_print_header "GitHub Token Config" "Agentbot › GitHub Token Config" "$cols" >&"$AGENTBOT_TOKEN_MENU_OUT_FD"
+	tui_header "GitHub Token Config" "Agentbot › GitHub Token Config" "$cols" >&"$AGENTBOT_TOKEN_MENU_OUT_FD"
 	printf '  %sCurrent:%s %s%s%s\n' \
 		"${C_BOLD:-}" "${C_RESET:-}" "$current_color" "$current" "${C_RESET:-}" \
 		>&"$AGENTBOT_TOKEN_MENU_OUT_FD"
@@ -66,9 +72,9 @@ _agentbot_token_menu_render() {
 
 _agentbot_token_menu_save() {
 	local token=''
-	printf '  %sInput is visible on screen and may be seen by others.%s\n' \
-		"${C_YELLOW:-}" "${C_RESET:-}" >&"$AGENTBOT_TOKEN_MENU_OUT_FD"
-	_agentbot_token_menu_line token "  ${C_CYAN:-}GitHub token${C_RESET:-} (q cancels): "
+	printf '  %sInput is hidden; only its fingerprint will be shown.%s\n' \
+		"${C_DIM:-}" "${C_RESET:-}" >&"$AGENTBOT_TOKEN_MENU_OUT_FD"
+	_agentbot_token_menu_secret token "  ${C_CYAN:-}GitHub token${C_RESET:-} (q cancels): "
 	[[ "$token" != q && "$token" != Q && -n "$token" ]] || return 0
 	if ! github_token_is_valid "$token"; then
 		printf '  %sInvalid token; nothing was saved.%s\n' \
@@ -129,7 +135,7 @@ agentbot_token_config_menu() {
 	_agentbot_token_menu_open_fds || return 1
 	_github_token_warning_scope_begin
 	while true; do
-		ui_clear
+		tui_clear
 		_agentbot_token_menu_render
 		_agentbot_token_menu_line action "  ${C_BOLD:-}Select action:${C_RESET:-} "
 		case "$action" in

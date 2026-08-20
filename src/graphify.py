@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import os
 import re
 import shutil
-import subprocess
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Callable
 
+from .command_runner import CommandRunner
 from .paths import AgentbotPaths
 
 
@@ -22,16 +22,28 @@ class GraphifyStatus:
     message: str
 
 
-RunCommand = Callable[..., subprocess.CompletedProcess[str]]
 _VERSION_RE = re.compile(r"\d+(?:\.\d+)+")
+DEFAULT_GRAPHIFY_TIMEOUT_SECONDS = 300
+GRAPHIFY_TIMEOUT_ENV = "AGENTBOT_GRAPHIFY_TIMEOUT_SECONDS"
 
 
 class GraphifyIntegration:
     """Inspect and install Graphify's global, skill-only Agent Skills copy."""
 
-    def __init__(self, paths: AgentbotPaths, *, run: RunCommand | None = None) -> None:
+    def __init__(self, paths: AgentbotPaths, *, runner: CommandRunner | None = None) -> None:
         self.paths = paths
-        self._run = run or subprocess.run
+        self._runner = runner or CommandRunner()
+
+    @staticmethod
+    def _timeout_seconds() -> int:
+        raw = os.environ.get(GRAPHIFY_TIMEOUT_ENV, str(DEFAULT_GRAPHIFY_TIMEOUT_SECONDS))
+        try:
+            timeout = int(raw)
+        except ValueError as error:
+            raise ValueError(f"{GRAPHIFY_TIMEOUT_ENV} must be a positive integer") from error
+        if timeout <= 0:
+            raise ValueError(f"{GRAPHIFY_TIMEOUT_ENV} must be a positive integer")
+        return timeout
 
     @property
     def skill_path(self) -> Path:
@@ -103,18 +115,16 @@ class GraphifyIntegration:
                 ),
             )
 
-        try:
-            result = self._run(
-                [str(current.cli_path), "install", "--platform", "agents"],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-        except OSError as error:
-            return replace(current, state="broken", message=f"Graphify skill setup failed: {error}")
+        result = self._runner.run(
+            [str(current.cli_path), "install", "--platform", "agents"],
+            timeout_seconds=self._timeout_seconds(),
+        )
         if result.returncode != 0:
-            detail = (result.stderr or result.stdout or f"exit {result.returncode}").strip()
-            return replace(current, state="broken", message=f"Graphify skill setup failed: {detail}")
+            return replace(
+                current,
+                state="broken",
+                message=f"Graphify skill setup failed: {result.detail()}",
+            )
 
         refreshed = self.status()
         if not refreshed.skill_path.is_file():
@@ -137,15 +147,10 @@ class GraphifyIntegration:
     def _cli_version(self, cli_path: Path | None) -> str | None:
         if cli_path is None:
             return None
-        try:
-            result = self._run(
-                [str(cli_path), "--version"],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-        except OSError:
-            return None
+        result = self._runner.run(
+            [str(cli_path), "--version"],
+            timeout_seconds=self._timeout_seconds(),
+        )
         if result.returncode != 0:
             return None
         output = (result.stdout or result.stderr).strip()

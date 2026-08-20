@@ -4,6 +4,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from tests.support import agentbot_paths
+
 
 class GlobalResyncTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -24,14 +26,7 @@ class GlobalResyncTests(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def _paths(self):
-        from src.paths import AgentbotPaths
-
-        return AgentbotPaths(
-            root=self.root,
-            codex_home=self.codex_home,
-            claude_home=self.claude_home,
-            cursor_home=self.root / "home" / ".cursor",
-        )
+        return agentbot_paths(self.root)
 
     def test_plan_reports_missing_global_outputs_and_statusline(self) -> None:
         from src.render import plan_global_resync_actions
@@ -66,13 +61,13 @@ class GlobalResyncTests(unittest.TestCase):
         self.assertEqual("~/.claude/statusline-command.sh", settings["statusLine"]["command"])
 
     def test_service_resync_includes_global_actions(self) -> None:
-        from src.service import AgentbotService
+        from src.lifecycle import Lifecycle
         from src.workspace_service import WorkspaceReport
 
-        service = AgentbotService(self._paths())
+        service = Lifecycle(self._paths())
         empty = WorkspaceReport(results=())
         with mock.patch.object(service.workspace_service, "resync", return_value=empty), mock.patch(
-            "src.service.resync_global_outputs",
+            "src.lifecycle.resync_global_outputs",
             return_value=(),
         ) as global_resync:
             report = service.resync_workspaces(apply=True, paths=())

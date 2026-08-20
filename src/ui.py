@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import sys
 import textwrap
 from collections.abc import Callable
 from pathlib import Path
+
+from .commands import CommandSpec, commands_for_surface
+from .models import Table, TableSection
 
 BOLD = "\033[1m"
 DIM = "\033[2m"
@@ -43,6 +47,33 @@ def strip_ansi(text: str) -> str:
     return ANSI_ESCAPE.sub("", text)
 
 
+def terminal_columns() -> int:
+    configured = os.environ.get("AGENTBOT_MENU_COLS", "")
+    if configured.isdigit():
+        return max(20, int(configured))
+    if os.environ.get("AGENTBOT_TUI"):
+        return max(20, shutil.get_terminal_size(fallback=(80, 24)).columns)
+    return 80
+
+
+def _fit_line(text: str, width: int) -> str:
+    if len(text) <= width:
+        return text
+    if width <= 3:
+        return text[:width]
+    return f"{text[: width - 3]}..."
+
+
+def _table_widths() -> tuple[int, int, int]:
+    if not os.environ.get("AGENTBOT_TUI") and not os.environ.get("AGENTBOT_MENU_COLS"):
+        return LABEL_W, DETAIL_W, RESULT_W
+    available = max(12, min(terminal_columns(), 80) - 8)
+    label_width = max(6, available * 29 // 100)
+    result_width = max(5, available * 14 // 100)
+    detail_width = max(1, available - label_width - result_width)
+    return label_width, detail_width, result_width
+
+
 def shorten_detail(text: str, *, max_len: int = DETAIL_W) -> str:
     cleaned = strip_ansi(text).replace("\r", "")
     for line in cleaned.splitlines():
@@ -59,20 +90,21 @@ def shorten_detail(text: str, *, max_len: int = DETAIL_W) -> str:
 
 
 def print_header(title: str, breadcrumb: str = "") -> None:
+    width = terminal_columns() - 2
     print()
-    print(f"  {_c(f'=== {title} ===', BOLD + ORANGE)}")
+    print(f"  {_c(_fit_line(f'=== {title} ===', width), BOLD + ORANGE)}")
     if breadcrumb:
-        print(f"  {_c(breadcrumb, DIM)}")
+        print(f"  {_c(_fit_line(breadcrumb, width), DIM)}")
     print()
 
 
 def print_section(label: str) -> None:
-    print(f"  {_c(label, BOLD + YELLOW)}")
+    print(f"  {_c(_fit_line(label, terminal_columns() - 2), BOLD + YELLOW)}")
 
 
 def color_result(result: str) -> str:
     key = result.strip().lower()
-    if key in {"ok", "installed", "configured", "linked", "up to date", "current", "applied"}:
+    if key in {"ok", "installed", "configured", "linked", "up to date", "current", "applied", "read-only"}:
         return _c(result, GREEN)
     if key in {"missing", "failed", "error", "conflict"}:
         return _c(result, RED)
@@ -84,6 +116,7 @@ def color_result(result: str) -> str:
         "drift",
         "extra",
         "applied-with-local-changes",
+        "mutating",
     }:
         return _c(result, YELLOW)
     if key in {"info", "dry-run", "preview"}:
@@ -101,9 +134,13 @@ def highlight_manual_skill_name(detail: str, line: str) -> str:
 
 def print_table_columns(*, headers: tuple[str, str, str] = ("component", "detail", "result")) -> None:
     h0, h1, h2 = headers
-    print(f"  {_c(f'{h0:<{LABEL_W}} | {h1:<{DETAIL_W}} | {h2}', BOLD)}")
+    label_width, detail_width, result_width = _table_widths()
+    h0 = _fit_line(h0, label_width)
+    h1 = _fit_line(h1, detail_width)
+    h2 = _fit_line(h2, result_width)
+    print(f"  {_c(f'{h0:<{label_width}} | {h1:<{detail_width}} | {h2}', BOLD)}")
     print(
-        f"  {'-' * LABEL_W}-+-{'-' * DETAIL_W}-+-{'-' * RESULT_W}"
+        f"  {'-' * label_width}-+-{'-' * detail_width}-+-{'-' * result_width}"
     )
 
 
@@ -116,6 +153,7 @@ def print_table(
     detail_highlighter: Callable[[str, str], str] | None = None,
 ) -> tuple[int, int, int]:
     ok_count = check_count = miss_count = 0
+    label_width, detail_width, _result_width = _table_widths()
     if show_header:
         print_table_columns(headers=headers)
     for label, detail, result in rows:
@@ -125,24 +163,25 @@ def print_table(
                 detail_lines.extend(
                     textwrap.wrap(
                         paragraph,
-                        width=DETAIL_W,
-                        break_long_words=False,
+                        width=detail_width,
+                        break_long_words=True,
                         break_on_hyphens=False,
                     )
                     or [""]
                 )
         else:
-            detail_lines = [detail if len(detail) <= DETAIL_W else f"{detail[: DETAIL_W - 3]}..."]
+            detail_lines = [_fit_line(detail, detail_width)]
 
         for line_number, detail_fit in enumerate(detail_lines):
-            detail_padded = f"{detail_fit:<{DETAIL_W}}"
+            detail_padded = f"{detail_fit:<{detail_width}}"
             if detail_highlighter is not None:
                 detail_padded = detail_highlighter(detail, detail_padded)
             if line_number == 0:
-                print(f"  {label:<{LABEL_W}} | {detail_padded} | ", end="")
-                print(color_result(result))
+                label_fit = _fit_line(label, label_width)
+                print(f"  {label_fit:<{label_width}} | {detail_padded} | ", end="")
+                print(color_result(_fit_line(result, _result_width)))
             else:
-                print(f"  {'':<{LABEL_W}} | {detail_padded} |")
+                print(f"  {'':<{label_width}} | {detail_padded} |")
         key = result.strip().lower()
         if key in {"ok", "installed", "configured", "linked", "up to date", "current"}:
             ok_count += 1
@@ -180,6 +219,87 @@ def print_section_block(label: str) -> None:
     print_table_columns()
 
 
+def table_rows(table: Table) -> list[dict[str, str]]:
+    return [
+        {"section": section.label, "component": component, "detail": detail, "result": result}
+        for section in table.sections
+        for component, detail, result in section.rows
+    ]
+
+
+def print_table_model(table: Table) -> tuple[int, int, int]:
+    print_header(table.title, table.breadcrumb)
+    total_ok = total_check = total_miss = 0
+    for section in table.sections:
+        print_section_block(section.label)
+        ok, check, miss = print_table(list(section.rows), show_header=False)
+        total_ok += ok
+        total_check += check
+        total_miss += miss
+    print_rollup(ok=total_ok, check=total_check, miss=total_miss)
+    return total_ok, total_check, total_miss
+
+
+def print_command_help(spec: CommandSpec | None = None) -> None:
+    if spec is None:
+        print_header("Agentbot Help", "Agentbot › Help")
+        print("  Usage: agentbot <command> [options]")
+        for surface, label in (("public", "── Commands ──"), ("bootstrap", "── Bootstrap commands ──")):
+            print()
+            print_section(label)
+            print()
+            print_table(
+                [(item.name, item.summary, item.behavior) for item in commands_for_surface(surface)],
+                headers=("command", "description", "behavior"),
+                wrap_details=True,
+            )
+        print()
+        print_section("── Environment ──")
+        print()
+        print_table(
+            [
+                ("AGENTBOT_HOME", "Owning Agentbot repository root", "info"),
+                ("XDG_CONFIG_HOME", "Base for private Agentbot state", "info"),
+                ("GITHUB_TOKEN", "Optional GitHub API credential; never rendered", "info"),
+                ("NO_COLOR", "Disable ANSI color output", "info"),
+            ],
+            headers=("variable", "purpose", "behavior"),
+            wrap_details=True,
+        )
+        return
+
+    print_header(spec.name, f"Agentbot › Help › {spec.name}")
+    print_table(
+        [
+            ("Usage", spec.usage, spec.behavior),
+            ("Purpose", spec.summary, "info"),
+            ("Effects", spec.effects, spec.behavior),
+        ],
+        show_header=False,
+        wrap_details=True,
+    )
+    if spec.options:
+        print_section_block("── Options ──")
+        print_table(
+            [
+                (item.usage, f"{item.description} Default: {item.default}.", "info")
+                for item in spec.options
+            ],
+            show_header=False,
+            wrap_details=True,
+        )
+    if spec.examples:
+        print_section_block("── Examples ──")
+        print_table(
+            [("Example", example, "info") for example in spec.examples],
+            show_header=False,
+            wrap_details=True,
+        )
+    if spec.related:
+        print()
+        print(f"  Related: {', '.join(spec.related)}")
+
+
 def print_status_summary(
     *,
     installed_skills: int,
@@ -205,10 +325,13 @@ def print_status_summary(
     elif global_lock_exists:
         lock_detail = "~/.agents/.skill-lock.json (unreadable)"
 
-    print_header("Status", "Agentbot › Status")
-    print_section_block("── Skills & baseline ──")
-    ok, check, miss = print_table(
-        [
+    table = Table(
+        title="Check Status",
+        breadcrumb="Agentbot › Check Status",
+        sections=(
+            TableSection(
+                label="── Skills & baseline ──",
+                rows=(
             ("Installed skills", str(installed_skills), "ok" if installed_skills else "check"),
             ("Global AGENTS.md", "global/AGENTS.md", "ok" if global_agents_exists else "missing"),
             ("Skills manifest", manifest_detail, "ok" if skills_sources_exists else "missing"),
@@ -237,14 +360,18 @@ def print_status_summary(
                 "no issues" if doctor_issue_count == 0 else f"{doctor_issue_count} issue(s)",
                 "ok" if doctor_issue_count == 0 else "check",
             ),
-        ],
-        show_header=False,
+                ),
+            ),
+        ),
     )
-    print_rollup(ok=ok, check=check, miss=miss)
+    print_table_model(table)
 
 
-def print_doctor_summary(issues: list) -> int:
-    print_header("Doctor", "Agentbot › Doctor")
+def print_doctor_summary(issues: list, *, include_header: bool = True) -> int:
+    if include_header:
+        print_header("Doctor", "Agentbot › Doctor")
+    else:
+        print_section_block("── Doctor issues ──")
     if not issues:
         print_table(
             [("Health check", "skills + global baseline", "ok")],
@@ -472,4 +599,32 @@ def print_workspace_removed(record) -> None:
     print_header("Workspace removed", "Agentbot › Workspaces › Remove")
     print(f"  Stopped managing: {record.path}")
     print("  No workspace files were changed.")
+
+
+def print_update_plan(plan, *, command: str = "update") -> None:
+    title = command.capitalize()
+    print_header(f"Agentbot {command}", f"Agentbot › {title}")
+    rows = [
+        (
+            "Skills",
+            (
+                f"{len(plan.reconcile.wildcard_additions)} add, "
+                f"{len(plan.reconcile.wildcard_removals)} remove, "
+                f"{len(plan.reconcile.explicit_missing)} missing"
+            ),
+            "preview",
+        ),
+        ("Graphify", plan.graphify_action, "preview"),
+        (
+            "Workspaces",
+            f"{len(plan.workspace_report.results)} registered result(s)",
+            "preview",
+        ),
+    ]
+    print_table(rows)
+
+
+def print_update_outcome(outcome) -> None:
+    result = "ok" if outcome.status in {"applied", "applied-with-local-changes"} else outcome.status
+    print_table([("Update", outcome.message or outcome.status, result)], wrap_details=True)
     print()

@@ -4,7 +4,7 @@
 
 Nothing here is read by `./install.sh`, `npx skills`, or `agentbot` at runtime.
 
-**Implementation roadmap:** [stuff3.md](./stuff3.md) — phased build plan for restoring deferred features.
+**Implementation roadmap:** [../../docs/roadmap.md](../../docs/roadmap.md) — active phased build plan.
 
 **Current status (2026-08-06):** Phases 0–2 and 5 are complete. Phase 4 is
 the next workstream; its public-memory migration gate (Slice 4M) is merged and
@@ -22,11 +22,11 @@ workspace `temp/mem/` notes, not in this archive.
 | Path | Why keep |
 |------|----------|
 | **[stuff.md](./stuff.md)** | This file — deferred map and restore pointers |
-| **[stuff3.md](./stuff3.md)** | Implementation phases (Phases 0–2 and 5 complete; Phase 4 next; Phase 3 deferred) |
+| **[../../docs/roadmap.md](../../docs/roadmap.md)** | Active implementation phases (outside the archive) |
 | **[legacy-memory-vault-design.md](./legacy-memory-vault-design.md)** | Sanitized history of the retired public prototype |
 | **[README.md](./README.md)** | Move log (Tier 1/2) and pack → bootstrap matrix |
 | **[LOCKFILE-NOTES.md](./LOCKFILE-NOTES.md)** | Global vs project lockfile history |
-| **[archive/docs/](./)** | Roadmap and deferred-capability notes (`stuff.md`, `stuff3.md`, `future.md`) |
+| **[archive/docs/](./)** | Deferred-capability and historical notes (`stuff.md`, `future.md`) |
 | **[future.md](./future.md)** | AgentOS roadmap items still deferred |
 | **Phase 4 design** | Workspace [`temp/mem/`](../../../temp/mem/); private memory is not stored in this repository |
 | **[agentos.yaml](../agentos.yaml)** | v4 Lite export profiles reference |
@@ -107,7 +107,7 @@ material remains recoverable from Git history.
 | 2 | Global `npx skills` | **Live** |
 | 3 | Private WSLg Obsidian vault | **Next — Phase 4** (workspace [`temp/mem/`](../../../temp/mem/)) |
 | 4 | Hermes `MEMORY.md` + SQLite FTS (home server) | **Deferred** — Proxmox + Phase 7.3 |
-| 5 | Graphify on-demand (large infra repos) | **Live — Phase 5** ([stuff3.md](./stuff3.md)) |
+| 5 | Graphify on-demand (large infra repos) | **Live — Phase 5** ([roadmap](../../docs/roadmap.md)) |
 | 6 | Mem0 / Graphiti / GraphRAG | **Deferred** |
 
 **Later phases (do not build on laptop now):**
@@ -126,7 +126,7 @@ material remains recoverable from Git history.
 ```text
 LIVE (slim)                 ARCHIVE (docs/config)        GIT HISTORY (code)     FUTURE (not built)
 ───────────                 ─────────────────────        ──────────────────     ────────────────
-npx skills                  future.md + stuff3.md        catalog.py             Hermes / Proxmox
+npx skills                  future.md + roadmap.md       catalog.py             Hermes / Proxmox
 agentbot bootstrap          agentos.yaml                 discovery.py           Mem0 / Graphiti
 Graphify CLI + skill        packages.json + mcp.json     state.py, ui.py         Graphify hooks
 global render               templates/                   render.py (full)
@@ -138,7 +138,7 @@ doctor
 
 ## If you restore a deferred feature
 
-1. **Pick scope** — follow [stuff3.md](./stuff3.md) phases; catalog/MCP remain coupled within Phase 3 while the workspace renderer is live.
+1. **Pick scope** — follow [the active roadmap](../../docs/roadmap.md); catalog/MCP remain coupled within Phase 3 while the workspace renderer is live.
 2. **Restore code from git** — e.g. `git show <commit>:archive/src/agent_bootstrap/render.py` or checkout pre-removal commit.
 3. **Copy config from archive** — `catalog/`, `mcp/`, and `.env.example`; use the live root `agentos.yaml` and workspace renderer.
 4. **Re-wire live tree** — `src/cli.py`, `install.sh`, `service.py`; restore only catalog/MCP subcommands after a new design.

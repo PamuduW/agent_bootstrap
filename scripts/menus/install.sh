@@ -9,6 +9,7 @@ agentbot_menu_install() {
 		agentbot_run_backend install || rc=$?
 	fi
 	if ((rc == 2)); then
+		# shellcheck disable=SC2034  # consumed by the sourced parent menu loop
 		AGENTBOT_MENU_QUIT=true
 		return 0
 	fi

@@ -1,41 +1,28 @@
 # Agentbot
 
-Personal AI-agent tooling installer. The Git repository and clone directory remain
-`agent_bootstrap`; the installed product and command are Agentbot / `agentbot`.
+Agentbot is a local bootstrap CLI for agent policy, curated Agent Skills, and
+registered workspace outputs. It keeps authored policy in canonical Markdown,
+renders provider-specific files, and makes every mutating flow explicit.
 
-- **Skills** — curated upstreams in [`skills.sources.yaml`](skills.sources.yaml), installed globally via [`npx skills`](https://www.npmjs.com/package/skills)
-- **Optional Graphify** — Agentbot owns the optional skill-only assistant setup; install the CLI separately
-- **agentbot boot** — register a folder or Git repo and render `AGENTS.md` plus selected agent surfaces from [`base/`](base/)
-- **Global baseline** — machine-level policy in [`global/AGENTS.md`](global/AGENTS.md), rendered to agent home dirs
+The supported interfaces are `./install.sh` from the checkout and `agentbot`
+after installation. Run `agentbot help` for the complete command index or
+`agentbot help COMMAND` for one command's options, effects, and examples.
 
-Deferred features and the phased expansion plan live in [`archive/docs/`](archive/docs/README.md) ([stuff3.md](archive/docs/stuff3.md)).
+## Requirements
 
-## Current roadmap status
+- Bash, Git, Python 3, and PyYAML
+- Node.js/npm and `npx` for skill installation and updates
+- an optional `graphify` CLI for generic Graphify Agent Skills integration
 
-Phases 0, 1, 2, and 5 are complete. Phase 4 is the next workstream; its public
-memory retirement gate (Slice 4M) is merged and complete. Slice 4.0A is next.
-Phase 3 remains deferred. 
-The live surface includes the standalone Agentbot menu, profile-driven
-workspace rendering, local workspace registration/resync, global baseline
-rendering, curated skills management, and the optional Graphify skill
-integration. The detailed, implementation-aware roadmap is
-[`archive/docs/stuff3.md`](archive/docs/stuff3.md).
-
-The supported menu entrypoints are `./install.sh` on a controlling TTY and
-`agentbot` after installation. `./install.sh menu` is not a separate command.
-
-## Fresh machine
-
-**Prerequisites:** Git, Python 3, Node.js (for `npx`). Install Python deps:
+Install Python requirements in a repository-local environment when needed:
 
 ```bash
-python3 -m pip install -r requirements.txt 
+python3 -m pip install -r requirements.txt
 ```
 
-### Clone paths
+## Install
 
-Clone Agentbot anywhere; it has no runtime dependency on the Dotfiles
-repository:
+Clone the repository anywhere, then run the explicit install flow:
 
 ```bash
 git clone <your-remote>/agent_bootstrap /any/path/agent_bootstrap
@@ -43,276 +30,135 @@ cd /any/path/agent_bootstrap
 ./install.sh install
 ```
 
-Explicit install runs skills install → optional generic Graphify Agent Skills
-sync → Claude bridge/global render → doctor, and symlinks `bin/agentbot` →
-`~/bin/agentbot`. Graphify is skipped without error when its CLI is absent.
-Ensure `~/bin` is on your PATH.
-Running `./install.sh` or `agentbot` without arguments requires a controlling TTY
-and opens the Agentbot menu when that menu is available.
+Install checks the repository first, installs enabled skills, synchronizes the
+optional generic Graphify skill, refreshes managed global outputs, runs Doctor,
+and links `bin/agentbot` to `~/bin/agentbot`. Ensure `~/bin` is on `PATH`.
 
-`AGENTBOT_HOME` is exported from the clone path (not from `.env`). The active
-configuration directory is `${XDG_CONFIG_HOME:-$HOME/.config}/agentbot`. For a
-standalone install, add the repository path to your shell profile if needed:
+`AGENTBOT_HOME` is resolved from the executable location and exported for child
+commands. Private state lives under
+`${XDG_CONFIG_HOME:-$HOME/.config}/agentbot`; it is never stored in the clone.
+
+## Common workflows
 
 ```bash
-export AGENTBOT_HOME="/any/path/agent_bootstrap"
+agentbot                         # open the TTY menu
+agentbot status                 # inspect current managed state
+agentbot doctor                 # validate skills, locks, links, and outputs
+agentbot update --dry-run       # preview the update transaction
+agentbot update                 # plan, confirm when required, then apply
+agentbot token                  # manage the optional private GitHub token
+agentbot boot /path/to/repo     # render and register one repository
+agentbot workspaces             # list registered workspaces
+agentbot resync --dry-run --all # preview all registered workspaces
 ```
+
+The TUI uses the same command model and lifecycle paths as the direct CLI. Its
+Command Lib is a selectable index rather than a second hand-maintained help
+document. GitHub token input is silent; only a fingerprint is shown unless the
+user accepts an explicit reveal warning.
 
 ## Skills
 
-Curated upstreams are listed in [`skills.sources.yaml`](skills.sources.yaml). Install or refresh:
+[`skills.sources.yaml`](skills.sources.yaml) is the canonical curated-source
+manifest. Global per-skill pins live in `~/.agents/.skill-lock.json`; the
+committed [`skills-lock.json`](skills-lock.json) is only a project stub.
 
 ```bash
-./install.sh skills install   # idempotent install from manifest, then refresh Claude/Codex outputs
-./install.sh skills update    # npx --yes skills update -g + Claude bridge + Codex symlinks
-./install.sh skills upgrade   # alias for skills update
-./install.sh update --dry-run # write-free reconciliation and managed-surface preview
-./install.sh update --yes     # pre-approve source-owned skill/manifest deltas
-./install.sh upgrade --yes    # alias for the repo-first reconciliation
+./install.sh skills install
+./install.sh skills update
 ./install.sh skills list
 ./install.sh skills doctor
 ```
 
-Agent policy does not maintain a hardcoded list of skill names. Before choosing
-a skill, an agent should use the active harness's discovery mechanism and select
-only compatible capabilities for the current task. Agentbot's installed
-inventory is available with `agentbot skills list` (or
-`./install.sh skills list`); `skills.sources.yaml` and
-`~/.agents/.skill-lock.json` remain the durable source records.
+Add a source to the manifest, then use `skills install`. Source discovery is
+performed once per update plan, and apply verifies that the repository,
+manifest, lock, and remote source revisions still match that plan. A folder
+copied directly into `~/.agents/skills/` remains a manual skill; Status and
+Doctor report it as outside managed sources until the manifest owns it.
 
-### Lockfile strategy
+Graphify is separate from the curated `npx skills` manifest. Dotfiles owns CLI
+installation. Agentbot runs only `graphify install --platform agents` when the
+optional CLI already exists; it never builds project graphs or installs hooks.
 
-| File | Role |
-| ---- | ---- |
-| [`skills-lock.json`](skills-lock.json) | **Project stub** — committed placeholder (`sources: []`, v1). Not populated by `-g` installs. |
-| `~/.agents/.skill-lock.json` | **Authoritative for global installs** — v3 per-skill pins written by `npx --yes skills add … -g`. |
+## Workspaces and policy ownership
 
-Do not copy the global lock into the repo by hand (schemas differ). **Future:** populate `skills-lock.json` from the manifest for CI/reproducible project-scoped installs.
+`base/AGENTS.md` is the canonical project scaffold. A generated workspace
+always includes `AGENTS.md`; Claude, Copilot, and Cursor outputs are selected
+compatibility surfaces. Agentbot rewrites only its marked managed block and
+preserves project-owned content. Unmarked conflicting files are not replaced.
 
-See [`archive/docs/LOCKFILE-NOTES.md`](archive/docs/LOCKFILE-NOTES.md) for historical notes.
+Successful apply registers the canonical path in the private workspace
+registry. Preview is the default for `workspace` and `resync`; `--yes` is
+required to write. Removing a workspace record never deletes workspace files.
 
-To add a skill: add an entry under `sources` in `skills.sources.yaml`, then run `./install.sh skills install` (not `update`).
+`global/AGENTS.md` is the sole authored machine policy. Global Codex and Claude
+outputs, skill links, and the Claude statusline are generated from canonical
+sources; do not edit generated adapters directly.
 
-GitHub skill sources are shallow-cloned locally with a five-minute bound before `npx skills` installs from that checkout. This avoids the Skills CLI's unbounded GitHub API preflight on fresh machines. Set `AGENTBOT_GITHUB_CLONE_TIMEOUT_SECONDS` or `AGENTBOT_NPX_TIMEOUT_SECONDS` to positive values when a slow network needs longer bounds. In the interactive Agentbot install, each source emits only one start line and one completion line; child CLI output is captured and failures show only a short diagnostic.
+## Update safety
 
-### Manual skill folders
+Update has two gates:
 
-A folder copied into `~/.agents/skills/` is a valid **manual local skill**. `./install.sh global` (and both skill install/update commands) links every valid local skill into Codex and Claude without replacing conflicting user-owned links. Manual skills remain distinct from managed installs: `doctor` and `status` report them as outside managed sources until their repository and selected skill names are added to `skills.sources.yaml`. A pre-existing global-lock pin alone does not make a skill manifest-managed. Agentbot's officially stamped Graphify integration is reported through its dedicated status instead of as a manual skill.
+1. Validate the exact Agentbot origin, inspect local changes, fetch, and
+   classify current/ahead/behind/diverged history. Only a clean confirmed
+   behind checkout is fast-forwarded with `git pull --ff-only`; a changed
+   checkout exits so the user can rerun the new code.
+2. Build one read-only lifecycle plan, confirm source-owned deltas once, verify
+   the snapshot again, and apply skills plus managed surfaces under the shared
+   rollback boundary.
 
-### Optional Graphify integration
+Dirty, detached, diverged, missing-upstream, declined, and failed-fetch states
+stop before downstream work. Agentbot never stages, commits, pushes,
+force-pushes, resets, or deletes user files.
 
-Install the optional `graphifyy` CLI through your preferred package workflow;
-Agentbot never installs or upgrades the Python package. When that optional CLI exists, main Agentbot
-Install and successful Update run only the generic Agent Skills synchronization.
-
-Use the direct Agentbot commands to inspect or repair that integration:
-
-```bash
-agentbot graphify status
-agentbot graphify setup
-```
-
-`status` is read-only. `setup` requires the `graphify` executable and invokes
-only Graphify's generic skill-only command,
-`graphify install --platform agents`. If the CLI is missing, Agentbot reports
-the manual `uv tool install graphifyy` command rather than installing it
-itself.
-
-The canonical integration is `~/.agents/skills/graphify/`, including its
-`.graphify_version` stamp. Agentbot refreshes its existing Codex/global link
-and Claude bridge from that canonical copy. Cursor and other assistants use the
-generic Agent Skills location where they support it; setup does not create
-project rules, rewrite `AGENTS.md`, install hooks, enable strict mode, or build
-or purge a project graph. Graphify output remains derived evidence, not a
-replacement for current source files and tests.
-
-When a project has an Agentbot-rendered `AGENTS.md` and a readable
-`graphify-out/graph.json` at that project's root, a supported assistant can use
-the installed Graphify skill's query-first path automatically. This is
-project-local: a graph in another repository is not selected implicitly, and a
-missing or stale graph falls back to normal source inspection. Use the
-assistant-specific form shown by the installed skill (`/graphify` for Claude or
-Cursor; `$graphify` for Codex) and the shell CLI form (`graphify extract .`,
-`graphify update .`, or `graphify query ...`) only in a terminal.
-
-The TUI's **Graphify Lib** item is a read-only quick
-reference for those forms and the [official Graphify command reference](https://github.com/Graphify-Labs/graphify#common-commands).
-It also shows the explicit platform setup commands. Agentbot does **not** run
-`graphify claude install`, `graphify agents install`, `graphify codex install`,
-or `graphify cursor install`; those commands can edit project instruction files
-or hooks and remain opt-in.
-
-Main Install and successful Update set up or refresh the canonical Graphify
-skill whenever the CLI exists. CLI absence is a non-failing skip; generic setup
-failure makes the main flow fail. `agentbot update --dry-run` reports whether
-setup, refresh, or skip would occur without invoking Graphify.
-
-## Workspace setup and repository scaffolding
-
-Set up the current directory. With no selectors, Agentbot creates or preserves
-the canonical `AGENTS.md`, `CLAUDE.md`, and Cursor rule, then records the
-canonical folder or Git root in local XDG state. Copilot instructions are
-opt-in with `--copilot`:
-
-```bash
-cd ~/Dev/my-project
-agentbot boot
-agentbot boot --claude             # AGENTS.md + CLAUDE.md
-agentbot boot --copilot            # AGENTS.md + Copilot instructions
-agentbot boot --cursor             # AGENTS.md + .cursor/rules/agentbot-policy.mdc
-agentbot boot --codex              # AGENTS.md only; Codex consumes AGENTS.md
-```
-
-All write-capable workspace commands preview by default; `--yes` applies a
-render. Existing unmarked compatibility files are preserved and receive a
-review copy instead of blocking the render. An existing unmarked `AGENTS.md`
-is preserved as custom policy and receives `AGENTS_temp.md` containing the
-current base template. The project-owned `## Project` section remains outside
-Agentbot's managed baseline block.
-
-Review copies use the target stem, for example `CLAUDE_temp.md`,
-`.github/copilot-instructions_temp.md`, and
-`.cursor/rules/agentbot-policy_temp.mdc`. Each generated review copy stores a
-SHA-256 marker in its first HTML comment. An untouched copy is refreshed in
-place when the template changes; an edited stale copy is preserved and the
-next available suffix (`_temp_1`, `_temp_2`, and so on) is created. Existing
-original files are never overwritten just because they conflict.
-
-```bash
-agentbot workspace ~/Dev/existing-project
-agentbot workspace --yes ~/Dev/existing-project
-agentbot workspaces
-agentbot workspaces --remove ~/Dev/existing-project
-agentbot resync --dry-run --all
-agentbot resync --yes --all
-agentbot resync --yes ~/Dev/existing-project
-```
-
-Workspace records are stored privately at
-`${XDG_CONFIG_HOME:-$HOME/.config}/agentbot/workspaces.json`; they are not
-written into projects or tracked by Git. `workspaces --remove PATH` deletes
-only the exact private registry record and does not read, regenerate, or delete
-workspace files; it also works after the directory itself is gone. Repository
-setup remains available through explicit `agentbot boot` and
-`agentbot workspace --yes` commands, not through the TUI. Cursor's generated rule is
-`.cursor/rules/agentbot-policy.mdc`, not a skill installer.
-
-Templates: [`base/AGENTS.md`](base/AGENTS.md), [`base/CLAUDE.md`](base/CLAUDE.md). Machine baseline stays in `global/AGENTS.md`.
-The same preserved-original and review-copy behavior applies to the rendered
-files under `~/.codex` and `~/.claude`. Global render also installs the managed
-Claude Code status line script at `~/.claude/statusline-command.sh` (from
-`global/claude/statusline-command.sh`) and merges a `statusLine` entry into
-`~/.claude/settings.json` when that slot is free. Plain `./install.sh update`
-refreshes registered workspaces and managed global Codex/Claude outputs
-(including the statusline) after successful or no-delta skill reconciliation.
-`--dry-run` previews both reconciliation and managed surfaces without writing;
-`--yes` pre-approves source-owned skill additions, removals, and manifest
-changes that would otherwise return `confirmation_required`.
-
-Re-link after moving the clone by running `./install.sh install` explicitly.
-
-## Other commands
-
-```bash
-./install.sh global     # re-render ~/.codex and ~/.claude outputs from global/AGENTS.md
-./install.sh status     # skills count + global baseline status
-./install.sh doctor     # validate manifest, locks, and managed agent skill links
-./install.sh update --dry-run # preview skills and managed surfaces without writing
-./install.sh workspace ~/Dev/existing-project
-./install.sh workspaces
-./install.sh resync --dry-run --all
-```
-
-The public Agentbot command matrix is:
-
-```text
-agentbot                  # TTY menu; headless invocation fails with guidance
-agentbot status [--json]
-agentbot install
-agentbot update|upgrade [--dry-run] [--yes]
-agentbot token
-agentbot boot [--claude] [--copilot] [--cursor] [--codex] [--profile NAME] [target]
-agentbot workspace [--profile NAME] [--targets LIST] [--yes] PATH
-agentbot workspaces [--paths0 | --remove PATH]
-agentbot resync [--all | PATH ...] [--yes | --dry-run]
-agentbot doctor
-agentbot graphify status|setup
-agentbot help
-```
-
-The interactive **Command Lib**, `agentbot help`, and the bootstrap help all
-show the complete supported command, option, configuration, output, and
-integration reference. They are read-only and use the same catalog.
-
-`agentbot update` is repo-first. It validates the repository and upstream,
-captures local changes, fetches the allowed origin, and classifies the verified
-ahead/behind state before deciding whether any update may run. Any tracked or
-untracked local change stops both the repository pull and every downstream
-Agentbot update step, even when the fetched upstream is current. The stopped
-report shows the verified remote state and up to 20 changed paths, plus a
-copyable command for the complete list. Detached, diverged, missing-upstream,
-declined, and failed pull states also stop before skills work.
-
-A confirmed reconciliation never runs `git add`, `git commit`, or `git push`;
-tracked manifest or policy changes are handed back as
-`applied-with-local-changes` for the user to review and commit or discard.
-
-Repository origin validation accepts the canonical Agentbot GitHub URLs and
-global `url.*.insteadOf` aliases only when the resolved URL is that exact
-repository. Other hosts, paths, and credential-bearing URLs remain rejected.
-
-The update report lists the individual skills that were updated and removed.
-When `npx skills` reports that a source repository deleted a skill, Agentbot
-automatically approves removal of that source-owned local skill from the global
-store and lock; unrelated reconciliation changes still use the normal
-confirmation flow.
-
-Plain `agentbot update` is mutating once reconciliation can proceed safely: it
-refreshes upstream skills, then registered workspaces and managed global
-outputs. `--dry-run` is the write-free preview. `--yes` does not turn rendering
-on; it pre-approves source-owned additions, removals, and manifest edits that
-would otherwise require confirmation. The dedicated `resync` command remains
-preview-by-default and still needs `--yes` to apply.
-
-Reconciliation reports only semantic changes. A no-delta preview shows no
-changed lock file, and a no-delta apply does not rewrite the global lock.
-Workspace and global refresh totals count only outputs whose planned action is
-`create` or `update`; unchanged inspected targets remain visible in the detail
-table but do not inflate the summary.
-
-From the TTY menu, **Update** checks the repository first. If it is behind, a
-colored repository table is shown before the fast-forward pull prompt; after a
-pull, press Enter to restart `install.sh` from the updated checkout. Once the
-repository is current, the menu shows the colored Agentbot status and
-reconciliation preview, asks whether to apply it, prints the result report,
-and pauses back at the menu.
-
-## Repo layout
+## Architecture
 
 ```text
 agent_bootstrap/
-├── install.sh
-├── skills.sources.yaml
-├── skills-lock.json
-├── bin/                  # agentbot, skills-install, claude-skills-bridge
-├── agentos.yaml          # safe-default workspace profile
-├── base/                 # canonical Agentbot policy templates
-├── global/AGENTS.md      # machine-level baseline (authored)
-├── src/                  # slim Python CLI (cli.py, service.py, …)
-├── tests/
-└── archive/              # deferred capabilities — documentation is under archive/docs/
+├── install.sh             # repository gate, prerequisites, token scope, CLI adapter
+├── bin/agentbot           # public dispatcher and TTY launcher
+├── src/
+│   ├── commands.py        # canonical command metadata
+│   ├── cli.py             # parser, composition root, exit policy
+│   ├── lifecycle.py       # install/update/workspace orchestration
+│   ├── diagnostics.py     # shared Status and Doctor snapshot
+│   └── ...                # render, skills, Graphify, workspace modules
+├── scripts/lib/tui.sh     # shared terminal presentation primitives
+├── scripts/menus/         # thin interactive adapters
+├── base/ and global/      # canonical policy sources
+├── tests/                 # Python and focused shell suites
+└── archive/               # retired designs and deferred capabilities
 ```
 
-## Tests
+Python owns lifecycle behavior. Bash is limited to bootstrap/self-update,
+controlling-TTY presentation, secret scoping, and process adapters.
+
+## Validation
+
+Run the complete local gate:
 
 ```bash
-python3 -m unittest discover -s tests
-bash tests/test_agentbot.sh
+bash tests/run.sh
 ```
 
-## Deferred / archived
+For the same Python quality checks used in CI, install the development-only
+tools in a repository-local virtual environment:
 
-Deferred capabilities are documented in [`archive/docs/stuff.md`](archive/docs/stuff.md); the build roadmap is [`archive/docs/stuff3.md`](archive/docs/stuff3.md).
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt -r requirements-dev.txt
+PATH="$PWD/.venv/bin:$PATH" bash tests/run.sh
+```
 
-Legacy pre-slim code is recoverable from Git history; the retained design and
-configuration references are documented in [`archive/docs/README.md`](archive/docs/README.md).
+The gate runs Ruff and coverage when installed, all Python and shell suites
+exactly once, Bash syntax, production ShellCheck when installed, and
+`git diff --check`, with per-suite timings.
+Focused troubleshooting can use `python3 -m unittest discover -s tests` or an
+individual shell suite under `tests/shell/`.
+
+## Project documentation
+
+- [Roadmap](docs/roadmap.md) — active delivered and planned work
+- [Quick start](QUICKSTART.md) — compact first-use guide
+- [Archive index](archive/docs/README.md) — retired designs and restore notes
+- [Deferred capability map](archive/docs/stuff.md) — intentionally inactive work

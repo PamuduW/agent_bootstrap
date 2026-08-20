@@ -171,10 +171,10 @@ class WorkspaceStore:
             raise ValueError(f"invalid workspace state: unsupported version in {self.state_file}")
         workspaces = raw.get("workspaces")
         if not isinstance(workspaces, list):
-            raise ValueError(f"invalid workspace state: workspaces must be a list")
+            raise ValueError("invalid workspace state: workspaces must be a list")
         records = tuple(WorkspaceRecord.from_dict(item) for item in workspaces)
         if len({record.path for record in records}) != len(records):
-            raise ValueError(f"invalid workspace state: duplicate workspace path")
+            raise ValueError("invalid workspace state: duplicate workspace path")
         return tuple(sorted(records, key=lambda record: record.path))
 
     def _prepare_parent(self) -> None:

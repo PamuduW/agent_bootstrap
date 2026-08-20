@@ -4,12 +4,17 @@ import argparse
 import json
 import os
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
+from .commands import COMMANDS, command_by_name
+from .diagnostics import Diagnostics
+from .graphify import GraphifyIntegration
+from .lifecycle import Lifecycle
 from .paths import AgentbotPaths, default_paths
-from .service import AgentbotService
 from .skills_installer import SkillsInstallError, parse_update_output
 from .ui import (
+    print_command_help,
     print_doctor_summary,
     print_graphify_status,
     print_header,
@@ -17,6 +22,8 @@ from .ui import (
     print_skills_report,
     print_skills_update_report,
     print_status_summary,
+    print_update_outcome,
+    print_update_plan,
     print_workspace_list,
     print_workspace_removed,
     print_workspace_report,
@@ -47,68 +54,90 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
 
+    command = args.command or "bootstrap"
+    if command == "help":
+        return print_help_command(
+            getattr(args, "help_topic", None),
+            output_format=getattr(args, "help_format", "plain"),
+        )
+
     paths = default_paths(Path(args.root))
-    service = AgentbotService(paths)
+    diagnostics = Diagnostics(paths)
+    lifecycle = Lifecycle(
+        paths,
+        diagnostics=diagnostics,
+        graphify=GraphifyIntegration(paths),
+    )
 
     try:
-        command = args.command or "bootstrap"
         if command in ARCHIVED_COMMANDS:
             return _archived_command_error(command)
         if command == "status":
             if getattr(args, "status_json", False):
-                print_status_json(service)
-            else:
-                print_status(service)
-            return 0
+                print_status_json(diagnostics)
+                return 0
+            return print_status(
+                diagnostics,
+                include_issues=bool(getattr(args, "status_doctor", False)),
+            )
         if command == "global":
-            service.render_global()
+            lifecycle.render_global()
             return 0
         if command == "doctor":
-            return print_doctor(service)
+            return print_doctor(diagnostics)
         if command == "graphify":
             graphify_command = getattr(args, "graphify_command", None) or "status"
             status = (
-                service.setup_graphify()
+                lifecycle.setup_graphify()
                 if graphify_command == "setup"
-                else service.graphify_status()
+                else lifecycle.graphify_status()
             )
             print_graphify_status(status)
             if graphify_command == "status":
                 return 1 if status.state == "broken" else 0
             return 0 if status.state in {"ready", "conflict", "stale"} else 1
         if command in {"update", "upgrade"}:
-            result = service.run_reconciliation_update(
-                dry_run=bool(getattr(args, "dry_run", False)),
-                confirm=bool(getattr(args, "confirm", False)),
-            )
-            title = command.capitalize()
-            print_header(f"Agentbot {command}", f"Agentbot › {title}")
-            print(f"  {result.status}: {result.message or 'source-owned skills reconciled'}")
-            for path in result.changed_paths:
-                print(f"  changed: {path}")
-            print_reconciliation_report(result)
-            if result.workspace_report is not None:
-                print_workspace_resync_report(result.workspace_report)
-            failed_surfaces = _workspace_report_has_failures(result.workspace_report)
-            if result.status not in {
-                "applied",
-                "applied-with-local-changes",
-                "preview",
-                "confirmation_required",
-            }:
+            plan = lifecycle.plan_update()
+            print_update_plan(plan, command=command)
+            if bool(getattr(args, "dry_run", False)):
+                return 0
+            if bool(getattr(args, "interactive", False)):
+                if not confirm_update_plan():
+                    print("  Update cancelled.")
+                    return 0
+            elif not bool(getattr(args, "confirm", False)) and (
+                plan.reconcile.wildcard_additions
+                or plan.reconcile.wildcard_removals
+                or plan.reconcile.manifest_changes
+            ):
+                print("  confirmation_required: rerun with --yes to apply this plan")
+                return 0
+            outcome = lifecycle.apply_update(plan)
+            print_update_outcome(outcome)
+            result = outcome.reconcile
+            if result is not None:
+                print_reconciliation_report(result)
+            workspace_report = outcome.workspace_report
+            if workspace_report is not None:
+                print_workspace_resync_report(workspace_report)
+            if outcome.status not in {"applied", "applied-with-local-changes"}:
                 return 1
-            return 1 if failed_surfaces else 0
+            return (
+                1
+                if _workspace_report_has_failures(workspace_report)
+                else 0
+            )
         if command == "workspace":
             targets = parse_workspace_targets(args.targets)
             if args.yes:
-                result = service.apply_workspace(
+                result = lifecycle.apply_workspace(
                     Path(args.path),
                     profile=args.profile,
                     targets=targets,
                     register=True,
                 )
             else:
-                result = service.preview_workspace(
+                result = lifecycle.preview_workspace(
                     Path(args.path),
                     profile=args.profile,
                     targets=targets,
@@ -117,13 +146,13 @@ def main() -> int:
             return 1 if result.status in {"conflict", "failed"} else 0
         if command == "workspaces":
             if args.remove:
-                removed = service.remove_workspace(Path(args.remove))
+                removed = lifecycle.remove_workspace(Path(args.remove))
                 print_workspace_removed(removed)
             elif args.paths0:
-                for record in service.list_workspaces():
+                for record in lifecycle.list_workspaces():
                     sys.stdout.write(f"{record.path}\0")
             else:
-                print_workspace_list(service.list_workspaces())
+                print_workspace_list(lifecycle.list_workspaces())
             return 0
         if command == "resync":
             if args.yes and args.dry_run:
@@ -132,16 +161,16 @@ def main() -> int:
                 raise ValueError("resync cannot combine --all with explicit PATH values")
             if not args.all and not args.paths:
                 raise ValueError("resync requires --all or at least one PATH")
-            report = service.resync_workspaces(
+            report = lifecycle.resync_workspaces(
                 apply=bool(args.yes),
                 paths=() if args.all else tuple(Path(path) for path in args.paths),
             )
             print_workspace_resync_report(report)
             return 1 if any(item.status in {"conflict", "failed"} for item in report.results) else 0
         if command == "bootstrap":
-            return run_bootstrap_command(service, paths)
+            return run_bootstrap_command(lifecycle, paths)
         if command == "skills":
-            return handle_skills_command(service, args.skills_command)
+            return handle_skills_command(lifecycle, args.skills_command)
         raise SystemExit(f"unknown command: {command}")
     except (SkillsInstallError, ValueError, OSError) as error:
         print(f"Error: {error}", file=sys.stderr)
@@ -157,9 +186,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command")
 
+    help_parser = subparsers.add_parser("help", help="Show the command reference")
+    help_parser.add_argument("help_topic", nargs="?", metavar="COMMAND")
+    help_parser.add_argument(
+        "--format",
+        choices=("plain", "menu", "tui"),
+        default="plain",
+        dest="help_format",
+        help=argparse.SUPPRESS,
+    )
+
     subparsers.add_parser("bootstrap", help="Run fresh-machine bootstrap flow")
     status_parser = subparsers.add_parser("status", help="Show skills and global render status")
-    status_parser.add_argument("--json", action="store_true", dest="status_json")
+    status_output = status_parser.add_mutually_exclusive_group()
+    status_output.add_argument("--json", action="store_true", dest="status_json")
+    status_output.add_argument(
+        "--doctor",
+        action="store_true",
+        dest="status_doctor",
+        help="Show status and Doctor issues from one diagnostics snapshot",
+    )
     subparsers.add_parser("global", help="Render global outputs")
     subparsers.add_parser("doctor", help="Validate skills and global baseline")
     graphify = subparsers.add_parser("graphify", help="Inspect or set up Graphify integration")
@@ -181,6 +227,11 @@ def build_parser() -> argparse.ArgumentParser:
             dest="confirm",
             action="store_true",
             help="Pre-approve source-owned skill and manifest changes",
+        )
+        update.add_argument(
+            "--interactive",
+            action="store_true",
+            help="Preview, confirm, and apply one update plan in this process",
         )
 
     workspace = subparsers.add_parser("workspace", help="Preview or render one workspace")
@@ -240,6 +291,17 @@ def _archived_command_error(command: str) -> int:
     return 1
 
 
+def confirm_update_plan() -> bool:
+    input_path = os.environ.get("AGENTBOT_UPDATE_TTY_INPUT", "/dev/tty")
+    output_path = os.environ.get("AGENTBOT_UPDATE_TTY_OUTPUT", "/dev/tty")
+    with open(output_path, "a", encoding="utf-8") as output_stream:
+        output_stream.write("\nApply this Agentbot update plan? [y/N] ")
+        output_stream.flush()
+    with open(input_path, encoding="utf-8") as input_stream:
+        answer = input_stream.readline().strip()
+    return answer.lower() in {"y", "yes"}
+
+
 def parse_workspace_targets(value: str | None) -> tuple[str, ...] | None:
     if value is None:
         return None
@@ -257,12 +319,12 @@ def parse_workspace_targets(value: str | None) -> tuple[str, ...] | None:
     return ("agents",) + tuple(target for target in targets if target != "agents")
 
 
-def handle_skills_command(service: AgentbotService, skills_command: str) -> int:
+def handle_skills_command(lifecycle: Lifecycle, skills_command: str) -> int:
     if skills_command == "install":
         try:
-            results = service.install_skills()
+            results = lifecycle.install_skills()
             skills_rc = print_skills_report(results, title="Skills install")
-            service.refresh_agent_outputs()
+            lifecycle.refresh_outputs()
         except Exception as error:  # noqa: BLE001
             print_header("Skills install", "Agentbot › Skills install")
             print(f"  Error: {error}")
@@ -272,21 +334,21 @@ def handle_skills_command(service: AgentbotService, skills_command: str) -> int:
         title = skills_command.capitalize()
         print_header(f"Skills {skills_command}", f"Agentbot › Skills {title}")
         try:
-            result = service.update_skills()
+            result = lifecycle.update_skills()
             update_report = parse_update_output(result.stdout, result.stderr)
-            linked, skipped, updated = service.refresh_agent_outputs()
+            outputs = lifecycle.refresh_outputs()
         except Exception as error:  # noqa: BLE001
             print(f"  Error: {error}")
             return 1
         return print_skills_update_report(
-            linked=linked,
-            skipped=skipped,
-            updated=updated,
+            linked=outputs.claude_linked,
+            skipped=outputs.claude_skipped,
+            updated=outputs.claude_updated,
             updated_skills=update_report.updated_skills,
             upstream_deleted_skills=update_report.deleted_skills,
         )
     if skills_command == "list":
-        skills = service.list_skills()
+        skills = lifecycle.list_skills()
         if not skills:
             print_header("Installed Skills", "Agentbot › Installed Skills")
             print("  No installed skills found.")
@@ -296,18 +358,27 @@ def handle_skills_command(service: AgentbotService, skills_command: str) -> int:
             print(f"  {skill}")
         return 0
     if skills_command == "doctor":
-        return print_skills_doctor(service)
+        return print_skills_doctor(lifecycle.diagnostics)
     raise SystemExit(f"unknown skills command: {skills_command}")
 
 
-def run_bootstrap_command(service: AgentbotService, paths: AgentbotPaths) -> int:
-    rc = service.run_bootstrap()
+def run_bootstrap_command(lifecycle: Lifecycle, paths: AgentbotPaths) -> int:
+    print_header("Install Agentbot", "Agentbot › Install Agentbot")
+    outcome = lifecycle.install()
+    skills_rc = print_skills_report(list(outcome.skills), title="Skills install")
+    if outcome.graphify.cli_path is not None or outcome.graphify.state == "broken":
+        print_graphify_status(outcome.graphify)
+    doctor_rc = print_doctor_summary(list(outcome.diagnostics.issues))
     print(f"AGENTBOT_HOME={paths.root.resolve()}")
-    return rc
+    if skills_rc != 0:
+        return skills_rc
+    if outcome.graphify.state == "broken":
+        return 1
+    return doctor_rc
 
 
-def print_skills_doctor(service: AgentbotService) -> int:
-    issues = service.skills_doctor_issues()
+def print_skills_doctor(diagnostics: Diagnostics) -> int:
+    issues = diagnostics.skills_doctor_issues()
     print_header("Skills Doctor", "Agentbot › Skills Doctor")
     if not issues:
         print("  No issues found.")
@@ -321,29 +392,50 @@ def print_skills_doctor(service: AgentbotService) -> int:
     return 1 if errors else 0
 
 
-def print_status(service: AgentbotService) -> None:
-    summary = service.status_summary()
+def print_status(diagnostics: Diagnostics, *, include_issues: bool = False) -> int:
+    snapshot = diagnostics.collect()
     print_status_summary(
-        installed_skills=int(summary["installed_skills"]),
-        global_agents_exists=bool(summary["global_agents_exists"]),
-        skills_sources_exists=bool(summary["skills_sources_exists"]),
-        enabled_sources=int(summary["enabled_sources"]),
-        global_lock_exists=bool(summary["global_lock_exists"]),
-        global_lock_skills=int(summary["global_lock_skills"]),
-        claude_bridge_links=int(summary["claude_bridge_links"]),
-        claude_statusline_state=str(summary.get("claude_statusline_state", "unknown")),
-        manual_skill_count=int(summary["manual_skill_count"]),
-        doctor_issue_count=int(summary["doctor_issue_count"]),
+        installed_skills=len(snapshot.installed_skills),
+        global_agents_exists=snapshot.global_agents_exists,
+        skills_sources_exists=snapshot.skills_sources_exists,
+        enabled_sources=snapshot.enabled_sources,
+        global_lock_exists=snapshot.global_lock_exists,
+        global_lock_skills=snapshot.global_lock_skills,
+        claude_bridge_links=snapshot.claude_bridge_links,
+        claude_statusline_state=snapshot.claude_statusline_state,
+        manual_skill_count=snapshot.manual_skill_count,
+        doctor_issue_count=len(snapshot.issues),
     )
+    if include_issues:
+        return print_doctor_summary(list(snapshot.issues), include_header=False)
+    return 0
 
 
-def print_status_json(service: AgentbotService) -> None:
-    print(json.dumps(service.status_summary(), indent=2, sort_keys=True))
+def print_status_json(diagnostics: Diagnostics) -> None:
+    snapshot = diagnostics.collect()
+    payload = asdict(snapshot)
+    payload["installed_skills"] = len(snapshot.installed_skills)
+    payload["doctor_issue_count"] = len(snapshot.issues)
+    payload.pop("issues")
+    print(json.dumps(payload, indent=2, sort_keys=True))
 
 
-def print_doctor(service: AgentbotService) -> int:
-    issues = service.doctor_issues() + service.skills_doctor_issues()
-    return print_doctor_summary(issues)
+def print_doctor(diagnostics: Diagnostics) -> int:
+    return print_doctor_summary(list(diagnostics.collect().issues))
+
+
+def print_help_command(topic: str | None, *, output_format: str = "plain") -> int:
+    if output_format == "menu":
+        for spec in COMMANDS:
+            print(f"{spec.name}\t{spec.behavior}\t{spec.surface}\t{spec.summary}")
+        return 0
+    try:
+        spec = command_by_name(topic) if topic else None
+    except KeyError:
+        print(f"Error: unknown help topic: {topic}", file=sys.stderr)
+        return 2
+    print_command_help(spec)
+    return 0
 
 
 if __name__ == "__main__":

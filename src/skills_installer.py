@@ -1,18 +1,19 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
-import subprocess
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
-import re
 
+from .command_runner import CommandResult, CommandRunner
 from .models import DoctorIssue
 from .paths import AgentbotPaths
+from .skill_catalog import skill_name_from_file
 from .skills_sources import SkillSourceEntry, SkillsSourcesConfig, load_skills_sources
 
 
@@ -76,6 +77,7 @@ NPX_TIMEOUT_ENV = "AGENTBOT_NPX_TIMEOUT_SECONDS"
 DEFAULT_GITHUB_CLONE_TIMEOUT_SECONDS = 300
 GITHUB_CLONE_TIMEOUT_ENV = "AGENTBOT_GITHUB_CLONE_TIMEOUT_SECONDS"
 MAX_COMMAND_ERROR_DETAIL_LENGTH = 240
+_COMMAND_RUNNER = CommandRunner()
 _ANSI_ESCAPE_RE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 _UPDATE_LINE_RE = re.compile(r"^✓\s+Updated\s+(.+?)$")
 _DELETED_HEADER_RE = re.compile(
@@ -120,18 +122,7 @@ def _github_clone_timeout_seconds() -> int:
 
 def _command_error_detail(stdout: str, stderr: str) -> str:
     """Keep command failures useful without replaying a child CLI transcript."""
-    lines: list[str] = []
-    for output in (stdout, stderr):
-        for raw_line in output.splitlines():
-            line = _ANSI_ESCAPE_RE.sub("", raw_line).strip()
-            if line and not line.lower().startswith("npm notice"):
-                lines.append(line)
-    if not lines:
-        return "no diagnostic output"
-    detail = " | ".join(lines[-3:])
-    if len(detail) > MAX_COMMAND_ERROR_DETAIL_LENGTH:
-        detail = f"...{detail[-MAX_COMMAND_ERROR_DETAIL_LENGTH + 3:]}"
-    return detail
+    return CommandResult(1, stdout, stderr).detail(MAX_COMMAND_ERROR_DETAIL_LENGTH)
 
 
 def parse_update_output(*outputs: str) -> SkillsUpdateReport:
@@ -193,35 +184,18 @@ def _clone_github_source(repo: str, destination: Path) -> None:
 
     timeout_seconds = _github_clone_timeout_seconds()
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
-    try:
-        completed = subprocess.run(
-            ["git", "clone", "--depth=1", clone_url, str(destination)],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=timeout_seconds,
-            env=env,
-        )
-    except subprocess.TimeoutExpired as error:
+    completed = _COMMAND_RUNNER.run(
+        ["git", "clone", "--depth=1", clone_url, str(destination)],
+        timeout_seconds=timeout_seconds,
+        env=env,
+    )
+    if completed.timed_out:
         raise SkillsInstallError(
             f"GitHub clone for source {repo!r} timed out after {timeout_seconds} seconds"
-        ) from error
+        )
     if completed.returncode != 0:
-        detail = _command_error_detail(completed.stdout, completed.stderr)
-        if detail == "no diagnostic output":
-            detail = f"exit code {completed.returncode}"
+        detail = completed.detail(MAX_COMMAND_ERROR_DETAIL_LENGTH)
         raise SkillsInstallError(f"failed to clone GitHub source {repo!r}: {detail}")
-
-
-def _checkout_skill_name(skill_file: Path) -> str:
-    content = skill_file.read_text(encoding="utf-8")
-    if content.startswith("---"):
-        closing = content.find("\n---", 3)
-        if closing != -1:
-            match = re.search(r"^name:\s*([^#\n]+)", content[3:closing], flags=re.MULTILINE)
-            if match:
-                return match.group(1).strip().strip("\"'")
-    return skill_file.parent.name
 
 
 def _skill_folder_hash(skill_dir: Path) -> str:
@@ -261,7 +235,7 @@ def _record_github_checkout_lock(source: SkillSourceEntry, checkout: Path, lock_
         checkout.rglob("SKILL.md"),
         key=lambda path: (len(path.relative_to(checkout).parts), path.relative_to(checkout).as_posix()),
     ):
-        name = _checkout_skill_name(skill_file)
+        name = skill_name_from_file(skill_file)
         if (wanted is None or name in wanted) and name in installed_names:
             checkout_skills.setdefault(name, skill_file)
 
@@ -359,20 +333,16 @@ def run_install_command(
     if timeout_seconds is None:
         timeout_seconds = _npx_timeout_seconds()
 
-    try:
-        completed = subprocess.run(
-            argv,
-            cwd=str(cwd) if cwd is not None else None,
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=timeout_seconds,
-        )
-    except subprocess.TimeoutExpired as error:
+    completed = _COMMAND_RUNNER.run(
+        argv,
+        cwd=cwd,
+        timeout_seconds=timeout_seconds,
+    )
+    if completed.timed_out:
         source = f" source {source_id!r}" if source_id else ""
         raise SkillsInstallError(
             f"npx skills{source} timed out after {timeout_seconds} seconds: {' '.join(argv)}"
-        ) from error
+        )
     return InstallResult(
         source_id=source_id,
         command=argv,
@@ -392,6 +362,7 @@ def install_source(
     cwd: Path | None = None,
     global_lock_file: Path | None = None,
     progress: InstallProgress | None = None,
+    checkout: Path | None = None,
 ) -> InstallResult:
     if not source.enabled or not source.repo or not source.skills:
         return InstallResult(
@@ -410,6 +381,28 @@ def install_source(
     try:
         if dry_run or clone_url is None:
             result = run_install_command(argv, source_id=source.id, dry_run=dry_run, cwd=cwd)
+        elif checkout is not None:
+            argv[4] = str(checkout)
+            result = run_install_command(argv, source_id=source.id, cwd=cwd)
+            if result.returncode == 0 and global_scope:
+                _record_github_checkout_lock(
+                    source,
+                    checkout,
+                    global_lock_file or Path.home() / ".agents" / ".skill-lock.json",
+                )
+            result = InstallResult(
+                source_id=result.source_id,
+                command=build_add_argv(
+                    source,
+                    agents=agents,
+                    global_scope=global_scope,
+                    npx=npx,
+                ),
+                returncode=result.returncode,
+                stdout=result.stdout,
+                stderr=result.stderr,
+                skipped=result.skipped,
+            )
         else:
             with tempfile.TemporaryDirectory(prefix="agentbot-skill-") as temp_dir:
                 checkout = Path(temp_dir) / source.id
@@ -452,6 +445,7 @@ def install_all(
     cwd: Path | None = None,
     global_lock_file: Path | None = None,
     progress: InstallProgress | None = None,
+    checkouts: Mapping[str, Path] | None = None,
 ) -> list[InstallResult]:
     global_scope = config.scope == "global"
     return [
@@ -464,6 +458,7 @@ def install_all(
             cwd=cwd,
             global_lock_file=global_lock_file,
             progress=progress,
+            checkout=(checkouts or {}).get(source.id),
         )
         for source in config.active_sources()
     ]
@@ -486,7 +481,12 @@ def update_all(
     return result
 
 
-def install_skills(paths: AgentbotPaths, *, dry_run: bool = False) -> list[InstallResult]:
+def install_skills(
+    paths: AgentbotPaths,
+    *,
+    dry_run: bool = False,
+    checkouts: Mapping[str, Path] | None = None,
+) -> list[InstallResult]:
     config = load_skills_sources(paths.skills_sources_file)
     progress = _print_install_progress if os.environ.get("AGENTBOT_TUI") else None
     return install_all(
@@ -495,6 +495,7 @@ def install_skills(paths: AgentbotPaths, *, dry_run: bool = False) -> list[Insta
         cwd=paths.root,
         global_lock_file=paths.global_skill_lock,
         progress=progress,
+        checkouts=checkouts,
     )
 
 

@@ -1,10 +1,12 @@
-# Agentbot expansion roadmap
+# Agentbot roadmap
 
 **Status:** Phases 0, 1, 2, and 5 are complete and verified against the live
 repositories. Phase 4 is the next workstream; its Slice 4M migration gate is
 merged and complete, so Slice 4.0A is next. Phase 3 remains deferred. Phase 5
 branches directly from the completed Phase 2 foundation. Current behavior and
-documentation were reconciled on 2026-08-06.
+documentation were reconciled on 2026-08-20. The current core has one Python
+lifecycle backend, one diagnostics snapshot, one command model, and focused
+shell adapters and tests.
 
 This is a living roadmap. The runtime source and operational documentation are
 the authority; this file records the delivered contracts and the future
@@ -70,8 +72,9 @@ Phase 1 delivered the independent Agentbot menu and sibling bridge:
 - install.sh and agentbot with no arguments open the TUI on a controlling TTY;
 - headless invocation gives explicit Agentbot CLI guidance;
 - Dotfiles launches the sibling Agentbot menu without duplicating its logic;
-- agentbot update remains skill reconciliation and is separate from workspace
-  resync;
+- agentbot update is a repository-first plan/confirm/apply transaction that
+  reconciles skills and then refreshes registered workspaces and global outputs;
+  `resync` remains the explicit workspace-focused preview/apply command;
 - boot is the single project setup entrypoint and Agentbot is the active public
   product name.
 
@@ -309,3 +312,4 @@ workstream.
 | 2026-07-28 | Reconciled README, archive indexes, and Phase 4 design notes with the live Phase 5 boundary |
 | 2026-07-28 | Selected Phase 4 as the next workstream and applied Slice 4M public-memory retirement in the working tree; review remains pending |
 | 2026-08-06 | Confirmed Slice 4M merged, reconciled Graphify Lib and automatic Install/Update setup behavior, and selected Slice 4.0A as next |
+| 2026-08-20 | Consolidated lifecycle, diagnostics, command metadata, TUI primitives, and validation before Phase 4 implementation |

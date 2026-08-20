@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import json
-import shutil
-import subprocess
-import tempfile
 import re
+import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
 import yaml
 
-from .skills_sources import SkillSourceEntry, SkillsSourcesConfig
+from .command_runner import CommandRunner
+from .skill_catalog import discover_checkout_skills, skill_name_from_file
+from .skills_sources import SkillsSourcesConfig
+
+_COMMAND_RUNNER = CommandRunner()
 
 
 @dataclass(frozen=True)
@@ -53,26 +56,6 @@ class ReconcileResult:
     @property
     def tracked_changes(self) -> bool:
         return any(path.name in {"skills.sources.yaml", "AGENTS.md"} for path in self.changed_paths)
-
-
-def _skill_name(skill_file: Path) -> str:
-    content = skill_file.read_text(encoding="utf-8")
-    if content.startswith("---"):
-        closing = content.find("\n---", 3)
-        if closing != -1:
-            frontmatter = content[3:closing]
-            match = re.search(r"^name:\s*([^#\n]+)", frontmatter, flags=re.MULTILINE)
-            if match:
-                return match.group(1).strip().strip("\"'")
-    return skill_file.parent.name
-
-
-def discover_checkout_skills(checkout: Path) -> tuple[str, ...]:
-    """Read a shallow source checkout without changing it or any install root."""
-    if not checkout.is_dir():
-        return ()
-    names = {_skill_name(path) for path in checkout.rglob("SKILL.md") if path.is_file()}
-    return tuple(sorted(name for name in names if name))
 
 
 def discover_source_checkouts(
@@ -195,7 +178,7 @@ def _checkout_dirs(checkout: Path) -> dict[str, Path]:
         return result
     for skill_file in checkout.rglob("SKILL.md"):
         if skill_file.is_file():
-            result.setdefault(_skill_name(skill_file), skill_file.parent)
+            result.setdefault(skill_name_from_file(skill_file), skill_file.parent)
     return result
 
 
@@ -290,15 +273,10 @@ def _tracked(path: Path, root: Path) -> bool:
         relative = path.relative_to(root)
     except ValueError:
         return False
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(root), "ls-files", "--error-unmatch", str(relative)],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    except OSError:
-        return False
+    result = _COMMAND_RUNNER.run(
+        ["git", "-C", str(root), "ls-files", "--error-unmatch", str(relative)],
+        timeout_seconds=30,
+    )
     return result.returncode == 0
 
 
@@ -311,6 +289,7 @@ def apply_reconcile_plan(
     confirm: bool | Callable[[SkillReconcilePlan], bool] = False,
     dry_run: bool = False,
     validate: Callable[[], None] | None = None,
+    extra_affected: Iterable[Path] = (),
 ) -> ReconcileResult:
     """Apply source-owned skill deltas with a recoverable staged transaction."""
     needs_confirmation = bool(
@@ -368,6 +347,8 @@ def apply_reconcile_plan(
         affected.extend(
             [agents_home / skill, codex_home / skill, claude_home / skill]
         )
+    affected.extend(extra_affected)
+    affected = list(dict.fromkeys(affected))
     backup = _snapshot(affected, paths.root)
     changed: list[Path] = []
     try:

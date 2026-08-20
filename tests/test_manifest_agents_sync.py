@@ -53,7 +53,10 @@ class ManifestAgentsSyncTests(unittest.TestCase):
         # the generic gate a skill description cannot supply: do not install
         # tooling or build/purge generated artifacts unasked.
         content = self.global_agents.read_text(encoding="utf-8")
-        for phrase in ("install or uninstall software", "build, purge, or commit"):
+        for phrase in (
+            "install or uninstall system/global software",
+            "regenerate, purge, or commit generated artifacts",
+        ):
             self.assertIn(phrase, content, msg=f"{phrase!r} missing from {self.global_agents}")
         for path in (self.global_agents, *self.agents_paths):
             self.assertNotIn("graphify-out/graph.json", path.read_text(encoding="utf-8"))

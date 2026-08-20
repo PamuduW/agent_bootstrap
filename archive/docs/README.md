@@ -2,16 +2,17 @@
 
 This directory holds **pre-slim `agent_bootstrap` assets** moved during the 2026-07-09 rework. It is **not part of the runtime install path** — `./install.sh`, `npx skills`, `bin/agentbot`, and slim bootstrap flows do not read from here.
 
-All archive Markdown indexes, roadmaps, and historical notes live in this
-`archive/docs/` directory. The archive root keeps the remaining
-JSON/YAML/environment configuration and template payloads they describe.
+Historical notes and restore indexes live in `archive/docs/`. The active
+roadmap lives at [`docs/roadmap.md`](../../docs/roadmap.md). The archive root
+keeps the remaining JSON/YAML/environment configuration and template payloads
+described here.
 
 **Archive documentation:**
 
 | File | Role |
 |------|------|
 | [stuff.md](./stuff.md) | Deferred capability map + restore pointers |
-| [stuff3.md](./stuff3.md) | **Implementation phases** (Phases 0–2 and 5 complete; Phase 4 next; Phase 3 deferred) |
+| [../../docs/roadmap.md](../../docs/roadmap.md) | Active implementation roadmap (kept outside the archive) |
 | [legacy-memory-vault-design.md](./legacy-memory-vault-design.md) | Sanitized historical note; not an active memory store |
 | [future.md](./future.md) | Deferred AgentOS feature notes |
 | [LOCKFILE-NOTES.md](./LOCKFILE-NOTES.md) | Historical lockfile strategy |
@@ -27,7 +28,7 @@ restore](./stuff.md#if-you-restore-a-deferred-feature).
 
 ## Pre-slim snapshot
 
-Tier 1/2 move tables below record what left the repo root on 2026-07-09. See [stuff.md](./stuff.md) for the deferred map and [stuff3.md](./stuff3.md) for the build phases.
+Tier 1/2 move tables below record what left the repo root on 2026-07-09. See [stuff.md](./stuff.md) for the deferred map and [the active roadmap](../../docs/roadmap.md) for current phases.
 
 ## Tier 1 moves (Phase 2 — 2026-07-09)
 
@@ -74,10 +75,10 @@ Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 
 |-----------------|-------------|----------|
 | Upstream skills manifest (`npx skills`) | **Live** | `skills.sources.yaml` |
 | Global skill lockfile | **Live** (repo stub; global pins in `~/.agents/.skill-lock.json`) | `skills-lock.json` |
-| `install.sh` / Python CLI | **Live (trimmed)** | `install.sh`, `src/` (`cli.py`, `service.py`, …) |
+| `install.sh` / Python CLI | **Live** | `install.sh`, `src/cli.py`, `src/lifecycle.py`, `src/diagnostics.py` |
 | `agentbot` scaffold | **Live** | `bin/agentbot`, `base/` |
 | Global `AGENTS.md` render | **Live** | `global/AGENTS.md`, `src/render.py` |
-| Claude skills bridge | **Live** | `bin/claude-skills-bridge.sh` |
+| Claude skills bridge | **Live** | `src/claude_bridge.py`, invoked by managed output rendering |
 | Package catalog + MCP provenance | **Archived** | `archive/catalog/`, `archive/mcp/` |
 | Workspace render + templates | **Live (Phase 2)** | `agentos.yaml`, `src/workspace_render.py`, `base/` |
 | Local registration / tracked workspaces | **Live (Phase 2)** | `src/workspace_state.py`, `src/workspace_service.py` |
@@ -106,11 +107,11 @@ Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 
 
 ## Restore notes
 
-See [stuff.md](./stuff.md) and [stuff3.md](./stuff3.md). Summary:
+See [stuff.md](./stuff.md) and [the active roadmap](../../docs/roadmap.md). Summary:
 
 1. **Pick scope** — catalog, discovery, state, full render, and ui are coupled.
 2. **Config/docs** — copy from `archive/` (`catalog/`, `mcp/`, `templates/`, `agentos.yaml`); use the Phase 4 design in workspace `temp/mem/` for the private memory workflow.
 3. **Code** — restore from git (pre-2026-07-10 archive layout or `git show <commit>:archive/src/...`).
-4. **Re-wire** — `src/cli.py`, `install.sh`, `service.py`; archived CLI subcommands.
+4. **Re-wire** — `src/cli.py`, `src/lifecycle.py`, and `install.sh`; archived CLI subcommands.
 5. **Env** — copy `archive/.env.example` if MCP servers need credentials.
 6. **Verify** — unittest + `./install.sh doctor`.

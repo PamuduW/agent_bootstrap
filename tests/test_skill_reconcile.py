@@ -1,4 +1,3 @@
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -80,23 +79,6 @@ class SkillReconcileTests(unittest.TestCase):
         self.assertEqual((), plan.explicit_missing)
         self.assertEqual((), plan.explicit_discovered)
         self.assertEqual((), plan.manifest_changes)
-
-    def test_bash_fallback_parser_preserves_scalar_all(self) -> None:
-        fixture = self.root / "skills.sources.yaml"
-        fixture.write_text(
-            """version: 1\nagents: [codex]\nscope: global\nsources:\n  - id: all\n    repo: owner/all\n    skills: all\n""",
-            encoding="utf-8",
-        )
-        command = "script=\"$1\"; fixture=\"$2\"; set -- help; source \"$script\" >/dev/null; SOURCES_FILE=\"$fixture\" parse_sources"
-        result = subprocess.run(
-            ["bash", "-c", command, "_", str(Path(__file__).resolve().parents[1] / "bin/skills-install.sh"), str(fixture)],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        self.assertEqual(0, result.returncode, result.stderr)
-        self.assertEqual("owner/all\t*\n", result.stdout)
-
 
 if __name__ == "__main__":
     unittest.main()

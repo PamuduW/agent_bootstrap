@@ -46,7 +46,7 @@ class WorkspaceCliTests(unittest.TestCase):
         return service
 
     @patch("src.cli.default_paths")
-    @patch("src.cli.AgentbotService")
+    @patch("src.cli.Lifecycle")
     def test_workspace_is_preview_only_without_yes(self, service_type, _default_paths) -> None:
         service = self._service()
         service_type.return_value = service
@@ -64,7 +64,7 @@ class WorkspaceCliTests(unittest.TestCase):
         self.assertIn("AGENTS.md", stdout)
 
     @patch("src.cli.default_paths")
-    @patch("src.cli.AgentbotService")
+    @patch("src.cli.Lifecycle")
     def test_workspace_yes_applies_and_registers(self, service_type, _default_paths) -> None:
         service = self._service()
         service_type.return_value = service
@@ -91,7 +91,7 @@ class WorkspaceCliTests(unittest.TestCase):
         )
 
     @patch("src.cli.default_paths")
-    @patch("src.cli.AgentbotService")
+    @patch("src.cli.Lifecycle")
     def test_resync_all_is_preview_only_without_yes(self, service_type, _default_paths) -> None:
         service = self._service()
         service_type.return_value = service
@@ -103,7 +103,7 @@ class WorkspaceCliTests(unittest.TestCase):
         self.assertIn("Workspace Resync", stdout)
 
     @patch("src.cli.default_paths")
-    @patch("src.cli.AgentbotService")
+    @patch("src.cli.Lifecycle")
     def test_resync_dry_run_alias_is_preview_only(self, service_type, _default_paths) -> None:
         service = self._service()
         service_type.return_value = service
@@ -116,7 +116,7 @@ class WorkspaceCliTests(unittest.TestCase):
         service.resync_workspaces.assert_called_once_with(apply=False, paths=())
 
     @patch("src.cli.default_paths")
-    @patch("src.cli.AgentbotService")
+    @patch("src.cli.Lifecycle")
     def test_resync_specific_paths_does_not_register(self, service_type, _default_paths) -> None:
         service = self._service()
         service_type.return_value = service
@@ -132,7 +132,7 @@ class WorkspaceCliTests(unittest.TestCase):
         )
 
     @patch("src.cli.default_paths")
-    @patch("src.cli.AgentbotService")
+    @patch("src.cli.Lifecycle")
     def test_workspaces_lists_local_records(self, service_type, _default_paths) -> None:
         service = self._service()
         service.list_workspaces.return_value = (
@@ -157,7 +157,7 @@ class WorkspaceCliTests(unittest.TestCase):
         self.assertIn("safe-default", stdout)
 
     @patch("src.cli.default_paths")
-    @patch("src.cli.AgentbotService")
+    @patch("src.cli.Lifecycle")
     def test_workspaces_paths0_is_nul_delimited(self, service_type, _default_paths) -> None:
         service = self._service()
         service.list_workspaces.return_value = (
@@ -191,7 +191,7 @@ class WorkspaceCliTests(unittest.TestCase):
         self.assertEqual("", stderr)
 
     @patch("src.cli.default_paths")
-    @patch("src.cli.AgentbotService")
+    @patch("src.cli.Lifecycle")
     def test_workspaces_remove_reports_registry_only_change(
         self, service_type, _default_paths
     ) -> None:
@@ -219,7 +219,7 @@ class WorkspaceCliTests(unittest.TestCase):
         self.assertEqual("", stderr)
 
     def test_resync_requires_all_or_explicit_paths(self) -> None:
-        with patch("src.cli.default_paths"), patch("src.cli.AgentbotService"):
+        with patch("src.cli.default_paths"), patch("src.cli.Lifecycle"):
             rc, _stdout, stderr = self._run_main(["agentbot", "resync"])
 
         self.assertEqual(1, rc)

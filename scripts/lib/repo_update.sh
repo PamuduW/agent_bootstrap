@@ -1,5 +1,10 @@
 # shellcheck shell=bash
 
+if ! declare -F tui_table_header >/dev/null 2>&1; then
+  # shellcheck disable=SC1091
+  source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/tui.sh"
+fi
+
 REPO_UPDATE_STATE=stopped
 REPO_UPDATE_AHEAD=0
 REPO_UPDATE_BEHIND=0
@@ -107,55 +112,22 @@ repo_update_history_detail() {
   esac
 }
 
-_repo_update_report_fit() {
-  local text="$1" width="$2"
-  if (( ${#text} > width )); then
-    if (( width <= 3 )); then
-      printf '%s' "${text:0:width}"
-    else
-      printf '%s...' "${text:0:$((width - 3))}"
-    fi
-  else
-    printf '%s' "$text"
-  fi
-}
-
-_repo_update_report_rule() {
-  local width="$1" rule
-  printf -v rule '%*s' "$width" ''
-  printf '%s' "${rule// /-}"
-}
-
-_repo_update_report_plain_cell() {
-  local text="$1" width="$2" fit padding
-  fit="$(_repo_update_report_fit "$text" "$width")"
-  printf '%s' "$fit"
-  padding=$((width - ${#fit}))
-  (( padding > 0 )) && printf '%*s' "$padding" ''
-}
-
-_repo_update_report_colored_cell() {
-  local text="$1" width="$2" color="$3" reset="$4" fit padding
-  fit="$(_repo_update_report_fit "$text" "$width")"
-  printf '%s%s%s' "$color" "$fit" "$reset"
-  padding=$((width - ${#fit}))
-  (( padding > 0 )) && printf '%*s' "$padding" ''
-}
-
 repo_update_print_report() {
   local repo="$1"
-  local branch local_rev history action upstream change_count remote_result
-  local bold='' dim='' reset='' yellow='' cyan='' green='' red=''
+  local branch local_rev history action upstream change_count remote_result cols
+  # shellcheck disable=SC2034  # shared TUI helpers consume these through Bash dynamic scope
+  local C_BOLD='' C_DIM='' C_WHITE='' C_RESET='' C_YELLOW='' C_CYAN='' C_GREEN='' C_RED=''
   local available_color action_color
   if [[ -z "${NO_COLOR:-}" && ( -t 1 || -t 0 || -n "${AGENTBOT_TUI:-}" || -n "${FORCE_COLOR:-}" ) ]]; then
-    bold=$'\033[1m'
-    dim=$'\033[2m'
-    reset=$'\033[0m'
-    yellow=$'\033[33m'
-    cyan=$'\033[36m'
-    green=$'\033[32m'
-    red=$'\033[31m'
+    # shellcheck disable=SC2034  # shared TUI helpers consume these through Bash dynamic scope
+    C_BOLD=$'\033[1m'
+    C_DIM=$'\033[2m'
+    # shellcheck disable=SC2034  # shared TUI helpers consume these through Bash dynamic scope
+    C_WHITE=$'\033[37m'
+    C_RESET=$'\033[0m'
+    C_YELLOW=$'\033[33m'; C_CYAN=$'\033[36m'; C_GREEN=$'\033[32m'; C_RED=$'\033[31m'
   fi
+  cols="$(tui_cols)"
   branch="$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
   local_rev="$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo unknown)"
   history="$(repo_update_history_detail)"
@@ -176,53 +148,28 @@ repo_update_print_report() {
     esac
   fi
   case "$history" in
-    current|none|up\ to\ date|freshness\ unknown) available_color="$dim" ;;
-    *behind|*ahead) available_color="$yellow" ;;
-    *) available_color="$cyan" ;;
+    current|none|up\ to\ date|freshness\ unknown) available_color="$C_DIM" ;;
+    *behind|*ahead) available_color="$C_YELLOW" ;;
+    *) available_color="$C_CYAN" ;;
   esac
   case "$action" in
-    current) action_color="$green" ;;
-    pull*|verified) action_color="$cyan" ;;
-    blocked) action_color="$red" ;;
-    *) action_color="$yellow" ;;
+    current) action_color="$C_GREEN" ;;
+    pull*|verified) action_color="$C_CYAN" ;;
+    blocked) action_color="$C_RED" ;;
+    *) action_color="$C_YELLOW" ;;
   esac
 
-  printf '\n%s%sRepository update%s\n\n' "$bold" "$yellow" "$reset"
-  printf '%s%-18s | %-28s | %-22s | %-16s%s\n' "$bold" component installed available action "$reset"
-  printf '%s%s-+-%s-+-%s-+-%s%s\n' \
-    "$dim" \
-    "$(_repo_update_report_rule 18)" \
-    "$(_repo_update_report_rule 28)" \
-    "$(_repo_update_report_rule 22)" \
-    "$(_repo_update_report_rule 16)" \
-    "$reset"
+  printf '\n'
+  tui_section 'Repository update' "$cols"
+  printf '\n'
+  tui_table_header "$cols" component installed available action
   if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
-    _repo_update_report_plain_cell 'agentbot repo' 18
-    printf ' | '
-    _repo_update_report_plain_cell "${branch}@${local_rev}" 28
-    printf ' | '
-    _repo_update_report_colored_cell "${change_count} local change(s)" 22 "$red" "$reset"
-    printf ' | '
-    _repo_update_report_colored_cell "$action" 16 "$action_color" "$reset"
-    printf '\n'
+    tui_table_row "$cols" 'agentbot repo' "${branch}@${local_rev}" "${change_count} local change(s)" "$action" "$C_RED" "$action_color"
   else
-    _repo_update_report_plain_cell 'agentbot repo' 18
-    printf ' | '
-    _repo_update_report_plain_cell "${branch}@${local_rev}" 28
-    printf ' | '
-    _repo_update_report_colored_cell "$history" 22 "$available_color" "$reset"
-    printf ' | '
-    _repo_update_report_colored_cell "$action" 16 "$action_color" "$reset"
-    printf '\n'
+    tui_table_row "$cols" 'agentbot repo' "${branch}@${local_rev}" "$history" "$action" "$available_color" "$action_color"
   fi
-  _repo_update_report_plain_cell "$upstream" 18
-  printf ' | '
-  _repo_update_report_plain_cell 'remote history' 28
-  printf ' | '
-  _repo_update_report_colored_cell "$history" 22 "$available_color" "$reset"
-  printf ' | '
-  _repo_update_report_colored_cell "$remote_result" 16 "$cyan" "$reset"
-  printf '\n\n'
+  tui_table_row "$cols" "$upstream" 'remote history' "$history" "$remote_result" "$available_color" "$C_CYAN"
+  printf '\n'
 }
 
 _repo_update_color_output_enabled() {

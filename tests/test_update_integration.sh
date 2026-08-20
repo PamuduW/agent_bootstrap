@@ -12,7 +12,7 @@ check() { local name="$1"; shift; if "$@"; then pass "$name"; else fail "$name";
 
 test_repo_gate_short_circuits_unsafe_states() (
   AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
-  check_deps() { :; }
+  check_skills_deps() { :; }
   run_cli() { printf 'cli:%s\n' "$*" >>"$TEST_ROOT/calls"; }
   : >"$TEST_ROOT/calls"
   run_update_backend_for() {
@@ -39,7 +39,7 @@ test_repo_gate_short_circuits_unsafe_states() (
 
 test_direct_update_shows_status_before_reconciliation() (
   AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
-  check_deps() { :; }
+  check_skills_deps() { :; }
   repo_update_run() {
     printf -v "$3" '%s' current
     printf -v "$4" '%s' current

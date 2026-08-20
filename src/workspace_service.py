@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal, Sequence
 
+from .command_runner import CommandRunner
 from .paths import AgentbotPaths
 from .workspace_profiles import (
     WorkspaceProfile,
@@ -21,6 +21,8 @@ from .workspace_render import (
     is_review_template_path,
 )
 from .workspace_state import WorkspaceRecord, WorkspaceStore
+
+_COMMAND_RUNNER = CommandRunner()
 
 
 @dataclass(frozen=True)
@@ -55,11 +57,9 @@ def resolve_workspace_identity(path: Path) -> WorkspaceIdentity:
     if not target.is_dir():
         raise ValueError(f"workspace target is not a directory: {path}")
 
-    completed = subprocess.run(
+    completed = _COMMAND_RUNNER.run(
         ["git", "-C", str(target), "rev-parse", "--show-toplevel"],
-        check=False,
-        text=True,
-        capture_output=True,
+        timeout_seconds=30,
     )
     if completed.returncode == 0 and completed.stdout.strip():
         root = Path(completed.stdout.strip()).resolve(strict=False)
@@ -70,11 +70,9 @@ def resolve_workspace_identity(path: Path) -> WorkspaceIdentity:
 def current_commit(identity: WorkspaceIdentity) -> str | None:
     if identity.kind != "git":
         return None
-    completed = subprocess.run(
+    completed = _COMMAND_RUNNER.run(
         ["git", "-C", str(identity.path), "rev-parse", "--short", "HEAD"],
-        check=False,
-        text=True,
-        capture_output=True,
+        timeout_seconds=30,
     )
     if completed.returncode != 0:
         return None
@@ -208,7 +206,7 @@ class WorkspaceService:
         for record in sorted(selected, key=lambda item: item.path):
             try:
                 results.append(self._resync_record(record, apply=apply))
-            except (OSError, ValueError, subprocess.SubprocessError) as error:
+            except (OSError, ValueError) as error:
                 results.append(
                     WorkspaceResult(
                         Path(record.path),
@@ -344,11 +342,9 @@ class WorkspaceService:
     def _dirty_before_render(self, identity: WorkspaceIdentity) -> bool:
         if identity.kind != "git":
             return False
-        completed = subprocess.run(
+        completed = _COMMAND_RUNNER.run(
             ["git", "-C", str(identity.path), "status", "--porcelain"],
-            check=False,
-            text=True,
-            capture_output=True,
+            timeout_seconds=30,
         )
         return bool(completed.stdout.strip())
 

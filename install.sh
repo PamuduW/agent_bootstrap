@@ -21,9 +21,6 @@ fi
 # shellcheck source=scripts/lib/repo_update.sh
 source "${REPO_ROOT}/scripts/lib/repo_update.sh"
 
-SKILLS_INSTALL_SH="${REPO_ROOT}/bin/skills-install.sh"
-CLAUDE_BRIDGE_SH="${REPO_ROOT}/bin/claude-skills-bridge.sh"
-
 github_token_child() (
   github_token_export_if_valid
   "$@"
@@ -51,13 +48,20 @@ log_info() {
   info "$@"
 }
 
-check_deps() {
+check_python_deps() {
   if ! command -v python3 >/dev/null 2>&1; then
     die "python3 is required"
   fi
   if ! python3 -c "import yaml" >/dev/null 2>&1; then
     die "PyYAML is required (run: python3 -m pip install -r requirements.txt)"
   fi
+  if ! python3 -c "import src.cli" >/dev/null 2>&1; then
+    die "Agentbot Python CLI is unavailable (restore the checkout, then retry)"
+  fi
+}
+
+check_skills_deps() {
+  check_python_deps
   if ! command -v node >/dev/null 2>&1; then
     die "node is required (install Node.js for npx skills)"
   fi
@@ -70,136 +74,26 @@ run_cli() {
   python3 -m src.cli --root "$REPO_ROOT" "$@"
 }
 
-cli_ready() {
-  python3 -m src.cli --root "$REPO_ROOT" status >/dev/null 2>&1
-}
-
 run_global_render() {
-  if cli_ready; then
-    run_cli global
-    return $?
-  fi
-  python3 - <<'PY'
-from pathlib import Path
-from src.paths import default_paths
-from src.service import AgentbotService
-
-AgentbotService(default_paths(Path(".").resolve())).render_global()
-PY
+  run_cli global "$@"
 }
 
-run_slim_doctor() {
-  if cli_ready; then
-    run_cli doctor
-    return $?
-  fi
-  python3 - <<'PY'
-import sys
-from pathlib import Path
-from src.paths import default_paths
-from src.service import AgentbotService
-from src.ui import print_doctor_summary
-
-paths = default_paths(Path(".").resolve())
-service = AgentbotService(paths)
-sys.exit(print_doctor_summary(service.doctor_issues() + service.skills_doctor_issues()))
-PY
+run_doctor() {
+  run_cli doctor "$@"
 }
 
-run_slim_status() {
-  if cli_ready; then
-    run_cli status "$@"
-    return $?
-  fi
-  python3 - <<'PY'
-import sys
-from pathlib import Path
-from src.paths import default_paths
-from src.service import AgentbotService
-from src.ui import print_status_summary
-
-paths = default_paths(Path(".").resolve())
-service = AgentbotService(paths)
-summary = service.status_summary()
-print_status_summary(
-    installed_skills=int(summary["installed_skills"]),
-    global_agents_exists=bool(summary["global_agents_exists"]),
-    skills_sources_exists=bool(summary["skills_sources_exists"]),
-    enabled_sources=int(summary["enabled_sources"]),
-    global_lock_exists=bool(summary["global_lock_exists"]),
-    global_lock_skills=int(summary["global_lock_skills"]),
-    claude_bridge_links=int(summary["claude_bridge_links"]),
-    claude_statusline_state=str(summary.get("claude_statusline_state", "unknown")),
-    manual_skill_count=int(summary["manual_skill_count"]),
-    doctor_issue_count=int(summary["doctor_issue_count"]),
-)
-PY
-}
-
-cli_supports_skills() {
-  cli_ready
-}
-
-cli_supports_bootstrap() {
-  cli_ready
-}
-
-list_installed_skills_fallback() {
-  python3 - <<'PY'
-from pathlib import Path
-from src.paths import default_paths
-from src.service import AgentbotService
-
-skills = AgentbotService(default_paths(Path(".").resolve())).list_skills()
-if not skills:
-    print("No installed skills found.")
-else:
-    print("\n=== Installed Skills ===")
-    for skill in skills:
-        print(skill)
-PY
-}
-
-refresh_agent_outputs_fallback() {
-  run_claude_bridge
-  run_global_render
+run_status() {
+  run_cli status "$@"
 }
 
 run_skills() {
-  local subcmd="$1"
+  local subcmd="${1:-}"
   shift
 
-  if cli_supports_skills; then
-    case "$subcmd" in
-      install|update|upgrade) github_token_child run_cli skills "$subcmd" "$@" ;;
-      *) run_cli skills "$subcmd" "$@" ;;
-    esac
-    return $?
-  fi
-
   case "$subcmd" in
-    install)
-      "$SKILLS_INSTALL_SH" install
-      refresh_agent_outputs_fallback
-      ;;
-    update|upgrade)
-      "$SKILLS_INSTALL_SH" update
-      refresh_agent_outputs_fallback
-      ;;
-    list)
-      list_installed_skills_fallback
-      ;;
-    doctor)
-      "$SKILLS_INSTALL_SH" doctor
-      ;;
-    *)
-      die "skills subcommand not supported by CLI fallback: ${subcmd}"
-      ;;
+    install|update|upgrade) github_token_child run_cli skills "$subcmd" "$@" ;;
+    *) run_cli skills "$subcmd" "$@" ;;
   esac
-}
-
-run_claude_bridge() {
-  "$CLAUDE_BRIDGE_SH"
 }
 
 cleanup_owned_old_agentboot_link() {
@@ -234,22 +128,11 @@ link_agentbot() {
 }
 
 run_bootstrap_backend() {
-  check_deps
+  check_skills_deps
   log_info "installing Agentbot from ${REPO_ROOT}"
 
   local rc=0
-  if cli_supports_bootstrap; then
-    github_token_child run_cli bootstrap || rc=$?
-  else
-    if ! cli_ready; then
-      warn "slim CLI unavailable — using bash fallback (run: git checkout -- src/cli.py)"
-    fi
-    export AGENTBOT_QUIET="${AGENTBOT_QUIET:-${AGENTBOT_TUI:-}}"
-    run_skills install || rc=$?
-    run_claude_bridge
-    run_global_render || rc=$?
-    run_slim_doctor || true
-  fi
+  github_token_child run_cli bootstrap || rc=$?
 
   return "$rc"
 }
@@ -375,13 +258,15 @@ run_update_backend() {
 run_update_backend_as() {
   local update_command="$1"
   shift
-  local confirm=no dry_run=false arg update_outcome update_reason repo_rc=0
+  # shellcheck disable=SC2034  # populated indirectly by repo_update_run
+  local confirm=no dry_run=false interactive=false arg update_outcome update_reason repo_rc=0
   AGENTBOT_REPOSITORY_UPDATE_DECLINED=false
   AGENTBOT_REPOSITORY_UPDATE_DECLINE_REPORTED=false
   for arg in "$@"; do
     case "$arg" in
       --yes) confirm=yes ;;
       --dry-run) dry_run=true ;;
+      --interactive) interactive=true; export AGENTBOT_UPDATE_INTERACTIVE=1 ;;
       *) die "unknown update option: $arg" ;;
     esac
   done
@@ -421,7 +306,7 @@ run_update_backend_as() {
       return 1
       ;;
   esac
-  if [[ "$dry_run" == true || "${AGENTBOT_UPDATE_SHOW_STATUS:-1}" == 1 ]]; then
+  if [[ "$dry_run" == true || ( "$interactive" == false && "${AGENTBOT_UPDATE_SHOW_STATUS:-1}" == 1 ) ]]; then
     run_cli status
   fi
   github_token_child run_cli "$update_command" "$@"
@@ -432,33 +317,17 @@ usage() {
 Usage: ./install.sh <command> [args]
 
   Commands:
-  install                Install Agentbot: skills, Graphify sync, outputs, doctor, link
-  skills install         Install curated upstream skills from skills.sources.yaml
-  skills update|upgrade  Refresh global skills from ~/.agents/.skill-lock.json
-  skills list            List installed skills
-  skills doctor          Validate skills installer prerequisites
-  doctor                 Run slim doctor (skills + global baseline)
-  update|upgrade [--dry-run] [--yes]
-                         Repo-first skill reconciliation update/upgrade
-  status [--json]        Show skills and global render status
-  global                 Render global agent outputs
-  workspace [--profile NAME] [--targets LIST] [--yes] PATH
-                         Preview or render one workspace
-  workspaces [--paths0 | --remove PATH]
-                         List paths or stop managing one without changing its files
-  resync [--all | PATH ...] [--yes | --dry-run]
-                         Preview or refresh registered workspaces
-  graphify status|setup  Inspect or set up the optional Graphify Agent Skills integration
-  help                   Show this help
+  install                    Run the complete bootstrap and link Agentbot
+  update [--dry-run|--yes]   Run the repository-first update flow
+  status [--json]            Show current Agentbot state
+  doctor                     Validate the installation
+  skills <command>           Install, update, list, or validate skills
+  global                     Refresh managed global outputs
+  workspace|workspaces|resync Manage registered workspace outputs
+  graphify status|setup      Inspect or repair generic Graphify Agent Skills
+  help                       Show this rescue summary
 
-Run agentbot boot in a repository to create/preserve AGENTS.md and selected outputs.
-With no arguments a usable controlling TTY is required for the Agentbot menu.
-
-Archived commands (see archive/docs/README.md): all, interactive, import-local,
-remove-managed, delete-local.
-
-Legacy flags (backward compatible):
-  --status, --global
+For the complete command and option reference, run: agentbot help
 EOF
 }
 
@@ -485,30 +354,33 @@ main() {
       run_install
       ;;
     update|upgrade)
-      check_deps
+      check_skills_deps
       run_update_backend_as "$cmd" "${@:2}"
       ;;
     skills)
-      check_deps
       if [[ $# -lt 2 ]]; then
         die "usage: ./install.sh skills <install|update|upgrade|list|doctor>"
       fi
+      case "${2}" in
+        install|update|upgrade) check_skills_deps ;;
+        *) check_python_deps ;;
+      esac
       run_skills "${2}" "${@:3}"
       ;;
     doctor|status|global)
-      if [[ "$cmd" == "global" ]]; then
-        check_deps
-      fi
+      check_python_deps
       case "$cmd" in
       global) run_global_render "${@:2}" ;;
-      doctor) run_slim_doctor "${@:2}" ;;
-      status) run_slim_status "${@:2}" ;;
+      doctor) run_doctor "${@:2}" ;;
+      status) run_status "${@:2}" ;;
       esac
       ;;
     workspace|workspaces|resync)
+      check_python_deps
       run_cli "$cmd" "${@:2}"
       ;;
     graphify)
+      check_python_deps
       run_cli graphify "${@:2}"
       ;;
     all|interactive|import-local|remove-managed|delete-local)

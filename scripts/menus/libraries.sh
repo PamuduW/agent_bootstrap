@@ -34,9 +34,9 @@ agentbot_menu_libraries() {
 			return 0
 		fi
 		choice="${MENU_SIMPLE_RESULT:-}"
-		ui_clear
+		tui_clear
 		rc=0
 		agentbot_menu_libraries_dispatch "$choice" || rc=$?
-		ui_pause
+		((rc == 0)) || tui_pause
 	done
 }

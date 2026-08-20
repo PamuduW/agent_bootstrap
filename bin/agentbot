@@ -12,11 +12,6 @@ else
 fi
 export AGENTBOT_HOME
 
-# shellcheck source=/dev/null
-source "$AGENTBOT_HOME/scripts/lib/command_catalog.sh"
-# shellcheck source=/dev/null
-source "$AGENTBOT_HOME/scripts/lib/command_help.sh"
-
 agentbot_die() { printf '[err] %s\n' "$*" >&2; return 1; }
 agentbot_info() { printf '[info] %s\n' "$*"; }
 
@@ -27,15 +22,23 @@ agentbot_has_tty() {
   [[ -t "$tty_fd" ]]
 }
 
-agentbot_run_menu() {
+agentbot_load_menu() {
   if [[ "${AGENTBOT_MENU_LOADED:-0}" != 1 ]]; then
     # shellcheck source=/dev/null
     source "$AGENTBOT_HOME/scripts/menu.sh"
     AGENTBOT_MENU_LOADED=1
   fi
+}
+
+agentbot_run_menu() {
+  agentbot_load_menu
   agentbot_menu_loop
 }
-agentbot_run_token() { agentbot_die 'Agentbot token screen is not available until the TUI slice.'; }
+
+agentbot_run_token() {
+  agentbot_load_menu
+  agentbot_token_config_menu
+}
 agentbot_run_backend() { "$AGENTBOT_HOME/install.sh" "$@"; }
 
 AGENTBOT_BOOT_OPTIONAL_FLAGS=(--claude --copilot --cursor)
@@ -95,7 +98,7 @@ agentbot_boot() {
 }
 
 agentbot_usage() {
-	agentbot_command_help_render_plain "${COLUMNS:-100}"
+	(cd "$AGENTBOT_HOME" && python3 -m src.cli --root "$AGENTBOT_HOME" help "$@")
 }
 
 agentbot_main() {
@@ -112,7 +115,7 @@ agentbot_main() {
     graphify) agentbot_run_backend graphify "$@" ;;
     token) agentbot_run_token "$@" ;;
     update|upgrade) agentbot_run_backend "$command" "$@" ;;
-    help|-h|--help) agentbot_usage ;;
+    help|-h|--help) agentbot_usage "$@" ;;
     *) agentbot_die "unknown command: $command (run agentbot help)" ;;
   esac
 }

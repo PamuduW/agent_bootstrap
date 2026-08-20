@@ -53,7 +53,37 @@ assert_text_lacks() {
   fi
 }
 
+test_runner_lists_each_shell_suite_once() (
+  local runner="$ROOT/tests/run.sh"
+  [[ -f "$runner" ]] || return 1
+
+  AGENTBOT_TEST_RUNNER_SOURCE_ONLY=1 source "$runner"
+
+  local suite path
+  local -A actual=() expected=()
+  for suite in "${SHELL_SUITES[@]}"; do
+    actual["$suite"]=$(( ${actual["$suite"]:-0} + 1 ))
+  done
+  while IFS= read -r path; do
+    expected["$path"]=1
+  done < <(
+    find "$ROOT/tests" -type f -name 'test_*.sh' \
+      ! -path "$ROOT/tests/lib/*" -print | sort
+  )
+
+  [[ "${#actual[@]}" -eq "${#expected[@]}" ]] || return 1
+  for path in "${!expected[@]}"; do
+    [[ "${actual["$path"]:-0}" -eq 1 ]] || return 1
+  done
+)
+
 test_harness_setup "$ROOT"
+
+if test_runner_lists_each_shell_suite_once; then
+  pass "full runner lists every shell suite exactly once"
+else
+  fail "full runner lists every shell suite exactly once"
+fi
 
 [[ "$HOME" == "$TEST_ROOT"/* ]] && pass "HOME is isolated" || fail "HOME is isolated"
 [[ "$XDG_CONFIG_HOME" == "$TEST_ROOT"/* ]] && pass "XDG_CONFIG_HOME is isolated" || fail "XDG_CONFIG_HOME is isolated"

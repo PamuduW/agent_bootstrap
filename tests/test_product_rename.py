@@ -6,7 +6,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 ACTIVE_ROOTS = (
     ROOT / "install.sh",
@@ -43,7 +42,7 @@ class ProductRenameTests(unittest.TestCase):
         self.assertEqual([], hits)
 
     def test_old_public_command_and_display_identity_are_absent(self) -> None:
-        allowed_old_link_files = {ROOT / "install.sh", ROOT / "tests/test_agentbot.sh"}
+        allowed_old_link_files = {ROOT / "install.sh"}
         hits = []
         for path in active_files():
             text = path.read_text(encoding="utf-8", errors="replace")
@@ -76,8 +75,8 @@ class ProductRenameTests(unittest.TestCase):
 
     def test_cli_config_and_types_use_agentbot_contract(self) -> None:
         from src.cli import build_parser
+        from src.lifecycle import Lifecycle
         from src.paths import AgentbotPaths, default_paths
-        from src.service import AgentbotService
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "agent_bootstrap"
@@ -102,7 +101,7 @@ class ProductRenameTests(unittest.TestCase):
         self.assertIsInstance(paths, AgentbotPaths)
         self.assertEqual(root, paths.root)
         self.assertEqual(config / "agentbot", paths.config_home)
-        self.assertEqual("AgentbotService", AgentbotService.__name__)
+        self.assertEqual("Lifecycle", Lifecycle.__name__)
 
     def test_public_dispatch_has_no_bootstrap_alias_or_old_shim(self) -> None:
         install = (ROOT / "install.sh").read_text(encoding="utf-8")

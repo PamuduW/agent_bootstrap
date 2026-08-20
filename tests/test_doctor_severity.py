@@ -9,8 +9,8 @@ from unittest.mock import patch
 
 class DoctorSeverityTests(unittest.TestCase):
     def test_unsafe_saved_token_is_actionable_warning_without_value_leak(self) -> None:
+        from src.diagnostics import Diagnostics
         from src.paths import AgentbotPaths
-        from src.service import AgentbotService
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -22,7 +22,7 @@ class DoctorSeverityTests(unittest.TestCase):
             token_file.write_text("GITHUB_TOKEN=short\n", encoding="utf-8")
             token_file.chmod(0o600)
             paths = AgentbotPaths(root, root / "codex", root / "claude", root / "cursor", config)
-            issues = AgentbotService(paths).doctor_issues()
+            issues = Diagnostics(paths).doctor_issues()
             self.assertTrue(any(issue.level == "warning" and issue.scope == "token" for issue in issues))
             self.assertFalse(any("short" in issue.message for issue in issues))
 
@@ -46,8 +46,8 @@ class DoctorSeverityTests(unittest.TestCase):
         self.assertEqual(1, rc)
 
     def test_official_graphify_skill_uses_graphify_scope_instead_of_manual_warning(self) -> None:
+        from src.diagnostics import Diagnostics
         from src.paths import AgentbotPaths
-        from src.service import AgentbotService
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -61,14 +61,14 @@ class DoctorSeverityTests(unittest.TestCase):
             paths = AgentbotPaths(root, root / "codex", root / "claude", root / "cursor")
 
             with patch.dict(os.environ, {"HOME": str(home)}, clear=False):
-                issues = AgentbotService(paths).doctor_issues()
+                issues = Diagnostics(paths).doctor_issues()
 
             self.assertTrue(any(issue.scope == "graphify" for issue in issues))
             self.assertFalse(any("Manual skill 'graphify'" in issue.message for issue in issues))
 
     def test_unstamped_graphify_directory_keeps_manual_skill_warning(self) -> None:
+        from src.diagnostics import Diagnostics
         from src.paths import AgentbotPaths
-        from src.service import AgentbotService
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -81,16 +81,16 @@ class DoctorSeverityTests(unittest.TestCase):
             paths = AgentbotPaths(root, root / "codex", root / "claude", root / "cursor")
 
             with patch.dict(os.environ, {"HOME": str(home)}, clear=False):
-                issues = AgentbotService(paths).doctor_issues()
+                issues = Diagnostics(paths).doctor_issues()
 
             manual_messages = [issue.message for issue in issues if "Manual skill 'graphify'" in issue.message]
             self.assertTrue(manual_messages)
             self.assertTrue(all("outside managed sources" in message for message in manual_messages))
 
     def test_broken_official_graphify_state_is_an_error(self) -> None:
+        from src.diagnostics import Diagnostics
         from src.graphify import GraphifyStatus
         from src.paths import AgentbotPaths
-        from src.service import AgentbotService
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -98,7 +98,7 @@ class DoctorSeverityTests(unittest.TestCase):
             (root / "global").mkdir()
             (root / "global" / "AGENTS.md").write_text("# baseline\n", encoding="utf-8")
             paths = AgentbotPaths(root, root / "codex", root / "claude", root / "cursor")
-            service = AgentbotService(paths)
+            service = Diagnostics(paths)
             graphify = home / ".agents/skills/graphify"
             graphify.mkdir(parents=True)
             (graphify / "SKILL.md").write_text("# graphify\n", encoding="utf-8")

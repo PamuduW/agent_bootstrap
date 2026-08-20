@@ -1,0 +1,103 @@
+from __future__ import annotations
+
+import os
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+
+class CommandRunnerTests(unittest.TestCase):
+    def test_success_and_nonzero_results_are_captured(self) -> None:
+        from src.command_runner import CommandRunner
+
+        runner = CommandRunner()
+        success = runner.run(
+            [sys.executable, "-c", "print('ready')"], timeout_seconds=5
+        )
+        failure = runner.run(
+            [
+                sys.executable,
+                "-c",
+                "import sys; print('bad', file=sys.stderr); raise SystemExit(7)",
+            ],
+            timeout_seconds=5,
+        )
+
+        self.assertEqual(0, success.returncode)
+        self.assertEqual("ready\n", success.stdout)
+        self.assertEqual(7, failure.returncode)
+        self.assertIn("bad", failure.detail())
+
+    def test_timeout_and_missing_executable_are_results_not_exceptions(self) -> None:
+        from src.command_runner import CommandRunner
+
+        runner = CommandRunner()
+        timed_out = runner.run(
+            [sys.executable, "-c", "import time; time.sleep(2)"],
+            timeout_seconds=0.01,
+        )
+        missing = runner.run(
+            ["agentbot-command-that-does-not-exist"], timeout_seconds=1
+        )
+
+        self.assertTrue(timed_out.timed_out)
+        self.assertIn("timed out", timed_out.detail())
+        self.assertTrue(missing.missing_executable)
+        self.assertIn("executable not found", missing.detail())
+
+    def test_detail_strips_ansi_notices_and_caps_multiline_output(self) -> None:
+        from src.command_runner import CommandResult
+
+        result = CommandResult(
+            returncode=1,
+            stdout="\x1b[31mfirst\x1b[0m\nsecond\nthird\nfourth\n",
+            stderr="npm notice update available\nlast\n",
+        )
+
+        detail = result.detail(max_length=30)
+
+        self.assertLessEqual(len(detail), 30)
+        self.assertNotIn("\x1b", detail)
+        self.assertNotIn("npm notice", detail.lower())
+        self.assertIn("last", detail)
+
+    def test_explicit_environment_values_are_redacted_from_captured_output(self) -> None:
+        from src.command_runner import CommandRunner
+
+        canary = "agentbot-env-canary-7ad91c"
+        env = {**os.environ, "AGENTBOT_TEST_CANARY": canary}
+        result = CommandRunner().run(
+            [
+                sys.executable,
+                "-c",
+                "import os; print(os.environ['AGENTBOT_TEST_CANARY'])",
+            ],
+            timeout_seconds=5,
+            env=env,
+        )
+
+        self.assertNotIn(canary, result.stdout)
+        self.assertNotIn(canary, result.stderr)
+        self.assertNotIn(canary, result.detail())
+        self.assertNotIn(canary, repr(result))
+
+    def test_cwd_is_honored_and_argv_is_never_shell_parsed(self) -> None:
+        from src.command_runner import CommandRunner
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            marker = root / "must-not-exist"
+            result = CommandRunner().run(
+                [sys.executable, "-c", "import pathlib; print(pathlib.Path.cwd().name)", ";", f"touch {marker}"],
+                cwd=root,
+                timeout_seconds=5,
+            )
+
+        self.assertEqual(0, result.returncode)
+        self.assertFalse(marker.exists())
+        self.assertIn(root.name, result.stdout)
+
+
+if __name__ == "__main__":
+    unittest.main()

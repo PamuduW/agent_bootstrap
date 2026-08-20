@@ -5,6 +5,9 @@ temp/
 log/
 state/
 __pycache__/
+.venv/
+.coverage
+htmlcov/
 
 # Generated per-agent export surfaces (render output)
 exports/

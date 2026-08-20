@@ -3,25 +3,14 @@
 # shellcheck disable=SC2034
 
 agentbot_menu_workspaces_confirm() {
-	local answer=''
-	printf '%sApply Agentbot-managed workspace changes?%s [y/N]: ' "$C_YELLOW" "$C_RESET" >/dev/tty
-	IFS= read -r answer </dev/tty || answer=n
-	case "$answer" in
-	y|Y|yes|YES) return 0 ;;
-	*) return 1 ;;
-	esac
+	tui_confirm "${C_YELLOW}Apply Agentbot-managed workspace changes?${C_RESET}"
 }
 
 agentbot_menu_workspaces_remove_confirm() {
-	local path="$1" answer=''
+	local path="$1"
 	printf '%sStop managing this workspace?%s\n' "$C_YELLOW" "$C_RESET" >/dev/tty
 	printf '%s%s%s\n' "$C_CYAN" "$path" "$C_RESET" >/dev/tty
-	printf 'No workspace files will be changed. [y/N]: ' >/dev/tty
-	IFS= read -r answer </dev/tty || answer=n
-	case "$answer" in
-	y|Y|yes|YES) return 0 ;;
-	*) return 1 ;;
-	esac
+	tui_confirm 'No workspace files will be changed.'
 }
 
 agentbot_menu_workspaces_remove_recorded() {
@@ -43,7 +32,7 @@ agentbot_menu_workspaces_remove_recorded() {
 
 		if ((${#recorded_paths[@]} == 0)); then
 			printf '%sNo recorded workspaces to remove.%s\n' "$C_DIM" "$C_RESET"
-			ui_pause
+			tui_pause
 			return 0
 		fi
 
@@ -68,13 +57,13 @@ agentbot_menu_workspaces_remove_recorded() {
 		[[ "$choice" =~ ^[0-9]+$ ]] || return 2
 		path="${recorded_paths[$choice]:-}"
 		[[ -n "$path" ]] || return 2
-		ui_clear
+		tui_clear
 		if agentbot_menu_workspaces_remove_confirm "$path"; then
 			agentbot_run_backend workspaces --remove "$path" || return $?
 		else
 			printf '%sWorkspace removal cancelled.%s\n' "$C_DIM" "$C_RESET"
 		fi
-		ui_pause
+		tui_pause
 	done
 }
 
@@ -125,11 +114,11 @@ agentbot_menu_workspaces() {
 			return 0
 		fi
 		choice="${MENU_SIMPLE_RESULT:-}"
-		ui_clear
+		tui_clear
 		rc=0
 		agentbot_menu_workspaces_dispatch "$choice" || rc=$?
 		if ((rc != 0)) || [[ "$choice" != remove ]]; then
-			ui_pause
+			tui_pause
 		fi
 	done
 }

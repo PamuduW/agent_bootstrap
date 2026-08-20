@@ -1,0 +1,182 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Literal
+
+
+@dataclass(frozen=True)
+class CommandOption:
+    usage: str
+    description: str
+    default: str
+
+
+@dataclass(frozen=True)
+class CommandSpec:
+    name: str
+    usage: str
+    behavior: Literal["read-only", "mutating"]
+    summary: str
+    options: tuple[CommandOption, ...]
+    effects: str
+    examples: tuple[str, ...]
+    related: tuple[str, ...]
+    surface: Literal["public", "bootstrap"]
+    parser_commands: tuple[str, ...] = ()
+
+
+def option(usage: str, description: str, default: str) -> CommandOption:
+    return CommandOption(usage, description, default)
+
+
+COMMANDS: tuple[CommandSpec, ...] = (
+    CommandSpec(
+        "status", "agentbot status [--json]", "read-only",
+        "Show installed skills, managed outputs, and diagnostics state.",
+        (option("--json", "Emit machine-readable status.", "off"),),
+        "Reads skills, locks, links, rendered outputs, and Doctor state.",
+        ("agentbot status", "agentbot status --json"), ("doctor", "update"),
+        "public", ("status",),
+    ),
+    CommandSpec(
+        "install", "agentbot install", "mutating",
+        "Install skills, synchronize optional Graphify Agent Skills, refresh outputs, run Doctor, and link Agentbot.",
+        (), "May install skills and write managed global outputs and the launcher link.",
+        ("agentbot install",), ("status", "doctor"), "public", ("bootstrap",),
+    ),
+    CommandSpec(
+        "update", "agentbot update|upgrade [--dry-run] [--yes]", "mutating",
+        "Run the repository-first update transaction.",
+        (
+            option("--dry-run", "Preview reconciliation and managed-surface changes.", "off"),
+            option("--yes", "Pre-approve source-owned additions, removals, and manifest edits.", "off"),
+        ),
+        "May fast-forward the checkout, reconcile source-owned skills, and refresh registered workspaces and global outputs.",
+        ("agentbot update --dry-run", "agentbot update --yes"), ("install", "status"),
+        "public", ("update", "upgrade"),
+    ),
+    CommandSpec(
+        "token", "agentbot token", "mutating",
+        "Configure the optional GitHub API token through the private TTY screen.",
+        (), "Writes only the private Agentbot token file after confirmation.",
+        ("agentbot token",), ("skills install", "update"), "public",
+    ),
+    CommandSpec(
+        "boot", "agentbot boot [SELECTORS] [--profile NAME] [TARGET]", "mutating",
+        "Create or preserve Agentbot policy outputs in one target and register it.",
+        (
+            option("--agents | --codex", "Include canonical AGENTS.md.", "always"),
+            option("--claude", "Include generated Claude output.", "selected"),
+            option("--copilot", "Include generated Copilot instructions.", "off"),
+            option("--cursor", "Include generated Cursor rules.", "selected"),
+            option("--profile NAME", "Select a workspace profile.", "safe"),
+            option("TARGET", "Target directory.", "current directory"),
+        ),
+        "May write selected Agentbot-managed policy outputs and update the private workspace registry.",
+        ("agentbot boot", "agentbot boot --copilot /path/to/repo"), ("workspace", "workspaces"),
+        "public",
+    ),
+    CommandSpec(
+        "workspace", "agentbot workspace [--profile NAME] [--targets LIST] [--yes] PATH", "mutating",
+        "Preview or apply one workspace render.",
+        (
+            option("--profile NAME", "Select a workspace profile.", "safe"),
+            option("--targets LIST", "Select agents, claude, copilot, or cursor outputs.", "profile defaults"),
+            option("--yes", "Apply and register instead of previewing.", "off"),
+            option("PATH", "Workspace directory.", "required"),
+        ),
+        "Preview reads target files; --yes may write managed outputs and update the private registry.",
+        ("agentbot workspace /path/to/repo", "agentbot workspace --yes /path/to/repo"),
+        ("boot", "workspaces", "resync"), "public", ("workspace",),
+    ),
+    CommandSpec(
+        "workspaces", "agentbot workspaces [--paths0 | --remove PATH]", "mutating",
+        "List registered workspaces or stop managing one recorded path.",
+        (
+            option("--paths0", "Print canonical paths separated by NUL bytes.", "off"),
+            option("--remove PATH", "Forget one registry record without changing workspace files.", "off"),
+        ),
+        "Listing is read-only; --remove changes only the private registry.",
+        ("agentbot workspaces",), ("workspace", "resync"), "public", ("workspaces",),
+    ),
+    CommandSpec(
+        "resync", "agentbot resync [--all | PATH ...] [--yes | --dry-run]", "mutating",
+        "Preview or refresh registered workspaces and managed global outputs.",
+        (
+            option("--all", "Select every enabled registered workspace.", "off"),
+            option("--yes", "Apply managed changes.", "off"),
+            option("--dry-run", "Force preview mode.", "preview"),
+            option("PATH ...", "Select explicit registered paths.", "required unless --all"),
+        ),
+        "Preview reads managed surfaces; --yes may update them.",
+        ("agentbot resync --dry-run --all", "agentbot resync --yes --all"),
+        ("workspace", "workspaces"), "public", ("resync",),
+    ),
+    CommandSpec(
+        "doctor", "agentbot doctor", "read-only",
+        "Validate skills, locks, links, rendered outputs, and configuration.",
+        (), "Reads local Agentbot-managed state without repairing it.",
+        ("agentbot doctor",), ("status", "update"), "public", ("doctor",),
+    ),
+    CommandSpec(
+        "graphify", "agentbot graphify status|setup", "mutating",
+        "Inspect or repair the optional generic Graphify Agent Skills integration.",
+        (
+            option("status", "Inspect CLI, skill, and assistant-link state.", "default"),
+            option("setup", "Run generic Agent Skills setup and refresh links.", "explicit"),
+        ),
+        "Status is read-only; setup may write the generic Graphify skill and managed links.",
+        ("agentbot graphify status",), ("install", "update"), "public", ("graphify",),
+    ),
+    CommandSpec(
+        "help", "agentbot help [COMMAND]", "read-only",
+        "Show the command index or one command's complete reference.",
+        (option("COMMAND", "Select one public or bootstrap command.", "all commands"),),
+        "Prints local metadata and performs no external action.",
+        ("agentbot help", "agentbot help workspace"), (), "public", ("help",),
+    ),
+    CommandSpec(
+        "skills install", "./install.sh skills install", "mutating",
+        "Install enabled upstream skills from skills.sources.yaml.", (),
+        "May update the global skill store, lock, and managed assistant links.",
+        ("./install.sh skills install",), ("skills list", "skills doctor"), "bootstrap", ("skills",),
+    ),
+    CommandSpec(
+        "skills update", "./install.sh skills update|upgrade", "mutating",
+        "Refresh globally installed skills from the lock.", (),
+        "May update source-owned global skills and managed assistant links.",
+        ("./install.sh skills update",), ("update", "skills list"), "bootstrap", ("skills",),
+    ),
+    CommandSpec(
+        "skills list", "./install.sh skills list", "read-only",
+        "List installed global skills.", (), "Reads the global skill store.",
+        ("./install.sh skills list",), ("skills install", "skills doctor"), "bootstrap", ("skills",),
+    ),
+    CommandSpec(
+        "skills doctor", "./install.sh skills doctor", "read-only",
+        "Validate skill sources and tooling prerequisites.", (),
+        "Reads the manifest, lock, installed store, and tool availability.",
+        ("./install.sh skills doctor",), ("doctor", "skills install"), "bootstrap", ("skills",),
+    ),
+    CommandSpec(
+        "global", "./install.sh global", "mutating",
+        "Render managed global Codex and Claude outputs.", (),
+        "Writes Agentbot-managed global outputs from canonical sources.",
+        ("./install.sh global",), ("status", "doctor"), "bootstrap", ("global",),
+    ),
+)
+
+
+def command_by_name(name: str) -> CommandSpec:
+    normalized = " ".join(name.strip().split())
+    normalized = {"upgrade": "update", "skills upgrade": "skills update"}.get(
+        normalized, normalized
+    )
+    for command in COMMANDS:
+        if command.name == normalized:
+            return command
+    raise KeyError(name)
+
+
+def commands_for_surface(surface: Literal["public", "bootstrap"]) -> tuple[CommandSpec, ...]:
+    return tuple(command for command in COMMANDS if command.surface == surface)

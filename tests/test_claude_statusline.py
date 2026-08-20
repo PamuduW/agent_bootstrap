@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.support import agentbot_paths
+
 
 class ClaudeStatuslineTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -26,14 +28,7 @@ class ClaudeStatuslineTests(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def _paths(self):
-        from src.paths import AgentbotPaths
-
-        return AgentbotPaths(
-            root=self.root,
-            codex_home=self.root / "home" / ".codex",
-            claude_home=self.claude_home,
-            cursor_home=self.root / "home" / ".cursor",
-        )
+        return agentbot_paths(self.root)
 
     def _run_real_statusline(
         self, payload: dict | str
@@ -263,8 +258,9 @@ class ClaudeStatuslineTests(unittest.TestCase):
         self.assertNotIn("echo old", refreshed)
 
     def test_render_global_outputs_installs_statusline(self) -> None:
-        from src.render import render_global_outputs
         from unittest import mock
+
+        from src.render import render_global_outputs
 
         (self.root / "global").mkdir(exist_ok=True)
         (self.root / "global" / "AGENTS.md").write_text("# Global\n", encoding="utf-8")
@@ -284,8 +280,9 @@ class ClaudeStatuslineTests(unittest.TestCase):
         self.assertEqual("~/.claude/statusline-command.sh", settings["statusLine"]["command"])
 
     def test_doctor_reports_stale_and_missing_jq(self) -> None:
-        from src.claude_statusline import doctor_claude_statusline, install_claude_statusline
         from unittest import mock
+
+        from src.claude_statusline import doctor_claude_statusline, install_claude_statusline
 
         paths = self._paths()
         install_claude_statusline(paths)

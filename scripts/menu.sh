@@ -3,11 +3,7 @@
 
 _AGENTBOT_MENU_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
-source "$_AGENTBOT_MENU_DIR/lib/menu_core.sh"
-# shellcheck disable=SC1091
-source "$_AGENTBOT_MENU_DIR/lib/command_catalog.sh"
-# shellcheck disable=SC1091
-source "$_AGENTBOT_MENU_DIR/lib/command_help.sh"
+source "$_AGENTBOT_MENU_DIR/lib/tui.sh"
 # shellcheck disable=SC1091
 source "$_AGENTBOT_MENU_DIR/lib/github_token.sh"
 # shellcheck disable=SC1091
@@ -32,10 +28,10 @@ _agentbot_menu_setup() {
 	MENU_SIMPLE_TITLE='Agentbot'
 	MENU_SIMPLE_BREADCRUMB='Agentbot'
 	MENU_SIMPLE_LABELS=(
-		'Check status'
+		'Check Status'
 		'Install Agentbot'
 		'Update'
-		'Configure GitHub token'
+		'GitHub Token Config'
 		'Workspaces'
 		'Libraries'
 		'Quit'
@@ -81,15 +77,15 @@ agentbot_menu_loop() {
 		fi
 		choice="${MENU_SIMPLE_RESULT:-}"
 		[[ "$choice" == quit ]] && return 0
-		ui_clear
+		tui_clear
 		rc=0
 		agentbot_menu_dispatch "$choice" || rc=$?
 		[[ "${AGENTBOT_MENU_QUIT:-false}" == true ]] && return 0
 		# Nested menus own their action pauses and return directly to this menu;
 		# do not add a stale parent pause after they exit. Failed child launches
 		# still pause so their error remains visible before the parent redraws.
-		if ((rc != 0)) || [[ "$choice" != workspaces && "$choice" != libraries ]]; then
-			ui_pause
+		if ((rc != 0)) || [[ "$choice" != token && "$choice" != workspaces && "$choice" != libraries ]]; then
+			tui_pause
 		fi
 	done
 }

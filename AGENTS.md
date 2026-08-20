@@ -83,12 +83,12 @@ machine-level baseline from `global/AGENTS.md`, and manages per-folder agent
 policy surfaces with `agentbot boot`, `workspace`, and `resync`. Treat this
 repo as a small CLI plus shell entrypoint, not a full config plane.
 
-**Stack:** Bash (`install.sh`, `bin/*`), Python 3 (`src/` via
+**Stack:** Bash (`install.sh`, `bin/agentbot`), Python 3 (`src/` via
 `python3 -m src.cli`), and Node.js (`npx skills`).
 
 | Path | Role |
 |---|---|
-| `install.sh` | Repository entrypoint for install, skills, global render, Doctor, and workspace commands. |
+| `install.sh` | Thin repository entrypoint for repository gating, dependency checks, token scoping, CLI delegation, and launcher linking. |
 | `skills.sources.yaml` | Curated upstream skill manifest; global pins live in `~/.agents/.skill-lock.json`. |
 | `src/` | Python CLI, global rendering, skill reconciliation, and workspace services. |
 | `bin/agentbot` | Public dispatcher; `boot` renders and registers a workspace. |
@@ -109,14 +109,17 @@ repo as a small CLI plus shell entrypoint, not a full config plane.
 ./install.sh skills install
 ./install.sh global
 ./install.sh doctor
-python3 -m unittest discover -s tests
-bash tests/test_agentbot.sh
-bash tests/test_agentbot_menu.sh
+bash tests/run.sh
 ```
+
+For focused troubleshooting, run `python3 -m unittest discover -s tests` or
+an individual shell suite under `tests/test_*.sh`.
 
 **Repository constraints:**
 
 - `install.sh` is the supported bootstrap interface.
+- Keep product behavior in the Python CLI. Do not add alternate Bash
+  implementations or capability-probe fallbacks to `install.sh`.
 - Plain `./install.sh update` refreshes upstream skills and, after successful
   or no-delta reconciliation, refreshes registered workspaces and managed
   global Codex/Claude outputs (including statusline).

@@ -13,26 +13,92 @@ class CliTests(unittest.TestCase):
         with patch.object(sys, "argv", argv), patch("sys.stdout", stdout), patch("sys.stderr", stderr):
             return main(), stdout.getvalue(), stderr.getvalue()
 
+    def _configure_update(self, lifecycle: MagicMock, result) -> None:
+        from src.models import UpdateOutcome, UpdatePlan, UpdateSnapshot
+        from src.skill_reconcile import SkillReconcilePlan
+        from src.workspace_service import WorkspaceReport
+
+        workspace_report = result.workspace_report or WorkspaceReport(())
+        lifecycle.plan_update.return_value = UpdatePlan(
+            UpdateSnapshot("head", "manifest", None),
+            SkillReconcilePlan(
+                (),
+                tuple(result.added_skills),
+                tuple(result.removed_skills),
+                (),
+                (),
+                (),
+            ),
+            "skip",
+            workspace_report,
+        )
+        lifecycle.apply_update.return_value = UpdateOutcome(
+            result.status,
+            result.message,
+            reconcile=result,
+            workspace_report=result.workspace_report,
+        )
+
+    def test_command_specs_cover_parser_and_public_dispatcher(self) -> None:
+        import argparse
+
+        from src.cli import build_parser
+        from src.commands import COMMANDS, commands_for_surface
+
+        parser = build_parser()
+        subparsers = next(
+            action for action in parser._actions if isinstance(action, argparse._SubParsersAction)
+        )
+        parser_commands = set(subparsers.choices)
+        covered_parser_commands = {
+            command for spec in COMMANDS for command in spec.parser_commands
+        }
+        self.assertEqual(parser_commands, covered_parser_commands)
+        self.assertEqual(
+            {
+                "status", "install", "update", "token", "boot", "workspace",
+                "workspaces", "resync", "doctor", "graphify", "help",
+            },
+            {spec.name for spec in commands_for_surface("public")},
+        )
+
+    def test_every_command_spec_has_a_help_detail(self) -> None:
+        from src.commands import COMMANDS
+
+        for spec in COMMANDS:
+            with self.subTest(command=spec.name):
+                rc, stdout, stderr = self._run_main(["agentbot", "help", spec.name])
+                self.assertEqual(0, rc, stderr)
+                self.assertIn(f"=== {spec.name} ===", stdout)
+                for command_option in spec.options:
+                    self.assertIn(command_option.usage, stdout)
+
+    def test_help_aliases_resolve_to_canonical_commands(self) -> None:
+        for alias, canonical in (("upgrade", "update"), ("skills upgrade", "skills update")):
+            with self.subTest(alias=alias):
+                rc, stdout, stderr = self._run_main(["agentbot", "help", alias])
+                self.assertEqual(0, rc, stderr)
+                self.assertIn(f"=== {canonical} ===", stdout)
+
     @patch("src.cli.default_paths")
-    @patch("src.cli.AgentbotService")
+    @patch("src.cli.Lifecycle")
     def test_skills_install_refreshes_agent_outputs(self, service_type, _default_paths) -> None:
         service = MagicMock()
         service.install_skills.return_value = []
-        service.refresh_agent_outputs.return_value = (0, 0, 0)
         service_type.return_value = service
 
         rc, _stdout, _stderr = self._run_main(["agentbot", "skills", "install"])
 
         self.assertEqual(0, rc)
-        service.refresh_agent_outputs.assert_called_once_with()
+        service.refresh_outputs.assert_called_once_with()
 
     @patch("src.cli.default_paths")
-    @patch("src.cli.AgentbotService")
+    @patch("src.cli.Lifecycle")
     def test_bootstrap_skill_failure_is_a_clean_cli_error(self, service_type, _default_paths) -> None:
         from src.skills_installer import SkillsInstallError
 
         service = MagicMock()
-        service.run_bootstrap.side_effect = SkillsInstallError("failed to install source 'test': offline")
+        service.install.side_effect = SkillsInstallError("failed to install source 'test': offline")
         service_type.return_value = service
 
         rc, _stdout, stderr = self._run_main(["agentbot", "bootstrap"])
@@ -40,20 +106,59 @@ class CliTests(unittest.TestCase):
         self.assertEqual(1, rc)
         self.assertIn("Error: failed to install source 'test': offline", stderr)
 
+    def test_bootstrap_header_uses_install_breadcrumb(self) -> None:
+        from pathlib import Path
+
+        from src.cli import run_bootstrap_command
+        from src.graphify import GraphifyStatus
+        from src.models import DiagnosticsSnapshot, InstallOutcome, OutputRefreshOutcome
+        from src.paths import AgentbotPaths
+
+        paths = AgentbotPaths(
+            Path("/repo"), Path("/codex"), Path("/claude"), Path("/cursor")
+        )
+        outcome = InstallOutcome(
+            skills=(),
+            graphify=GraphifyStatus(
+                "not-installed",
+                None,
+                None,
+                Path("/agents/skills/graphify/SKILL.md"),
+                None,
+                "missing",
+                "missing",
+                "Graphify is not installed.",
+            ),
+            outputs=OutputRefreshOutcome(0, 0, 0),
+            diagnostics=DiagnosticsSnapshot(
+                (), 0, True, True, False, 0, 0, 0, 0, "missing", ()
+            ),
+        )
+        lifecycle = MagicMock()
+        lifecycle.install.return_value = outcome
+        output = io.StringIO()
+
+        with patch("sys.stdout", output):
+            rc = run_bootstrap_command(lifecycle, paths)
+
+        self.assertEqual(0, rc)
+        self.assertIn("Agentbot › Install Agentbot", output.getvalue())
+
     @patch("src.cli.default_paths")
-    @patch("src.cli.AgentbotService")
+    @patch("src.cli.Lifecycle")
     def test_update_prints_reconciliation_result_report(self, service_type, _default_paths) -> None:
         from pathlib import Path
+
         from src.skill_reconcile import ReconcileResult
 
         service = MagicMock()
-        service.run_reconciliation_update.return_value = ReconcileResult(
+        self._configure_update(service, ReconcileResult(
             "applied",
             (Path("AGENTS.md"),),
             ("removed-skill",),
             ("added-skill",),
             updated_skills=("updated-skill",),
-        )
+        ))
         service_type.return_value = service
 
         rc, stdout, _stderr = self._run_main(["agentbot", "update", "--yes"])
@@ -65,7 +170,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("updated-skill", stdout)
 
     @patch("src.cli.default_paths")
-    @patch("src.cli.AgentbotService")
+    @patch("src.cli.Lifecycle")
     def test_update_returns_failure_for_global_output_conflict(
         self, service_type, _default_paths
     ) -> None:
@@ -74,7 +179,7 @@ class CliTests(unittest.TestCase):
         from src.workspace_service import WorkspaceReport
 
         service = MagicMock()
-        service.run_reconciliation_update.return_value = ReconcileResult(
+        self._configure_update(service, ReconcileResult(
             "applied",
             (),
             (),
@@ -90,7 +195,7 @@ class CliTests(unittest.TestCase):
                     ),
                 ),
             ),
-        )
+        ))
         service_type.return_value = service
 
         rc, stdout, _stderr = self._run_main(["agentbot", "update", "--yes"])
@@ -99,7 +204,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("conflict", stdout)
 
     @patch("src.cli.default_paths")
-    @patch("src.cli.AgentbotService")
+    @patch("src.cli.Lifecycle")
     def test_update_accepts_non_conflicting_global_output_actions(
         self, service_type, _default_paths
     ) -> None:
@@ -112,13 +217,13 @@ class CliTests(unittest.TestCase):
             for kind in ("create", "update", "unchanged")
         )
         service = MagicMock()
-        service.run_reconciliation_update.return_value = ReconcileResult(
+        self._configure_update(service, ReconcileResult(
             "applied",
             (),
             (),
             (),
             workspace_report=WorkspaceReport(results=(), global_actions=actions),
-        )
+        ))
         service_type.return_value = service
 
         rc, _stdout, _stderr = self._run_main(["agentbot", "update", "--yes"])
@@ -126,16 +231,16 @@ class CliTests(unittest.TestCase):
         self.assertEqual(0, rc)
 
     @patch("src.cli.default_paths")
-    @patch("src.cli.AgentbotService")
+    @patch("src.cli.Lifecycle")
     def test_update_returns_failure_for_broken_graphify_setup(
         self, service_type, _default_paths
     ) -> None:
         from src.skill_reconcile import ReconcileResult
 
         service = MagicMock()
-        service.run_reconciliation_update.return_value = ReconcileResult(
+        self._configure_update(service, ReconcileResult(
             "failed", (), (), (), message="Graphify: skill setup failed"
-        )
+        ))
         service_type.return_value = service
 
         rc, stdout, _stderr = self._run_main(["agentbot", "update", "--yes"])
@@ -144,14 +249,14 @@ class CliTests(unittest.TestCase):
         self.assertIn("Graphify: skill setup failed", stdout)
 
     @patch("src.cli.default_paths")
-    @patch("src.cli.AgentbotService")
+    @patch("src.cli.Lifecycle")
     def test_upgrade_is_update_alias_and_prints_skill_delta(self, service_type, _default_paths) -> None:
         from src.skill_reconcile import ReconcileResult
 
         service = MagicMock()
-        service.run_reconciliation_update.return_value = ReconcileResult(
+        self._configure_update(service, ReconcileResult(
             "applied", (), ("removed-skill",), (), updated_skills=("updated-skill",)
-        )
+        ))
         service_type.return_value = service
 
         rc, stdout, _stderr = self._run_main(["agentbot", "upgrade", "--yes"])
@@ -160,7 +265,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("Agentbot › Upgrade", stdout)
         self.assertIn("updated-skill", stdout)
         self.assertIn("removed-skill", stdout)
-        service.run_reconciliation_update.assert_called_once_with(dry_run=False, confirm=True)
+        service.apply_update.assert_called_once_with(service.plan_update.return_value)
 
     def test_parser_accepts_upgrade_alias(self) -> None:
         from src.cli import build_parser
@@ -169,6 +274,42 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual("upgrade", args.command)
         self.assertTrue(args.dry_run)
+
+    def test_parser_accepts_interactive_update(self) -> None:
+        from src.cli import build_parser
+
+        args = build_parser().parse_args(["update", "--interactive"])
+
+        self.assertTrue(args.interactive)
+
+    @patch("src.cli.default_paths")
+    @patch("src.cli.Lifecycle")
+    @patch("src.cli.confirm_update_plan", return_value=True)
+    @patch("src.cli.print_update_plan")
+    @patch("src.cli.print_update_outcome")
+    def test_interactive_update_applies_the_same_confirmed_plan_once(
+        self,
+        _print_outcome,
+        _print_plan,
+        _confirm,
+        lifecycle_type,
+        _default_paths,
+    ) -> None:
+        from src.models import UpdateOutcome
+
+        lifecycle = MagicMock()
+        plan = MagicMock()
+        lifecycle.plan_update.return_value = plan
+        lifecycle.apply_update.return_value = UpdateOutcome("applied")
+        lifecycle_type.return_value = lifecycle
+
+        rc, _stdout, _stderr = self._run_main(
+            ["agentbot", "update", "--interactive"]
+        )
+
+        self.assertEqual(0, rc)
+        lifecycle.plan_update.assert_called_once_with()
+        lifecycle.apply_update.assert_called_once_with(plan)
 
     def test_parser_accepts_graphify_status_and_setup(self) -> None:
         from src.cli import build_parser
@@ -181,9 +322,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual("setup", setup.graphify_command)
 
     @patch("src.cli.default_paths")
-    @patch("src.cli.AgentbotService")
+    @patch("src.cli.Lifecycle")
     def test_graphify_status_is_read_only_and_prints_state(self, service_type, _default_paths) -> None:
         from pathlib import Path
+
         from src.graphify import GraphifyStatus
 
         service = MagicMock()
@@ -208,9 +350,10 @@ class CliTests(unittest.TestCase):
         service.setup_graphify.assert_not_called()
 
     @patch("src.cli.default_paths")
-    @patch("src.cli.AgentbotService")
+    @patch("src.cli.Lifecycle")
     def test_graphify_setup_returns_success_for_ready_state(self, service_type, _default_paths) -> None:
         from pathlib import Path
+
         from src.graphify import GraphifyStatus
 
         service = MagicMock()
@@ -233,9 +376,10 @@ class CliTests(unittest.TestCase):
         service.setup_graphify.assert_called_once_with()
 
     @patch("src.cli.default_paths")
-    @patch("src.cli.AgentbotService")
+    @patch("src.cli.Lifecycle")
     def test_graphify_setup_fails_cleanly_when_cli_is_missing(self, service_type, _default_paths) -> None:
         from pathlib import Path
+
         from src.graphify import GraphifyStatus
 
         service = MagicMock()
@@ -257,26 +401,31 @@ class CliTests(unittest.TestCase):
         self.assertIn("uv tool install graphifyy", stdout)
 
     @patch("src.cli.default_paths")
-    @patch("src.cli.AgentbotService")
-    def test_status_and_update_use_hierarchical_breadcrumbs(self, service_type, _default_paths) -> None:
+    @patch("src.cli.Lifecycle")
+    @patch("src.cli.Diagnostics")
+    def test_status_and_update_use_hierarchical_breadcrumbs(
+        self, diagnostics_type, service_type, _default_paths
+    ) -> None:
+        from src.models import DiagnosticsSnapshot
         from src.skill_reconcile import ReconcileResult
 
         service = MagicMock()
-        service.status_summary.return_value = {
-            "installed_skills": 1,
-            "global_agents_exists": True,
-            "skills_sources_exists": True,
-            "enabled_sources": 1,
-            "global_lock_exists": True,
-            "global_lock_skills": 1,
-            "claude_bridge_links": 1,
-            "claude_statusline_state": "ok",
-            "manual_skill_count": 0,
-            "doctor_issue_count": 0,
-        }
-        service.run_reconciliation_update.return_value = ReconcileResult(
-            "preview", (), (), ()
+        diagnostics_type.return_value.collect.return_value = DiagnosticsSnapshot(
+            installed_skills=("alpha",),
+            enabled_sources=1,
+            global_agents_exists=True,
+            skills_sources_exists=True,
+            global_lock_exists=True,
+            global_lock_skills=1,
+            managed_skill_count=1,
+            manual_skill_count=0,
+            claude_bridge_links=1,
+            claude_statusline_state="ok",
+            issues=(),
         )
+        self._configure_update(service, ReconcileResult(
+            "preview", (), (), ()
+        ))
         service_type.return_value = service
 
         status_rc, status_stdout, _ = self._run_main(["agentbot", "status"])
@@ -284,7 +433,7 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(0, status_rc)
         self.assertEqual(0, update_rc)
-        self.assertIn("Agentbot › Status", status_stdout)
+        self.assertIn("Agentbot › Check Status", status_stdout)
         self.assertIn("Agentbot › Update", update_stdout)
 
     def test_status_labels_trial_skills_outside_managed_sources(self) -> None:
@@ -310,15 +459,53 @@ class CliTests(unittest.TestCase):
         self.assertNotIn("outside global lock", rendered)
 
     @patch("src.cli.default_paths")
-    @patch("src.cli.AgentbotService")
+    @patch("src.cli.Lifecycle")
+    @patch("src.cli.Diagnostics")
+    def test_status_doctor_renders_one_snapshot(
+        self, diagnostics_type, _lifecycle_type, _default_paths
+    ) -> None:
+        from src.models import DiagnosticsSnapshot, DoctorIssue
+
+        diagnostics = diagnostics_type.return_value
+        diagnostics.collect.return_value = DiagnosticsSnapshot(
+            (), 1, True, True, False, 0, 0, 0, 0, "missing",
+            (DoctorIssue("error", "global", "baseline is missing"),),
+        )
+
+        rc, stdout, _stderr = self._run_main(["agentbot", "status", "--doctor"])
+
+        self.assertEqual(1, rc)
+        diagnostics.collect.assert_called_once_with()
+        self.assertIn("Skills & baseline", stdout)
+        self.assertIn("Doctor issues", stdout)
+        self.assertIn("baseline is missing", stdout)
+
+    def test_table_model_exposes_json_compatible_rows(self) -> None:
+        from src.models import Table, TableSection
+        from src.ui import table_rows
+
+        table = Table(
+            "Status",
+            "Agentbot › Check Status",
+            (TableSection("Health", (("Agentbot", "current", "ok"),)),),
+        )
+
+        self.assertEqual(
+            [{"section": "Health", "component": "Agentbot", "detail": "current", "result": "ok"}],
+            table_rows(table),
+        )
+
+    @patch("src.cli.default_paths")
+    @patch("src.cli.Lifecycle")
     def test_update_reconciliation_report_has_one_table_header(self, service_type, _default_paths) -> None:
         from pathlib import Path
+
         from src.skill_reconcile import ReconcileResult
 
         service = MagicMock()
-        service.run_reconciliation_update.return_value = ReconcileResult(
+        self._configure_update(service, ReconcileResult(
             "preview", (Path("AGENTS.md"),), ("added",), ("removed",)
-        )
+        ))
         service_type.return_value = service
 
         rc, stdout, _ = self._run_main(["agentbot", "update", "--dry-run"])
@@ -400,6 +587,29 @@ class CliTests(unittest.TestCase):
         self.assertIn("add a manifest source to make it", rendered)
         self.assertIn("reproducible", rendered)
         self.assertNotIn("...", output.getvalue())
+
+    def test_python_reports_fit_tui_widths(self) -> None:
+        import os
+
+        from src.models import DoctorIssue
+        from src.ui import print_doctor_summary, strip_ansi
+
+        issue = DoctorIssue(
+            "warning",
+            "reproducibility",
+            "A deliberately long diagnostic remains width-safe at every supported terminal size",
+        )
+        for columns in (48, 80, 120):
+            output = io.StringIO()
+            with patch.dict(
+                os.environ,
+                {"AGENTBOT_TUI": "1", "AGENTBOT_MENU_COLS": str(columns), "NO_COLOR": "1"},
+                clear=False,
+            ):
+                with patch("sys.stdout", output):
+                    print_doctor_summary([issue])
+            for line in strip_ansi(output.getvalue()).splitlines():
+                self.assertLessEqual(len(line), columns, (columns, line))
 
     def test_doctor_highlights_manual_skill_names_without_shifting_columns(self) -> None:
         import os

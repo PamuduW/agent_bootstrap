@@ -11,6 +11,9 @@ REPO_UPDATE_BEHIND=0
 REPO_UPDATE_DIRTY=0
 REPO_UPDATE_CHANGES=''
 REPO_UPDATE_UPSTREAM=''
+REPO_UPDATE_RECOVERY_BRANCH=''
+REPO_UPDATE_RECOVERY_STASH=''
+REPO_UPDATE_RECOVERY_REASON=''
 
 _repo_update_set_result() {
   local outcome_name="$1" reason_name="$2" outcome_value="$3" reason_value="$4"
@@ -142,7 +145,7 @@ repo_update_print_report() {
   else
     case "${REPO_UPDATE_STATE:-stopped}" in
       behind) action='pull --ff-only' ;;
-      ahead) action='continue' ;;
+      ahead|diverged) action='replace after backup' ;;
       current) action='current' ;;
       *) action='check' ;;
     esac
@@ -155,6 +158,7 @@ repo_update_print_report() {
   case "$action" in
     current) action_color="$C_GREEN" ;;
     pull*|verified) action_color="$C_CYAN" ;;
+    replace*) action_color="$C_YELLOW" ;;
     blocked) action_color="$C_RED" ;;
     *) action_color="$C_YELLOW" ;;
   esac
@@ -178,7 +182,7 @@ _repo_update_color_output_enabled() {
 
 repo_update_is_declined() {
   case "${1:-unknown}" in
-    behind-declined|ahead-declined) return 0 ;;
+    behind-declined|ahead-declined|replace-declined) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -209,6 +213,72 @@ repo_update_print_changed() {
   printf 'Run setup again when ready.\n'
 }
 
+repo_update_print_recovery() {
+  [[ -n "${REPO_UPDATE_RECOVERY_BRANCH:-}${REPO_UPDATE_RECOVERY_STASH:-}" ]] || return 0
+  printf 'Recovery data preserved:\n'
+  [[ -n "${REPO_UPDATE_RECOVERY_BRANCH:-}" ]] && printf '  Recovery branch: %s\n' "$REPO_UPDATE_RECOVERY_BRANCH"
+  [[ -n "${REPO_UPDATE_RECOVERY_STASH:-}" ]] && printf '  Recovery stash: %s\n' "$REPO_UPDATE_RECOVERY_STASH"
+}
+
+_repo_update_stash_changes() {
+  local repo="$1" output='' stash_id message
+  message="agentbot full-update recovery $(date -u +%Y%m%d-%H%M%S)" || {
+    REPO_UPDATE_RECOVERY_REASON=recovery-timestamp-failed
+    return 1
+  }
+  if ! output="$(git -C "$repo" stash push --include-untracked -m "$message" 2>&1)"; then
+    [[ -n "$output" ]] && printf '%s\n' "$output" >&2
+    REPO_UPDATE_RECOVERY_REASON=stash-failed
+    return 1
+  fi
+  stash_id="$(git -C "$repo" rev-parse --verify refs/stash 2>/dev/null)" || {
+    REPO_UPDATE_RECOVERY_REASON=stash-reference-failed
+    return 1
+  }
+  REPO_UPDATE_RECOVERY_STASH="$stash_id"
+}
+
+_repo_update_recovery_branch() {
+  local repo="$1" timestamp candidate suffix=0
+  timestamp="$(date -u +%Y%m%d-%H%M%S)" || {
+    REPO_UPDATE_RECOVERY_REASON=recovery-timestamp-failed
+    return 1
+  }
+  candidate="recovery/agentbot-${timestamp}"
+  while git -C "$repo" show-ref --verify --quiet "refs/heads/${candidate}"; do
+    suffix=$((suffix + 1))
+    candidate="recovery/agentbot-${timestamp}-${suffix}"
+  done
+  git -C "$repo" branch "$candidate" HEAD || {
+    REPO_UPDATE_RECOVERY_REASON=recovery-branch-failed
+    return 1
+  }
+  REPO_UPDATE_RECOVERY_BRANCH="$candidate"
+}
+
+_repo_update_replace_with_upstream() {
+  local repo="$1" remaining output=''
+  if ((REPO_UPDATE_AHEAD > 0)); then
+    _repo_update_recovery_branch "$repo" || return 1
+  fi
+  if ((REPO_UPDATE_DIRTY)); then
+    _repo_update_stash_changes "$repo" || return 1
+  fi
+  remaining="$(git -C "$repo" status --short --untracked-files=all 2>/dev/null)" || {
+    REPO_UPDATE_RECOVERY_REASON=status-failed-after-recovery
+    return 1
+  }
+  [[ -z "$remaining" ]] || {
+    REPO_UPDATE_RECOVERY_REASON=recovery-incomplete
+    return 1
+  }
+  if ! output="$(git -C "$repo" reset --hard '@{upstream}' 2>&1)"; then
+    [[ -n "$output" ]] && printf '%s\n' "$output" >&2
+    REPO_UPDATE_RECOVERY_REASON='reset-failed'
+    return 1
+  fi
+}
+
 _repo_update_run() {
   local repo="$1" decision_fn="$2" outcome_name="$3" reason_name="$4" repository="${5:-agent_bootstrap}"
   local worktree bare origin branch upstream state reason rewrite_rules
@@ -220,6 +290,9 @@ _repo_update_run() {
   REPO_UPDATE_DIRTY=0
   REPO_UPDATE_CHANGES=''
   REPO_UPDATE_UPSTREAM=''
+  REPO_UPDATE_RECOVERY_BRANCH=''
+  REPO_UPDATE_RECOVERY_STASH=''
+  REPO_UPDATE_RECOVERY_REASON=''
   [[ -d "$repo" ]] || return 0
   worktree="$(git -C "$repo" rev-parse --is-inside-work-tree 2>/dev/null)" || return 0
   [[ "$worktree" == true ]] || return 0
@@ -269,8 +342,14 @@ _repo_update_run() {
     _repo_update_set_result "$outcome_name" "$reason_name" stopped "$reason"
     return 0
   fi
-  if ((REPO_UPDATE_DIRTY)); then
-    _repo_update_set_result "$outcome_name" "$reason_name" stopped dirty
+  if ((REPO_UPDATE_DIRTY)) || [[ "$state" == ahead || "$state" == diverged ]]; then
+    if ! "$decision_fn" replace-local; then
+      _repo_update_set_result "$outcome_name" "$reason_name" stopped replace-declined
+    elif _repo_update_replace_with_upstream "$repo"; then
+      _repo_update_set_result "$outcome_name" "$reason_name" repository_changed replaced
+    else
+      _repo_update_set_result "$outcome_name" "$reason_name" stopped "${REPO_UPDATE_RECOVERY_REASON:-recovery-failed}"
+    fi
     return 0
   fi
   case "$state" in
@@ -305,6 +384,7 @@ repo_update_run() {
   local outcome_name="$3" rc=0 outcome
   _repo_update_run "$@" || rc=$?
   outcome="${!outcome_name:-stopped}"
+  repo_update_print_recovery
   case "$outcome" in
     repository_changed) return 2 ;;
     stopped) return 1 ;;

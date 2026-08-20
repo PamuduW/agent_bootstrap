@@ -100,16 +100,26 @@ sources; do not edit generated adapters directly.
 Update has two gates:
 
 1. Validate the exact Agentbot origin, inspect local changes, fetch, and
-   classify current/ahead/behind/diverged history. Only a clean confirmed
-   behind checkout is fast-forwarded with `git pull --ff-only`; a changed
-   checkout exits so the user can rerun the new code.
+   classify current/ahead/behind/diverged history. A clean confirmed behind
+   checkout is fast-forwarded with `git pull --ff-only`. Dirty, ahead, and
+   diverged state can be replaced after explicit approval.
 2. Build one read-only lifecycle plan, confirm source-owned deltas once, verify
    the snapshot again, and apply skills plus managed surfaces under the shared
    rollback boundary.
 
-Dirty, detached, diverged, missing-upstream, declined, and failed-fetch states
-stop before downstream work. Agentbot never stages, commits, pushes,
-force-pushes, resets, or deletes user files.
+Before replacement, Agentbot stashes tracked and untracked changes and creates
+a timestamped `recovery/agentbot-*` branch for local commits. It resets only
+after verifying those backups and a clean worktree. It never runs `git clean`,
+deletes ignored files, removes recovery data, commits, pushes, or force-pushes.
+A changed checkout exits with status 2 so its caller can restart the new code.
+Detached, missing-upstream, declined, failed-fetch, and failed-recovery states
+stop before downstream work.
+
+`dotfiles full-update` is the unattended system-maintenance entrypoint. It
+authorizes Agentbot repository recovery, reruns `agentbot install` once after a
+self-update, and then runs `agentbot update --yes`. Inspect preserved work with
+`git branch --list 'recovery/*'`, `git stash list`, `git show <recovery-branch>`,
+and `git stash show --stat <stash-object-id>`.
 
 ## Architecture
 

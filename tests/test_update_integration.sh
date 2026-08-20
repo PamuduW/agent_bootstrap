@@ -188,6 +188,32 @@ test_repo_prompt_renders_after_table_on_the_tty_stream() (
   [[ ! -s "$captured_stdout" ]]
 )
 
+test_repo_prompt_supports_recover_and_replace() (
+  AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+  local tty_input="$TEST_ROOT/replace-prompt.input"
+  local tty_output="$TEST_ROOT/replace-prompt.output"
+  printf 'y\n' >"$tty_input"
+  : >"$tty_output"
+  git() {
+    case "$*" in
+      *'rev-parse --abbrev-ref HEAD'*) printf 'main\n' ;;
+      *'rev-parse --short HEAD'*) printf 'abc123\n' ;;
+      *) return 1 ;;
+    esac
+  }
+  REPO_UPDATE_STATE=diverged
+  REPO_UPDATE_AHEAD=2
+  REPO_UPDATE_BEHIND=3
+  REPO_UPDATE_DIRTY=1
+  REPO_UPDATE_CHANGES=' M scripts/example.sh'
+  REPO_UPDATE_UPSTREAM=origin/main
+  AGENTBOT_UPDATE_TTY_INPUT="$tty_input"
+  AGENTBOT_UPDATE_TTY_OUTPUT="$tty_output"
+
+  run_repo_update_prompt replace-local || return 1
+  grep -Fq 'Back up local work and replace it with origin/main? [y/N]:' "$tty_output"
+)
+
 test_repo_update_table_honors_tui_color_mode() (
   AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
   local output
@@ -204,6 +230,26 @@ test_repo_update_table_honors_tui_color_mode() (
   [[ "$output" == *$'\033[33mcheck\033[0m'* ]]
 )
 
+test_ahead_repo_table_describes_recoverable_replacement() (
+  AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+  local output
+  git() {
+    case "$*" in
+      *'rev-parse --abbrev-ref HEAD'*) printf 'main\n' ;;
+      *'rev-parse --short HEAD'*) printf 'abc123\n' ;;
+      *) return 1 ;;
+    esac
+  }
+  REPO_UPDATE_STATE=ahead
+  REPO_UPDATE_AHEAD=2
+  REPO_UPDATE_BEHIND=0
+  REPO_UPDATE_DIRTY=0
+  REPO_UPDATE_UPSTREAM=origin/main
+  tui_cols() { printf '120\n'; }
+  NO_COLOR=1 output="$(print_repo_update_table)"
+  [[ "$output" == *'replace after backup'* && "$output" != *'continue'* ]]
+)
+
   check 'repo gate short-circuits stopped and changed-repository states' test_repo_gate_short_circuits_unsafe_states
 check 'dirty update reports changes and remote history before blocking backend work' test_dirty_state_reports_changes_remote_history_and_blocks_backend
 check 'dirty current repository reports verified current and stops' test_dirty_current_reports_verified_current_and_stops
@@ -211,7 +257,9 @@ check 'dirty fetch failure reports paths and unknown remote freshness' test_dirt
 check 'dirty change report caps paths and prints a copyable full-status command' test_dirty_change_list_is_bounded_with_copyable_command
 check 'interactive update decisions use the TTY prompt seam' test_interactive_repo_decision_uses_tty_prompt_contract
 check 'repository pull prompt renders below its table on the TTY stream' test_repo_prompt_renders_after_table_on_the_tty_stream
+check 'repository prompt supports recover and replace decisions' test_repo_prompt_supports_recover_and_replace
 check 'repository update table honors the Agentbot TUI color mode' test_repo_update_table_honors_tui_color_mode
+check 'ahead repository table describes recoverable replacement' test_ahead_repo_table_describes_recoverable_replacement
 check 'direct update shows the status table before reconciliation' test_direct_update_shows_status_before_reconciliation
 test_harness_verify_safety || failed=$((failed + 1))
 printf '\nRan %d update-integration test(s); %d failure(s).\n' "$((passed + failed))" "$failed"

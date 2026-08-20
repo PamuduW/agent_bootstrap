@@ -192,6 +192,7 @@ run_repo_update_prompt() {
   case "$action" in
     pull-behind) prompt="Pull ${REPO_UPDATE_BEHIND:-0} commit(s) with --ff-only?" ;;
     continue-ahead) prompt='The repository is ahead. Continue with the Agentbot update?' ;;
+    replace-local) prompt="Back up local work and replace it with ${REPO_UPDATE_UPSTREAM:-upstream}?" ;;
     *) return 1 ;;
   esac
   print_repo_update_table >"$tty_output"

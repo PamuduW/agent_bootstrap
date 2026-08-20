@@ -43,22 +43,31 @@ case "$cmd" in
   'status --short --untracked-files=all')
     [[ "$scenario" == status-failed ]] && exit 43
     case "$scenario" in
-      dirty|dirty-*)
-        printf '%s\n' \
-          ' M scripts/example.sh' \
-          '?? .cursor/rules/agentbot-policy.mdc'
+      dirty|dirty-*|recovery-stash-failed|recovery-incomplete|recovery-reset-failed)
+        if [[ ! -f "$TEST_ROOT/recovery-stashed" || "$scenario" == recovery-incomplete ]]; then
+          printf '%s\n' \
+            ' M scripts/example.sh' \
+            '?? .cursor/rules/agentbot-policy.mdc'
+        fi
         ;;
     esac
     ;;
   'symbolic-ref --quiet --short HEAD') [[ "$scenario" == detached ]] && exit 1; printf 'main\n' ;;
   'rev-list --left-right --count HEAD...@{upstream}')
     case "$scenario" in
-      ahead|dirty-ahead) printf '2\t0\n' ;;
+      ahead|dirty-ahead|recovery-branch-failed) printf '2\t0\n' ;;
       behind|pull-failed|dirty-behind) printf '0\t3\n' ;;
       diverged|dirty-diverged) printf '2\t3\n' ;;
       invalid-counts) printf 'not-counts\n' ;; *) printf '0\t0\n' ;;
     esac ;;
   'pull --ff-only') [[ "$scenario" == pull-failed ]] && exit 31; : ;;
+  'stash push --include-untracked -m '*)
+    [[ "$scenario" == recovery-stash-failed ]] && exit 41
+    : >"$TEST_ROOT/recovery-stashed"; printf 'Saved working directory\n' ;;
+  'rev-parse --verify refs/stash') printf 'agentbot-stash-object\n' ;;
+  'show-ref --verify --quiet refs/heads/recovery/agentbot-'*) exit 1 ;;
+  'branch recovery/agentbot-'*' HEAD') [[ "$scenario" == recovery-branch-failed ]] && exit 42; : ;;
+  'reset --hard @{upstream}') [[ "$scenario" == recovery-reset-failed ]] && exit 43; : ;;
   *) printf 'unconfigured fake Git operation: %s\n' "$cmd" >&2; exit 97 ;;
 esac
 FAKE
@@ -72,6 +81,7 @@ decision() {
 
 reset_case() {
   : >"$TEST_COMMAND_LOG"; : >"$TEST_URL_LOG"; : >"$TEST_SIBLING_LOG"; : >"$TEST_RELAUNCH_LOG"; : >"$TEST_ROOT/decisions.log"
+  rm -f "$TEST_ROOT/recovery-stashed"
   REPO_SCENARIO="$1" DECISION_APPROVE="${2:-no}"
   export REPO_SCENARIO DECISION_APPROVE
   OUTCOME=unset REASON=unset
@@ -87,15 +97,49 @@ pull_count() { grep -c $'git\t-C\t.*\tpull\t--ff-only$' "$TEST_COMMAND_LOG" 2>/d
 decision_count() { wc -l <"$TEST_ROOT/decisions.log"; }
 
 test_current() { run_case current; [[ "$OUTCOME/$REASON" == current/current && "$(decision_count)" -eq 0 && "$(pull_count)" -eq 0 ]]; }
-test_dirty() { run_case dirty; [[ "$OUTCOME/$REASON" == stopped/dirty && "$(pull_count)" -eq 0 ]]; }
+test_dirty() { run_case dirty; [[ "$OUTCOME/$REASON" == stopped/replace-declined && "$(pull_count)" -eq 0 ]]; }
+test_dirty_approved_replacement() {
+  reset_case dirty yes
+  local output_file="$TEST_ROOT/dirty-replacement.output"
+  repo_update_run "$TEST_ROOT/repo" decision OUTCOME REASON >"$output_file" 2>&1
+  RUN_RC=$?
+  [[ "$OUTCOME/$REASON" == repository_changed/replaced && "$RUN_RC" -eq 2 ]] || return 1
+  grep -Fq 'Recovery stash: agentbot-stash-object' "$output_file" || return 1
+  local stash_line clean_line reset_line
+  stash_line="$(grep -n $'git\t-C\t.*\tstash\tpush\t--include-untracked\t-m\t' "$TEST_COMMAND_LOG" | cut -d: -f1)"
+  clean_line="$(grep -n $'git\t-C\t.*\tstatus\t--short\t--untracked-files=all$' "$TEST_COMMAND_LOG" | tail -n 1 | cut -d: -f1)"
+  reset_line="$(grep -n $'git\t-C\t.*\treset\t--hard\t@{upstream}$' "$TEST_COMMAND_LOG" | cut -d: -f1)"
+  [[ -n "$stash_line" && -n "$clean_line" && -n "$reset_line" ]] && ((stash_line < clean_line && clean_line < reset_line))
+}
+test_recovery_failures_stop_before_unsafe_followup() {
+  local scenario expected
+  while read -r scenario expected; do
+    run_case "$scenario" yes
+    [[ "$OUTCOME/$REASON" == "stopped/$expected" && "$RUN_RC" -eq 1 ]] || return 1
+    case "$scenario" in
+      recovery-branch-failed|recovery-stash-failed|recovery-incomplete)
+        ! grep -q $'\treset\t--hard\t@{upstream}$' "$TEST_COMMAND_LOG" || return 1
+        ;;
+    esac
+  done <<'TABLE'
+recovery-branch-failed recovery-branch-failed
+recovery-stash-failed stash-failed
+recovery-incomplete recovery-incomplete
+recovery-reset-failed reset-failed
+TABLE
+}
 test_detached() { run_case detached; [[ "$OUTCOME/$REASON" == stopped/detached && "$(pull_count)" -eq 0 ]]; }
 test_no_upstream() { run_case no-upstream; [[ "$OUTCOME/$REASON" == stopped/no-upstream ]] && ! grep -q $'\tfetch\t--prune$' "$TEST_COMMAND_LOG"; }
-test_ahead_approved() { run_case ahead yes; [[ "$OUTCOME/$REASON" == ahead-approved/ahead && "$(pull_count)" -eq 0 ]] && grep -Fqx continue-ahead "$TEST_ROOT/decisions.log"; }
-test_ahead_declined() { run_case ahead no; [[ "$OUTCOME/$REASON" == stopped/ahead-declined && "$(pull_count)" -eq 0 ]]; }
+test_ahead_approved() {
+  run_case ahead yes
+  [[ "$OUTCOME/$REASON" == repository_changed/replaced && "$RUN_RC" -eq 2 && "$(pull_count)" -eq 0 ]] || return 1
+  [[ "$REPO_UPDATE_RECOVERY_BRANCH" == recovery/agentbot-* ]] && grep -Fqx replace-local "$TEST_ROOT/decisions.log"
+}
+test_ahead_declined() { run_case ahead no; [[ "$OUTCOME/$REASON" == stopped/replace-declined && "$(pull_count)" -eq 0 ]]; }
 test_behind_declined() { run_case behind no; [[ "$OUTCOME/$REASON" == stopped/behind-declined && "$(pull_count)" -eq 0 ]] && grep -Fqx pull-behind "$TEST_ROOT/decisions.log"; }
 test_behind_pulled() { run_case behind yes; [[ "$OUTCOME/$REASON" == repository_changed/pulled && "$RUN_RC" -eq 2 && "$(pull_count)" -eq 1 ]]; }
 test_pull_failed() { run_case pull-failed yes; [[ "$OUTCOME/$REASON" == stopped/pull-failed && "$(pull_count)" -eq 1 ]]; }
-test_diverged() { run_case diverged yes; [[ "$OUTCOME/$REASON" == stopped/diverged && "$(decision_count)" -eq 0 && "$(pull_count)" -eq 0 ]]; }
+test_diverged() { run_case diverged yes; [[ "$OUTCOME/$REASON" == repository_changed/replaced && "$RUN_RC" -eq 2 && "$(decision_count)" -eq 1 && "$(pull_count)" -eq 0 ]]; }
 test_fetch_failed() { run_case fetch-failed yes; [[ "$OUTCOME/$REASON" == stopped/fetch-failed ]] && grep -q $'\tstatus\t--short\t--untracked-files=all$' "$TEST_COMMAND_LOG"; }
 test_invalid_counts() { run_case invalid-counts yes; [[ "$OUTCOME/$REASON" == stopped/invalid-counts && "$(pull_count)" -eq 0 ]]; }
 
@@ -146,15 +190,15 @@ test_status_failure_stops_before_fetch() {
 test_dirty_matrix_fetches_classifies_and_stops() {
   local scenario expected_history
   while read -r scenario expected_history; do
-    run_case "$scenario" yes
-    [[ "$OUTCOME/$REASON" == stopped/dirty ]] || return 1
+    run_case "$scenario" no
+    [[ "$OUTCOME/$REASON" == stopped/replace-declined ]] || return 1
     [[ "${REPO_UPDATE_DIRTY:-0}" -eq 1 ]] || return 1
     [[ "${REPO_UPDATE_CHANGES:-}" == *' M scripts/example.sh'* ]] || return 1
     [[ "${REPO_UPDATE_CHANGES:-}" == *'?? .cursor/rules/agentbot-policy.mdc'* ]] || return 1
     [[ "$REPO_UPDATE_STATE" == "$expected_history" ]] || return 1
     grep -q $'\tfetch\t--prune$' "$TEST_COMMAND_LOG" || return 1
     grep -q $'\trev-list\t--left-right\t--count\tHEAD...@{upstream}$' "$TEST_COMMAND_LOG" || return 1
-    [[ "$(pull_count)" -eq 0 && "$(decision_count)" -eq 0 ]] || return 1
+    [[ "$(pull_count)" -eq 0 && "$(decision_count)" -eq 1 ]] || return 1
   done <<'TABLE'
 dirty-current current
 dirty-ahead ahead
@@ -220,7 +264,7 @@ test_success_returns_at_pull_boundary() (
 test_exit_contract() {
   run_case current
   [[ "$RUN_RC" -eq 0 ]] || return 1
-  run_case dirty yes
+  run_case dirty no
   [[ "$RUN_RC" -eq 1 ]] || return 1
   run_case behind yes
   [[ "$RUN_RC" -eq 2 ]]
@@ -239,14 +283,16 @@ declare -F repo_update_run >/dev/null || repo_update_run() { printf -v "$3" stop
 
 expect 'current returns current without decision or pull' test_current
 expect 'dirty stops without pull' test_dirty
+expect 'approved dirty replacement stashes and verifies before reset' test_dirty_approved_replacement
+expect 'recovery failures retain distinct reasons and block unsafe followup' test_recovery_failures_stop_before_unsafe_followup
 expect 'detached stops without pull' test_detached
 expect 'missing upstream stops before fetch' test_no_upstream
-expect 'ahead approval continues without pull' test_ahead_approved
-expect 'ahead decline stops without pull' test_ahead_declined
+expect 'ahead approval creates a recovery branch and replaces local history' test_ahead_approved
+expect 'ahead replacement decline stops without pull' test_ahead_declined
 expect 'behind decline stops without pull' test_behind_declined
 expect 'behind approval pulls ff-only once and reports a changed repository' test_behind_pulled
 expect 'failed confirmed pull stops with pull-failed' test_pull_failed
-expect 'diverged stops without decision or pull' test_diverged
+expect 'diverged approval preserves a recovery branch and replaces local history' test_diverged
 expect 'fetch failure stops before classification' test_fetch_failed
 expect 'malformed counts stop with invalid-counts' test_invalid_counts
 expect 'invalid repository and origin stop before fetch' test_invalid_repo_and_origin

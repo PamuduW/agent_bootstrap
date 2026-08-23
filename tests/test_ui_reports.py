@@ -79,13 +79,12 @@ class SkillsReportTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("alpha", text)
 
-    def test_partial_failure_is_reported_but_does_not_fail_the_command(self):
-        # Current contract: a skills install is best-effort. Some sources
-        # failing still exits 0; only losing every source exits 1. Pinned here
-        # because it is surprising and easy to "fix" by accident.
+    def test_any_failed_source_fails_the_command(self):
+        # A partial install is a failure: the machine is left without skills
+        # the user asked for, so the command must not exit 0.
         results = [self._result("alpha"), self._result("beta", returncode=1)]
         text, rc = _capture(print_skills_report, results, title="Skills install")
-        self.assertEqual(rc, 0)
+        self.assertEqual(rc, 1)
         self.assertIn("failed", text)
 
     def test_total_failure_fails_the_command(self):
@@ -94,7 +93,7 @@ class SkillsReportTests(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("failed", text)
 
-    def test_skipped_sources_are_counted_separately(self):
+    def test_skipped_sources_alone_are_not_a_failure(self):
         results = [self._result("alpha"), self._result("beta", skipped=True)]
         _text, rc = _capture(print_skills_report, results, title="Skills install")
         self.assertEqual(rc, 0)

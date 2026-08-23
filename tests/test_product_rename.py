@@ -67,11 +67,30 @@ class ProductRenameTests(unittest.TestCase):
         self.assertEqual([], hits)
 
     def test_repository_identity_and_origin_allowlist_remain_agent_bootstrap(self) -> None:
+        """Agentbot must keep trusting exactly PamuduW/agent_bootstrap.
+
+        The URL matching moved into the shared state machine, which is written
+        once against an expected-slug argument. The identity is therefore
+        asserted in two halves: the adapter supplies the slug, and the shared
+        core builds only github.com URLs from it.
+        """
         self.assertEqual("agent_bootstrap", ROOT.name)
+
         adapter = (ROOT / "scripts/lib/repo_update.sh").read_text(encoding="utf-8")
-        self.assertIn("git@github.com:PamuduW/agent_bootstrap.git", adapter)
-        self.assertIn("https://github.com/PamuduW/agent_bootstrap.git", adapter)
-        self.assertNotIn("PamuduW/agentbot.git", adapter)
+        self.assertIn('repository="${5:-agent_bootstrap}"', adapter)
+        self.assertIn('slug="PamuduW/${repository}"', adapter)
+        self.assertNotIn("PamuduW/agentbot", adapter)
+
+        core = (ROOT / "scripts/lib/shared/repo_update.sh").read_text(encoding="utf-8")
+        for form in (
+            '"git@github.com:${expected_slug}"',
+            '"git@github.com:${expected_slug}.git"',
+            '"https://github.com/${expected_slug}"',
+            '"https://github.com/${expected_slug}.git"',
+        ):
+            self.assertIn(form, core)
+        # An origin carrying embedded credentials is never trusted.
+        self.assertIn("*://*@*) return 1", core)
 
     def test_cli_config_and_types_use_agentbot_contract(self) -> None:
         from src.cli import build_parser

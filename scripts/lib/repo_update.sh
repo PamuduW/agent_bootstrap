@@ -1,9 +1,36 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # REPO_UPDATE_* globals are this module's published output.
+# Agentbot binding for the shared repository-update state machine.
+#
+# The state machine itself lives in scripts/lib/shared/repo_update.sh and is
+# shared verbatim with the sibling repository. This file supplies the Agentbot
+# identity and keeps the calling convention Agentbot's callers already use:
+#
+#   repo_update_run <repo> <decision_fn> <outcome_var> <reason_var> [repository]
+#
+# plus the REPO_UPDATE_* globals its callers read, and Agentbot's own
+# result vocabulary (invalid-repository, invalid-origin, replaced, pulled).
+
+if [[ "${_AGENTBOT_REPO_UPDATE_LOADED:-0}" == 1 ]]; then
+	return 0
+fi
+_AGENTBOT_REPO_UPDATE_LOADED=1
 
 if ! declare -F tui_table_header >/dev/null 2>&1; then
 	# shellcheck disable=SC1091
 	source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/tui.sh"
 fi
+
+REPO_UPDATE_RECOVERY_PREFIX=agentbot
+# Agentbot's decision prompt renders its own table before asking, so the shared
+# machine must not print a second one.
+REPO_UPDATE_REPORT_FN=_agentbot_repo_update_no_report
+export REPO_UPDATE_RECOVERY_PREFIX
+
+_agentbot_repo_update_no_report() { :; }
+
+# shellcheck source=scripts/lib/shared/repo_update.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/shared/repo_update.sh"
 
 REPO_UPDATE_STATE=stopped
 REPO_UPDATE_AHEAD=0
@@ -15,90 +42,29 @@ REPO_UPDATE_RECOVERY_BRANCH=''
 REPO_UPDATE_RECOVERY_STASH=''
 REPO_UPDATE_RECOVERY_REASON=''
 
-_repo_update_set_result() {
-	local outcome_name="$1" reason_name="$2" outcome_value="$3" reason_value="$4"
-	printf -v "$outcome_name" '%s' "$outcome_value"
-	printf -v "$reason_name" '%s' "$reason_value"
-}
+declare -A _AGENTBOT_REPO_RESULT=()
 
-_repo_update_origin_allowed() {
-	local origin="$1" rewrite_rules="${2:-}" repository="${3:-agent_bootstrap}"
-	local key target prefix matched_prefix='' matched_target='' resolved
-
-	case "$origin" in
-	*://*@*) return 1 ;;
-	git@github.com:PamuduW/agent_bootstrap.git | https://github.com/PamuduW/agent_bootstrap.git)
-		[[ "$repository" == agent_bootstrap ]] && return 0
-		;;
+# The shared machine and Agentbot name some stop reasons differently. Agentbot
+# collapses "there is no origin" and "origin is not ours" into one
+# invalid-origin, and calls a non-worktree invalid-repository.
+_agentbot_repo_update_reason() {
+	case "$1" in
+	invalid) printf 'invalid-repository\n' ;;
+	no-origin | wrong-origin | non-origin-upstream) printf 'invalid-origin\n' ;;
+	*) printf '%s\n' "$1" ;;
 	esac
-
-	while IFS=$' \t' read -r key target; do
-		[[ "$key" == url.*.insteadof ]] || continue
-		prefix="${key#url.}"
-		prefix="${prefix%.insteadof}"
-		[[ -n "$prefix" ]] || continue
-		case "$origin" in
-		"$prefix"*)
-			if ((${#prefix} > ${#matched_prefix})); then
-				matched_prefix="$prefix"
-				matched_target="$target"
-			fi
-			;;
-		esac
-	done <<<"$rewrite_rules"
-
-	[[ -n "$matched_prefix" ]] || return 1
-	resolved="${matched_target}${origin#"$matched_prefix"}"
-	case "$resolved" in
-	git@github.com:PamuduW/agent_bootstrap.git | https://github.com/PamuduW/agent_bootstrap.git)
-		[[ "$repository" == agent_bootstrap ]] && return 0
-		;;
-	esac
-	return 1
 }
 
-_repo_update_read_changes() {
-	local repo="$1" status_output
-
-	status_output="$(git -C "$repo" status --short --untracked-files=all 2>/dev/null)" || return 1
-	REPO_UPDATE_CHANGES="$status_output"
-	if [[ -n "$status_output" ]]; then
-		REPO_UPDATE_DIRTY=1
-	else
-		REPO_UPDATE_DIRTY=0
-	fi
-}
-
-repo_update_classify_history() {
-	local repo="$1" state_name="$2" reason_name="$3"
-	local counts ahead behind classified_state classified_reason
-
-	REPO_UPDATE_AHEAD=0
-	REPO_UPDATE_BEHIND=0
-
-	if ! counts="$(git -C "$repo" rev-list --left-right --count 'HEAD...@{upstream}' 2>/dev/null)"; then
-		classified_state=stopped classified_reason=invalid-counts
-	elif [[ "$counts" =~ ^([0-9]+)[[:space:]]+([0-9]+)$ ]]; then
-		ahead="${BASH_REMATCH[1]}" behind="${BASH_REMATCH[2]}"
-		REPO_UPDATE_AHEAD="$ahead"
-		REPO_UPDATE_BEHIND="$behind"
-		if ((ahead > 0 && behind > 0)); then
-			classified_state=diverged
-		elif ((ahead > 0)); then
-			classified_state=ahead
-		elif ((behind > 0)); then
-			classified_state=behind
-		else
-			classified_state=current
-		fi
-		classified_reason="$classified_state"
-	else
-		classified_state=stopped classified_reason=invalid-counts
-	fi
-
-	printf -v "$state_name" '%s' "$classified_state"
-	printf -v "$reason_name" '%s' "$classified_reason"
-	REPO_UPDATE_STATE="$classified_state"
+# Mirror the shared result into the globals the bootstrap entrypoint reads.
+_agentbot_repo_update_export() {
+	REPO_UPDATE_STATE="${_AGENTBOT_REPO_RESULT[state]:-stopped}"
+	REPO_UPDATE_AHEAD="${_AGENTBOT_REPO_RESULT[ahead]:-0}"
+	REPO_UPDATE_BEHIND="${_AGENTBOT_REPO_RESULT[behind]:-0}"
+	REPO_UPDATE_DIRTY="${_AGENTBOT_REPO_RESULT[dirty]:-0}"
+	REPO_UPDATE_CHANGES="${_AGENTBOT_REPO_RESULT[changes]:-}"
+	REPO_UPDATE_UPSTREAM="${_AGENTBOT_REPO_RESULT[upstream]:-}"
+	REPO_UPDATE_RECOVERY_BRANCH="${_AGENTBOT_REPO_RESULT[recovery_branch]:-}"
+	REPO_UPDATE_RECOVERY_STASH="${_AGENTBOT_REPO_RESULT[recovery_stash]:-}"
 }
 
 repo_update_change_count() {
@@ -119,24 +85,45 @@ repo_update_history_detail() {
 	esac
 }
 
+# Standalone classifier kept for callers and tests that classify without
+# running the whole machine.
+repo_update_classify_history() {
+	local repo="$1" state_name="$2" reason_name="$3"
+	local counts state reason
+
+	REPO_UPDATE_AHEAD=0
+	REPO_UPDATE_BEHIND=0
+
+	if ! counts="$(git -C "$repo" rev-list --left-right --count 'HEAD...@{upstream}' 2>/dev/null)"; then
+		state=stopped reason=invalid-counts
+	elif [[ "$counts" =~ ^([0-9]+)[[:space:]]+([0-9]+)$ ]]; then
+		REPO_UPDATE_AHEAD="${BASH_REMATCH[1]}"
+		REPO_UPDATE_BEHIND="${BASH_REMATCH[2]}"
+		if ((REPO_UPDATE_AHEAD > 0 && REPO_UPDATE_BEHIND > 0)); then
+			state=diverged
+		elif ((REPO_UPDATE_AHEAD > 0)); then
+			state=ahead
+		elif ((REPO_UPDATE_BEHIND > 0)); then
+			state=behind
+		else
+			state=current
+		fi
+		reason="$state"
+	else
+		state=stopped reason=invalid-counts
+	fi
+
+	printf -v "$state_name" '%s' "$state"
+	printf -v "$reason_name" '%s' "$reason"
+	REPO_UPDATE_STATE="$state"
+}
+
+# Agentbot's proportional-width result table.
 repo_update_print_report() {
 	local repo="$1"
 	local branch local_rev history action upstream change_count remote_result cols
-	# shellcheck disable=SC2034  # shared TUI helpers consume these through Bash dynamic scope
-	local C_BOLD='' C_DIM='' C_WHITE='' C_RESET='' C_YELLOW='' C_CYAN='' C_GREEN='' C_RED=''
 	local available_color action_color
-	if [[ -z "${NO_COLOR:-}" && (-t 1 || -t 0 || -n "${AGENTBOT_TUI:-}" || -n "${FORCE_COLOR:-}") ]]; then
-		# shellcheck disable=SC2034  # shared TUI helpers consume these through Bash dynamic scope
-		C_BOLD=$'\033[1m'
-		C_DIM=$'\033[2m'
-		# shellcheck disable=SC2034  # shared TUI helpers consume these through Bash dynamic scope
-		C_WHITE=$'\033[37m'
-		C_RESET=$'\033[0m'
-		C_YELLOW=$'\033[33m'
-		C_CYAN=$'\033[36m'
-		C_GREEN=$'\033[32m'
-		C_RED=$'\033[31m'
-	fi
+	colors_complete_palette
 	cols="$(tui_cols)"
 	branch="$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
 	local_rev="$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo unknown)"
@@ -175,23 +162,28 @@ repo_update_print_report() {
 	printf '\n'
 	tui_table_header "$cols" component installed available action
 	if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
-		tui_table_row "$cols" 'agentbot repo' "${branch}@${local_rev}" "${change_count} local change(s)" "$action" "$C_RED" "$action_color"
+		tui_table_row "$cols" 'agentbot repo' "${branch}@${local_rev}" \
+			"${change_count} local change(s)" "$action" "$C_RED" "$action_color"
 	else
-		tui_table_row "$cols" 'agentbot repo' "${branch}@${local_rev}" "$history" "$action" "$available_color" "$action_color"
+		tui_table_row "$cols" 'agentbot repo' "${branch}@${local_rev}" \
+			"$history" "$action" "$available_color" "$action_color"
 	fi
-	tui_table_row "$cols" "$upstream" 'remote history' "$history" "$remote_result" "$available_color" "$C_CYAN"
+	tui_table_row "$cols" "$upstream" 'remote history' "$history" "$remote_result" \
+		"$available_color" "$C_CYAN"
 	printf '\n'
 }
 
-_repo_update_color_output_enabled() {
-	[[ -z "${NO_COLOR:-}" && (-t 1 || -t 0 || -n "${AGENTBOT_TUI:-}" || -n "${FORCE_COLOR:-}") ]]
-}
-
+# Agentbot's callers hold the reason as a string, where the shared machine
+# holds a result array. Defined after the shared source so this spelling wins.
 repo_update_is_declined() {
 	case "${1:-unknown}" in
 	behind-declined | ahead-declined | replace-declined) return 0 ;;
 	*) return 1 ;;
 	esac
+}
+
+_repo_update_color_output_enabled() {
+	[[ -z "${NO_COLOR:-}" && (-t 1 || -t 0 || -n "${AGENTBOT_TUI:-}" || -n "${FORCE_COLOR:-}") ]]
 }
 
 repo_update_print_declined() {
@@ -201,12 +193,8 @@ repo_update_print_declined() {
 		reset=$'\033[0m'
 	fi
 	case "$action" in
-	pull-behind)
-		printf '\n\n%sPull declined; update stopped.%s\n' "$red" "$reset"
-		;;
-	*)
-		printf '\n\n%sUpdate stopped; no downstream work was run.%s\n' "$red" "$reset"
-		;;
+	pull-behind) printf '\n\n%sPull declined; update stopped.%s\n' "$red" "$reset" ;;
+	*) printf '\n\n%sUpdate stopped; no downstream work was run.%s\n' "$red" "$reset" ;;
 	esac
 }
 
@@ -223,178 +211,76 @@ repo_update_print_changed() {
 repo_update_print_recovery() {
 	[[ -n "${REPO_UPDATE_RECOVERY_BRANCH:-}${REPO_UPDATE_RECOVERY_STASH:-}" ]] || return 0
 	printf 'Recovery data preserved:\n'
-	[[ -n "${REPO_UPDATE_RECOVERY_BRANCH:-}" ]] && printf '  Recovery branch: %s\n' "$REPO_UPDATE_RECOVERY_BRANCH"
-	[[ -n "${REPO_UPDATE_RECOVERY_STASH:-}" ]] && printf '  Recovery stash: %s\n' "$REPO_UPDATE_RECOVERY_STASH"
-}
-
-_repo_update_stash_changes() {
-	local repo="$1" output='' stash_id message
-	message="agentbot full-update recovery $(date -u +%Y%m%d-%H%M%S)" || {
-		REPO_UPDATE_RECOVERY_REASON=recovery-timestamp-failed
-		return 1
-	}
-	if ! output="$(git -C "$repo" stash push --include-untracked -m "$message" 2>&1)"; then
-		[[ -n "$output" ]] && printf '%s\n' "$output" >&2
-		REPO_UPDATE_RECOVERY_REASON=stash-failed
-		return 1
-	fi
-	stash_id="$(git -C "$repo" rev-parse --verify refs/stash 2>/dev/null)" || {
-		REPO_UPDATE_RECOVERY_REASON=stash-reference-failed
-		return 1
-	}
-	REPO_UPDATE_RECOVERY_STASH="$stash_id"
-}
-
-_repo_update_recovery_branch() {
-	local repo="$1" timestamp candidate suffix=0
-	timestamp="$(date -u +%Y%m%d-%H%M%S)" || {
-		REPO_UPDATE_RECOVERY_REASON=recovery-timestamp-failed
-		return 1
-	}
-	candidate="recovery/agentbot-${timestamp}"
-	while git -C "$repo" show-ref --verify --quiet "refs/heads/${candidate}"; do
-		suffix=$((suffix + 1))
-		candidate="recovery/agentbot-${timestamp}-${suffix}"
-	done
-	git -C "$repo" branch "$candidate" HEAD || {
-		REPO_UPDATE_RECOVERY_REASON=recovery-branch-failed
-		return 1
-	}
-	REPO_UPDATE_RECOVERY_BRANCH="$candidate"
-}
-
-_repo_update_replace_with_upstream() {
-	local repo="$1" remaining output=''
-	if ((REPO_UPDATE_AHEAD > 0)); then
-		_repo_update_recovery_branch "$repo" || return 1
-	fi
-	if ((REPO_UPDATE_DIRTY)); then
-		_repo_update_stash_changes "$repo" || return 1
-	fi
-	remaining="$(git -C "$repo" status --short --untracked-files=all 2>/dev/null)" || {
-		REPO_UPDATE_RECOVERY_REASON=status-failed-after-recovery
-		return 1
-	}
-	[[ -z "$remaining" ]] || {
-		REPO_UPDATE_RECOVERY_REASON=recovery-incomplete
-		return 1
-	}
-	if ! output="$(git -C "$repo" reset --hard '@{upstream}' 2>&1)"; then
-		[[ -n "$output" ]] && printf '%s\n' "$output" >&2
-		REPO_UPDATE_RECOVERY_REASON='reset-failed'
-		return 1
-	fi
-}
-
-_repo_update_run() {
-	local repo="$1" decision_fn="$2" outcome_name="$3" reason_name="$4" repository="${5:-agent_bootstrap}"
-	local worktree bare origin branch upstream state reason rewrite_rules
-
-	_repo_update_set_result "$outcome_name" "$reason_name" stopped invalid-repository
-	REPO_UPDATE_STATE=stopped
-	REPO_UPDATE_AHEAD=0
-	REPO_UPDATE_BEHIND=0
-	REPO_UPDATE_DIRTY=0
-	REPO_UPDATE_CHANGES=''
-	REPO_UPDATE_UPSTREAM=''
-	REPO_UPDATE_RECOVERY_BRANCH=''
-	REPO_UPDATE_RECOVERY_STASH=''
-	REPO_UPDATE_RECOVERY_REASON=''
-	[[ -d "$repo" ]] || return 0
-	worktree="$(git -C "$repo" rev-parse --is-inside-work-tree 2>/dev/null)" || return 0
-	[[ "$worktree" == true ]] || return 0
-	bare="$(git -C "$repo" rev-parse --is-bare-repository 2>/dev/null)" || return 0
-	[[ "$bare" == false ]] || return 0
-
-	origin="$(git -C "$repo" remote get-url origin 2>/dev/null)" || {
-		_repo_update_set_result "$outcome_name" "$reason_name" stopped invalid-origin
-		return 0
-	}
-	if ! _repo_update_origin_allowed "$origin" '' "$repository"; then
-		rewrite_rules="$(git config --global --get-regexp '^url\..*\.insteadof$' 2>/dev/null || true)"
-		_repo_update_origin_allowed "$origin" "$rewrite_rules" "$repository" || {
-			_repo_update_set_result "$outcome_name" "$reason_name" stopped invalid-origin
-			return 0
-		}
-	fi
-
-	branch="$(git -C "$repo" symbolic-ref --quiet --short HEAD 2>/dev/null)" || {
-		_repo_update_set_result "$outcome_name" "$reason_name" stopped detached
-		return 0
-	}
-	[[ -n "$branch" ]] || {
-		_repo_update_set_result "$outcome_name" "$reason_name" stopped detached
-		return 0
-	}
-	upstream="$(git -C "$repo" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)" || {
-		_repo_update_set_result "$outcome_name" "$reason_name" stopped no-upstream
-		return 0
-	}
-	[[ -n "$upstream" ]] || {
-		_repo_update_set_result "$outcome_name" "$reason_name" stopped no-upstream
-		return 0
-	}
-	REPO_UPDATE_UPSTREAM="$upstream"
-	if ! _repo_update_read_changes "$repo"; then
-		_repo_update_set_result "$outcome_name" "$reason_name" stopped status-failed
-		return 0
-	fi
-	if ! git -C "$repo" fetch --prune; then
-		_repo_update_set_result "$outcome_name" "$reason_name" stopped fetch-failed
-		return 0
-	fi
-
-	repo_update_classify_history "$repo" state reason
-	if [[ "$state" == stopped ]]; then
-		_repo_update_set_result "$outcome_name" "$reason_name" stopped "$reason"
-		return 0
-	fi
-	if ((REPO_UPDATE_DIRTY)) || [[ "$state" == ahead || "$state" == diverged ]]; then
-		if ! "$decision_fn" replace-local; then
-			_repo_update_set_result "$outcome_name" "$reason_name" stopped replace-declined
-		elif _repo_update_replace_with_upstream "$repo"; then
-			_repo_update_set_result "$outcome_name" "$reason_name" repository_changed replaced
-		else
-			_repo_update_set_result "$outcome_name" "$reason_name" stopped "${REPO_UPDATE_RECOVERY_REASON:-recovery-failed}"
-		fi
-		return 0
-	fi
-	case "$state" in
-	current) _repo_update_set_result "$outcome_name" "$reason_name" current current ;;
-	ahead)
-		if "$decision_fn" continue-ahead; then
-			_repo_update_set_result "$outcome_name" "$reason_name" ahead-approved ahead
-		else
-			_repo_update_set_result "$outcome_name" "$reason_name" stopped ahead-declined
-		fi
-		;;
-	behind)
-		if ! "$decision_fn" pull-behind; then
-			_repo_update_set_result "$outcome_name" "$reason_name" stopped behind-declined
-		elif git -C "$repo" pull --ff-only; then
-			_repo_update_set_result "$outcome_name" "$reason_name" repository_changed pulled
-		else
-			_repo_update_set_result "$outcome_name" "$reason_name" stopped pull-failed
-		fi
-		;;
-	diverged)
-		_repo_update_set_result "$outcome_name" "$reason_name" stopped "$reason"
-		;;
-	*) _repo_update_set_result "$outcome_name" "$reason_name" stopped invalid-counts ;;
-	esac
+	[[ -n "${REPO_UPDATE_RECOVERY_BRANCH:-}" ]] &&
+		printf '  Recovery branch: %s\n' "$REPO_UPDATE_RECOVERY_BRANCH"
+	[[ -n "${REPO_UPDATE_RECOVERY_STASH:-}" ]] &&
+		printf '  Recovery stash: %s\n' "$REPO_UPDATE_RECOVERY_STASH"
+	return 0
 }
 
 repo_update_run() {
-	# Contract: 0 means callers may continue, 1 means the update stopped, and
-	# 2 means a fast-forward changed this checkout and all higher-level work
-	# must stop so the user can rerun from the new repository state.
-	local outcome_name="$3" rc=0 outcome
-	_repo_update_run "$@" || rc=$?
-	outcome="${!outcome_name:-stopped}"
+	# Contract: 0 continue, 1 stopped, 2 the checkout changed and all
+	# higher-level work must stop so the user can rerun from the new state.
+	local repo="$1" decision_fn="$2" outcome_name="$3" reason_name="$4"
+	local repository="${5:-agent_bootstrap}"
+	local slug="PamuduW/${repository}"
+	local outcome reason rc=0
+
+	_AGENTBOT_REPO_RESULT=()
+	repo_update_preflight "$repo" 'agentbot repo' _AGENTBOT_REPO_RESULT "$slug"
+	_agentbot_repo_update_export
+
+	if [[ "${_AGENTBOT_REPO_RESULT[safe]}" != 1 &&
+		"${_AGENTBOT_REPO_RESULT[reason]}" != dirty &&
+		"${_AGENTBOT_REPO_RESULT[state]}" != diverged ]]; then
+		outcome=stopped
+		reason="$(_agentbot_repo_update_reason "${_AGENTBOT_REPO_RESULT[reason]}")"
+		printf -v "$outcome_name" '%s' "$outcome"
+		printf -v "$reason_name" '%s' "$reason"
+		return 1
+	fi
+
+	if ! repo_update_request_approval _AGENTBOT_REPO_RESULT "$decision_fn"; then
+		_agentbot_repo_update_export
+		printf -v "$outcome_name" '%s' stopped
+		printf -v "$reason_name" '%s' \
+			"$(_agentbot_repo_update_reason "${_AGENTBOT_REPO_RESULT[reason]}")"
+		return 1
+	fi
+
+	local replaced=0
+	[[ "${_AGENTBOT_REPO_RESULT[apply_action]:-}" == replace ]] && replaced=1
+
+	if ! repo_update_apply _AGENTBOT_REPO_RESULT; then
+		_agentbot_repo_update_export
+		REPO_UPDATE_RECOVERY_REASON="${_AGENTBOT_REPO_RESULT[reason]}"
+		repo_update_print_recovery
+		printf -v "$outcome_name" '%s' stopped
+		printf -v "$reason_name" '%s' \
+			"$(_agentbot_repo_update_reason "${_AGENTBOT_REPO_RESULT[reason]}")"
+		return 1
+	fi
+
+	_agentbot_repo_update_export
 	repo_update_print_recovery
-	case "$outcome" in
-	repository_changed) return 2 ;;
-	stopped) return 1 ;;
-	*) return "$rc" ;;
+
+	case "${_AGENTBOT_REPO_RESULT[outcome]}" in
+	repository_changed)
+		outcome=repository_changed
+		((replaced)) && reason=replaced || reason=pulled
+		rc=2
+		;;
+	current)
+		outcome=current reason=current rc=0
+		;;
+	*)
+		outcome="${_AGENTBOT_REPO_RESULT[outcome]}"
+		reason="$(_agentbot_repo_update_reason "${_AGENTBOT_REPO_RESULT[reason]}")"
+		rc=0
+		;;
 	esac
+
+	printf -v "$outcome_name" '%s' "$outcome"
+	printf -v "$reason_name" '%s' "$reason"
+	return "$rc"
 }

@@ -245,7 +245,11 @@ def print_skills_report(results: list, *, title: str) -> int:
             f"{_c(str(summary.failed), RED)} failed, "
             f"{_c(str(summary.skipped), YELLOW)} skipped"
         )
-        return 1 if summary.ok == 0 else 0
+        # Any failed source is an error. A partial install leaves the machine
+        # in a state the user did not ask for, and silently exiting 0 meant
+        # `agentbot install` and `dotfiles full-update` reported success while
+        # skills were missing.
+        return 1
     print(f"  {_c(f'{summary.ok} source(s) installed successfully.', GREEN)}")
     if rows:
         print_rollup(ok=ok, check=check, miss=miss)

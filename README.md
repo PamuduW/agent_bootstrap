@@ -72,7 +72,12 @@ committed [`skills-lock.json`](skills-lock.json) is only a project stub.
 
 Add a source to the manifest, then use `skills install`. Source discovery is
 performed once per update plan, and apply verifies that the repository,
-manifest, lock, and remote source revisions still match that plan. A folder
+manifest, lock, and remote source revisions still match that plan.
+
+Any source that fails to install makes the command exit nonzero, including when
+other sources succeeded: a partial install leaves skills missing that the
+manifest asked for. The report lists the ok / failed / skipped counts. Sources
+that are deliberately skipped are not failures. A folder
 copied directly into `~/.agents/skills/` remains a manual skill; Status and
 Doctor report it as outside managed sources until the manifest owns it.
 

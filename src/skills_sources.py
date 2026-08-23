@@ -19,6 +19,13 @@ class SkillSourceEntry:
     repo: str | None
     skills: list[str] = field(default_factory=list)
     enabled: bool = True
+    # Names to drop from this source. Mainly for `skills: all`, where an
+    # upstream repository may ship things you do not want -- its own CLI test
+    # fixtures, for instance -- and there is otherwise no way to say no.
+    exclude: list[str] = field(default_factory=list)
+
+    def excludes(self, skill: str) -> bool:
+        return skill in self.exclude
 
 
 @dataclass(frozen=True)
@@ -87,6 +94,15 @@ def validate_skills_sources(raw: dict[str, Any], *, path: Path | None = None) ->
         enabled = item.get("enabled", True)
         if not isinstance(enabled, bool):
             raise SkillsSourcesError(f"{label}: sources[{index}].enabled must be a boolean")
+        exclude = _require_string_list(
+            item.get("exclude", []), field_name="exclude", label=label, index=index
+        )
+        for name in exclude:
+            if skills != ["*"] and name not in skills:
+                raise SkillsSourcesError(
+                    f"{label}: sources[{index}].exclude names {name!r}, which this "
+                    "source does not install"
+                )
 
         sources.append(
             SkillSourceEntry(
@@ -94,6 +110,7 @@ def validate_skills_sources(raw: dict[str, Any], *, path: Path | None = None) ->
                 repo=repo.strip() if isinstance(repo, str) else None,
                 skills=skills,
                 enabled=enabled,
+                exclude=exclude,
             )
         )
 

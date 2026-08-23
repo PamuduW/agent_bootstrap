@@ -56,7 +56,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(parser_commands, covered_parser_commands)
         self.assertEqual(
             {
-                "status", "install", "update", "token", "boot", "workspace",
+                "status", "install", "full", "update", "token", "boot", "workspace",
                 "workspaces", "resync", "doctor", "graphify", "help",
             },
             {spec.name for spec in commands_for_surface("public")},

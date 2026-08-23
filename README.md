@@ -68,6 +68,27 @@ committed [`skills-lock.json`](skills-lock.json) is only a project stub.
 ./install.sh skills update
 ./install.sh skills list
 ./install.sh skills doctor
+./install.sh skills prune          # report skills no active source wants
+./install.sh skills prune --yes    # and remove them
+./install.sh full                  # install, then update, in one command
+```
+
+`skills prune` reconciles the store against the manifest and classifies every
+skill: `excluded` (its source installs it, the manifest excludes it),
+`orphaned` (pinned to a source that is no longer active), `stale-pin` (in the
+lock with no directory), and `manual` (user-placed, never removed unless you
+pass `--include-manual`). It reports by default and only writes with `--yes`.
+
+A `skills: all` source can refuse specific upstream names, which is how you keep
+a repository's own test fixtures out of every agent's context:
+
+```yaml
+  - id: some-source
+    repo: owner/repo
+    skills: all
+    exclude:
+      - alpha
+      - beta
 ```
 
 Add a source to the manifest, then use `skills install`. Source discovery is

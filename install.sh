@@ -305,12 +305,48 @@ run_update_backend_as() {
 	github_token_child run_cli "$update_command" "$@"
 }
 
+# `full` = install then update, sharing one exit contract.
+#
+# Both stages already return 0 continue / 1 stop / 2 repository changed. The
+# only extra rule is the restart budget: a repository change may legitimately
+# happen once (the checkout moved forward and this process is running the old
+# code), so the stage is retried from the new checkout exactly once.
+run_full() {
+	local stage rc restarts=0
+	for stage in install update; do
+		while true; do
+			rc=0
+			case "$stage" in
+			install) run_install || rc=$? ;;
+			update)
+				check_skills_deps
+				run_update_backend_as update --yes || rc=$?
+				;;
+			esac
+			case "$rc" in
+			0) break ;;
+			2)
+				if ((restarts >= 1)); then
+					warn 'repository changed more than once; full run stopped'
+					return 1
+				fi
+				restarts=$((restarts + 1))
+				log_info 'restarting from the updated checkout'
+				;;
+			*) return "$rc" ;;
+			esac
+		done
+	done
+	log_info 'Agentbot full run complete'
+}
+
 usage() {
 	cat <<EOF
 Usage: ./install.sh <command> [args]
 
   Commands:
   install                    Run the complete bootstrap and link Agentbot
+  full                       Run install, then update, in one command
   update [--dry-run|--yes]   Run the repository-first update flow
   status [--json]            Show current Agentbot state
   doctor                     Validate the installation
@@ -345,6 +381,10 @@ main() {
 		;;
 	install)
 		run_install
+		;;
+	full)
+		check_skills_deps
+		run_full
 		;;
 	update | upgrade)
 		check_skills_deps

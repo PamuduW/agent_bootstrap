@@ -22,6 +22,7 @@ class WorkspaceServiceTests(unittest.TestCase):
             claude_home=self.root / "claude",
             cursor_home=self.root / "cursor",
             config_home=self.config_home,
+            agents_home=self.root / "agents",
         )
         self.workspace_service = WorkspaceService(self.paths)
 
@@ -236,6 +237,80 @@ class WorkspaceServiceTests(unittest.TestCase):
             self.workspace_service.remove(self.root / "unknown")
 
         self.assertEqual(before, self.paths.workspace_state_file.read_bytes())
+
+    def test_generated_output_for_an_unregistered_target_is_reported(self):
+        from src.workspace_state import WorkspaceRecord
+
+        workspace = self.root / "ws"
+        (workspace / ".cursor" / "rules").mkdir(parents=True)
+        (workspace / "AGENTS.md").write_text("# policy\n", encoding="utf-8")
+        # An Agentbot-generated Cursor rule left behind after the workspace was
+        # re-registered without the cursor target.
+        (workspace / ".cursor" / "rules" / "agentbot-policy.mdc").write_text(
+            "---\ndescription: x\n---\n\n<!-- BEGIN AGENTBOT MANAGED BASELINE -->\n"
+            "old\n<!-- END AGENTBOT MANAGED BASELINE -->\n",
+            encoding="utf-8",
+        )
+        record = WorkspaceRecord(
+            path=str(workspace),
+            kind="directory",
+            policy_mode="managed",
+            profile="safe-default",
+            targets=("agents",),
+            enabled=True,
+            last_commit=None,
+            last_rendered_at=None,
+        )
+
+        orphans = self.workspace_service._orphaned_output_results(record)
+
+        self.assertEqual(1, len(orphans))
+        self.assertEqual("conflict", orphans[0].status)
+        self.assertIn("agentbot-policy.mdc", orphans[0].message)
+        self.assertIn("--cursor", orphans[0].message)
+
+    def test_a_user_authored_file_at_a_target_path_is_left_alone(self):
+        from src.workspace_state import WorkspaceRecord
+
+        workspace = self.root / "ws2"
+        (workspace / ".cursor" / "rules").mkdir(parents=True)
+        # No managed marker: the user wrote this, it is not ours to police.
+        (workspace / ".cursor" / "rules" / "agentbot-policy.mdc").write_text(
+            "my own rules\n", encoding="utf-8"
+        )
+        record = WorkspaceRecord(
+            path=str(workspace),
+            kind="directory",
+            policy_mode="managed",
+            profile="safe-default",
+            targets=("agents",),
+            enabled=True,
+            last_commit=None,
+            last_rendered_at=None,
+        )
+
+        self.assertEqual([], self.workspace_service._orphaned_output_results(record))
+
+    def test_a_registered_target_is_not_reported_as_an_orphan(self):
+        from src.workspace_state import WorkspaceRecord
+
+        workspace = self.root / "ws3"
+        (workspace / ".cursor" / "rules").mkdir(parents=True)
+        (workspace / ".cursor" / "rules" / "agentbot-policy.mdc").write_text(
+            "<!-- BEGIN AGENTBOT MANAGED BASELINE -->\n", encoding="utf-8"
+        )
+        record = WorkspaceRecord(
+            path=str(workspace),
+            kind="directory",
+            policy_mode="managed",
+            profile="safe-default",
+            targets=("agents", "cursor"),
+            enabled=True,
+            last_commit=None,
+            last_rendered_at=None,
+        )
+
+        self.assertEqual([], self.workspace_service._orphaned_output_results(record))
 
 
 if __name__ == "__main__":

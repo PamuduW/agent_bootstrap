@@ -12,6 +12,12 @@ class AgentbotPaths:
     claude_home: Path
     cursor_home: Path
     config_home: Path = field(default_factory=lambda: _default_config_home())
+    # Injectable like the other homes. This used to be computed from
+    # Path.home() inside the properties below, which meant a caller could point
+    # root/claude/codex/cursor at a temp directory and still read and write the
+    # real ~/.agents skill store. Declared last so the existing positional
+    # order (root, codex, claude, cursor, config) is unchanged.
+    agents_home: Path = field(default_factory=lambda: Path.home() / ".agents")
 
     @property
     def global_agents(self) -> Path:
@@ -27,7 +33,7 @@ class AgentbotPaths:
 
     @property
     def agents_skills_home(self) -> Path:
-        return Path.home() / ".agents" / "skills"
+        return self.agents_home / "skills"
 
     @property
     def claude_skills_home(self) -> Path:
@@ -35,7 +41,7 @@ class AgentbotPaths:
 
     @property
     def global_skill_lock(self) -> Path:
-        return Path.home() / ".agents" / ".skill-lock.json"
+        return self.agents_home / ".skill-lock.json"
 
     @property
     def workspace_profiles_file(self) -> Path:
@@ -56,6 +62,7 @@ def default_paths(root: Path | None = None) -> AgentbotPaths:
         codex_home=home / ".codex",
         claude_home=home / ".claude",
         cursor_home=home / ".cursor",
+        agents_home=home / ".agents",
     )
 
 

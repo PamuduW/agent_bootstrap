@@ -42,6 +42,7 @@ class UpdateLifecycleTests(unittest.TestCase):
             home / ".claude",
             home / ".cursor",
             home / ".config" / "agentbot",
+            agents_home=home / ".agents",
         )
         return root, home, paths
 

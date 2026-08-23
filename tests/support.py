@@ -18,6 +18,8 @@ def agentbot_paths(root: Path) -> AgentbotPaths:
         claude_home=home / ".claude",
         cursor_home=home / ".cursor",
         config_home=home / ".config" / "agentbot",
+        # Explicit, so isolation never depends on when HOME was patched.
+        agents_home=home / ".agents",
     )
 
 

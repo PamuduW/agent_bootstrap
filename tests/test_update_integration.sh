@@ -262,6 +262,49 @@ test_ahead_repo_table_describes_recoverable_replacement() (
 	[[ "$output" == *'replace after backup'* && "$output" != *'continue'* ]]
 )
 
+test_full_runs_install_then_update_with_one_restart_budget() (
+	AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+	local events="$TEST_ROOT/full.events"
+
+	# both stages clean
+	: >"$events"
+	run_install() { printf 'install\n' >>"$events"; }
+	check_skills_deps() { :; }
+	run_update_backend_as() { printf 'update:%s\n' "$*" >>"$events"; }
+	run_full >/dev/null || return 1
+	[[ "$(<"$events")" == $'install\nupdate:update --yes' ]] || return 1
+
+	# a repository change during install is retried exactly once
+	: >"$events"
+	local install_calls=0
+	run_install() {
+		install_calls=$((install_calls + 1))
+		printf 'install\n' >>"$events"
+		((install_calls == 1)) && return 2
+		return 0
+	}
+	run_full >/dev/null || return 1
+	[[ "$(<"$events")" == $'install\ninstall\nupdate:update --yes' ]] || return 1
+
+	# a second repository change exhausts the budget and stops
+	: >"$events"
+	run_install() {
+		printf 'install\n' >>"$events"
+		return 2
+	}
+	local rc=0
+	run_full >/dev/null 2>&1 || rc=$?
+	[[ "$rc" -eq 1 && "$(wc -l <"$events")" -eq 2 ]] || return 1
+
+	# a genuine failure propagates unchanged, without running update
+	: >"$events"
+	run_install() { return 23; }
+	rc=0
+	run_full >/dev/null 2>&1 || rc=$?
+	[[ "$rc" -eq 23 && ! -s "$events" ]]
+)
+
+check 'full runs install then update with a one-restart budget' test_full_runs_install_then_update_with_one_restart_budget
 check 'repo gate short-circuits stopped and changed-repository states' test_repo_gate_short_circuits_unsafe_states
 check 'dirty update reports changes and remote history before blocking backend work' test_dirty_state_reports_changes_remote_history_and_blocks_backend
 check 'dirty current repository reports verified current and stops' test_dirty_current_reports_verified_current_and_stops

@@ -209,6 +209,20 @@ def _skill_folder_hash(skill_dir: Path) -> str:
     return digest.hexdigest()
 
 
+def _require_global_lock(global_lock_file: Path | None) -> Path:
+    """Refuse to guess the lock location.
+
+    This used to fall back to ``Path.home()/".agents"/".skill-lock.json"``. A
+    caller that forgot to pass a path — a test, for instance — then wrote pins
+    into the real user lock instead of its own sandbox.
+    """
+    if global_lock_file is None:
+        raise SkillsInstallError(
+            "global lock path is required to record a source-owned skill pin"
+        )
+    return global_lock_file
+
+
 def _record_github_checkout_lock(source: SkillSourceEntry, checkout: Path, lock_file: Path) -> None:
     if source.repo is None:
         raise SkillsInstallError(f"source {source.id!r} has no repository to record")
@@ -388,9 +402,7 @@ def install_source(
             result = run_install_command(argv, source_id=source.id, cwd=cwd)
             if result.returncode == 0 and global_scope:
                 _record_github_checkout_lock(
-                    source,
-                    checkout,
-                    global_lock_file or Path.home() / ".agents" / ".skill-lock.json",
+                    source, checkout, _require_global_lock(global_lock_file)
                 )
             result = InstallResult(
                 source_id=result.source_id,
@@ -413,9 +425,7 @@ def install_source(
                 result = run_install_command(argv, source_id=source.id, cwd=cwd)
                 if result.returncode == 0 and global_scope:
                     _record_github_checkout_lock(
-                        source,
-                        checkout,
-                        global_lock_file or Path.home() / ".agents" / ".skill-lock.json",
+                        source, checkout, _require_global_lock(global_lock_file)
                     )
                 result = InstallResult(
                     source_id=result.source_id,

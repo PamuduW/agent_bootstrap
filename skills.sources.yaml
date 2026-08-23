@@ -80,6 +80,12 @@ sources:
   - id: akindu-agent-skills
     repo: Akindu23/my-agent-skills
     skills: all
+    # This repository ships its own Skills-CLI test fixtures under
+    # cli/test/fixtures/, and `skills: all` sweeps them in. They are not real
+    # skills; excluding them keeps them out of every agent's context.
+    exclude:
+      - alpha
+      - beta
 
   - id: pamudu-agent-bootstrap-skills
     repo: PamuduW/agent_bootstrap_skills

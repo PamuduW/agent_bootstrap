@@ -53,6 +53,7 @@ class GraphifyIntegrationTests(unittest.TestCase):
             self.root / "codex",
             self.root / "claude",
             self.root / "cursor",
+            agents_home=self.home / ".agents",
         )
 
     def test_status_reports_not_installed_without_writing(self) -> None:

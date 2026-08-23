@@ -31,6 +31,18 @@ from src.workspace_service import WorkspaceReport, WorkspaceResult
 from src.workspace_state import WorkspaceRecord
 
 
+def _header_lines(text: str) -> int:
+    """Count rendered column-header lines, not the word "component".
+
+    The header is column-padded, so match on the parsed first field.
+    """
+    return sum(
+        1
+        for line in text.splitlines()
+        if "|" in line and line.split("|")[0].strip() == "component"
+    )
+
+
 def _capture(fn, *args, **kwargs) -> tuple[str, object]:
     buffer = io.StringIO()
     with redirect_stdout(buffer):
@@ -49,6 +61,21 @@ class DoctorSummaryTests(unittest.TestCase):
         text, rc = _capture(print_doctor_summary, issues)
         self.assertEqual(rc, 0)
         self.assertIn("a warning", text)
+
+    def test_embedded_doctor_section_does_not_repeat_the_column_header(self):
+        # print_section_block already emits the column header; asking
+        # print_table for one too printed "component | detail | result" twice
+        # under `status --doctor`.
+        issues = [DoctorIssue(level="warning", scope="skills", message="a warning")]
+        embedded, _ = _capture(print_doctor_summary, issues, include_header=False)
+        self.assertEqual(1, _header_lines(embedded))
+
+        standalone, _ = _capture(print_doctor_summary, issues, include_header=True)
+        self.assertEqual(1, _header_lines(standalone))
+
+    def test_empty_doctor_section_does_not_repeat_the_column_header(self):
+        embedded, _ = _capture(print_doctor_summary, [], include_header=False)
+        self.assertEqual(1, _header_lines(embedded))
 
     def test_any_error_fails(self):
         issues = [

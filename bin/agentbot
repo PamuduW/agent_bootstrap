@@ -109,7 +109,7 @@ agentbot_main() {
       if agentbot_has_tty; then agentbot_run_menu
       else agentbot_die 'No usable controlling TTY. Use agentbot help or an explicit command such as agentbot install.'; fi
       ;;
-    status|install|doctor) agentbot_run_backend "$command" "$@" ;;
+    status|install|full|doctor) agentbot_run_backend "$command" "$@" ;;
     boot) agentbot_boot "$@" ;;
     workspace|workspaces|resync) agentbot_run_backend "$command" "$@" ;;
     graphify) agentbot_run_backend graphify "$@" ;;

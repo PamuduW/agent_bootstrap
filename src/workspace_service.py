@@ -205,6 +205,7 @@ class WorkspaceService:
             results = []
 
         for record in sorted(selected, key=lambda item: item.path):
+            results.extend(self._orphaned_output_results(record))
             try:
                 results.append(self._resync_record(record, apply=apply))
             except (OSError, ValueError) as error:
@@ -217,6 +218,47 @@ class WorkspaceService:
                     )
                 )
         return WorkspaceReport(tuple(sorted(results, key=lambda result: str(result.path))))
+
+    def _orphaned_output_results(self, record: WorkspaceRecord) -> list[WorkspaceResult]:
+        """Report Agentbot-generated outputs that are no longer registered targets.
+
+        Registering fewer targets than a directory already has leaves the extra
+        files behind. They still carry the managed markers, so they look
+        generated and current, but nothing refreshes them -- they silently drift
+        away from the policy every other surface is following. Resync only walks
+        registered targets, so without this the drift is invisible.
+        """
+        from .workspace_render import MANAGED_BEGIN, OUTPUT_PATHS
+
+        root = Path(record.path)
+        if not root.is_dir():
+            return []
+
+        orphans: list[WorkspaceResult] = []
+        for target, relative_path in sorted(OUTPUT_PATHS.items()):
+            if target in record.targets:
+                continue
+            candidate = root / relative_path
+            if not candidate.is_file():
+                continue
+            try:
+                content = candidate.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            if MANAGED_BEGIN not in content:
+                # No managed marker: user-authored, none of our business.
+                continue
+            orphans.append(
+                WorkspaceResult(
+                    root,
+                    "conflict",
+                    (),
+                    f"{relative_path} is Agentbot-generated but {target!r} is not a "
+                    "registered target; it will never be refreshed. Re-register with "
+                    f"--{target}, or delete the file if it is no longer wanted",
+                )
+            )
+        return orphans
 
     def _resync_record(self, record: WorkspaceRecord, *, apply: bool) -> WorkspaceResult:
         path = Path(record.path)

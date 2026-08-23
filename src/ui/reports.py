@@ -162,12 +162,17 @@ def print_status_summary(
 def print_doctor_summary(issues: list, *, include_header: bool = True) -> int:
     if include_header:
         print_header("Doctor", "Agentbot › Doctor")
+        # print_header does not emit column names; print_table must.
+        show_columns = True
     else:
+        # print_section_block already emits the column header, so asking
+        # print_table for one too printed it twice.
         print_section_block("── Doctor issues ──")
+        show_columns = False
     if not issues:
         print_table(
             [("Health check", "skills + global baseline", "ok")],
-            show_header=True,
+            show_header=show_columns,
         )
         print_rollup(ok=1, check=0, miss=0)
         return 0
@@ -185,6 +190,7 @@ def print_doctor_summary(issues: list, *, include_header: bool = True) -> int:
         rows.append((issue.scope, issue.message, result))
     _ok, check, miss = print_table(
         rows,
+        show_header=show_columns,
         wrap_details=True,
         detail_highlighter=highlight_manual_skill_name,
     )
@@ -424,3 +430,46 @@ def print_update_outcome(outcome) -> None:
     result = "ok" if outcome.status in {"applied", "applied-with-local-changes"} else outcome.status
     print_table([("Update", outcome.message or outcome.status, result)], wrap_details=True)
     print()
+
+
+def print_skill_prune_report(report, *, include_manual: bool = False) -> int:
+    """Render the prune plan or result. Returns the command's exit code."""
+    print_header("Skills Prune", "Agentbot › Skills Prune")
+
+    rows = [
+        (item.name, item.detail, item.reason)
+        for item in report.candidates
+        if item.removable_by_default or item.reason == "manual"
+    ]
+    if not rows:
+        print_table(
+            [("Skill store", "every installed skill has an active source", "ok")],
+            show_header=True,
+        )
+        print_rollup(ok=1, check=0, miss=0)
+        return 0
+
+    print_table(rows, show_header=True)
+    print()
+
+    if report.applied:
+        if report.removed:
+            print(f"  Removed {len(report.removed)} skill(s): {', '.join(report.removed)}")
+        else:
+            print("  Nothing removed.")
+        if report.manual and not include_manual:
+            print(
+                f"  {_c(str(len(report.manual)), YELLOW)} manual skill(s) left in place; "
+                "rerun with --include-manual to remove them too."
+            )
+        return 0
+
+    removable = len(report.removable)
+    if removable:
+        print(f"  {_c(str(removable), YELLOW)} skill(s) would be removed. Rerun with --yes to apply.")
+    if report.manual:
+        print(
+            f"  {_c(str(len(report.manual)), DIM)} manual skill(s) are user-placed and are "
+            "never removed unless --include-manual is given."
+        )
+    return 0

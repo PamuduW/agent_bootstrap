@@ -20,6 +20,7 @@ from .ui import (
     print_graphify_status,
     print_header,
     print_reconciliation_report,
+    print_skill_prune_report,
     print_skills_report,
     print_skills_update_report,
     print_status_summary,
@@ -205,6 +206,12 @@ def _handle_bootstrap(context: CommandContext) -> int:
 
 
 def _handle_skills(context: CommandContext) -> int:
+    if context.args.skills_command == "prune":
+        return handle_skills_prune(
+            context.lifecycle,
+            apply=bool(getattr(context.args, "confirm", False)),
+            include_manual=bool(getattr(context.args, "include_manual", False)),
+        )
     return handle_skills_command(context.lifecycle, context.args.skills_command)
 
 
@@ -324,6 +331,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     skills_sub.add_parser("list", help="List installed skills under ~/.agents/skills")
     skills_sub.add_parser("doctor", help="Validate skills sources and tooling")
+    prune = skills_sub.add_parser(
+        "prune",
+        help="Remove installed skills that no active manifest source wants",
+    )
+    prune.add_argument(
+        "--yes",
+        dest="confirm",
+        action="store_true",
+        help="Apply the removals; without it this only reports",
+    )
+    prune.add_argument(
+        "--include-manual",
+        action="store_true",
+        help="Also remove user-placed skills that have no lock entry",
+    )
 
     return parser
 
@@ -363,6 +385,20 @@ def parse_workspace_targets(value: str | None) -> tuple[str, ...] | None:
             raise ValueError(f"--targets contains duplicates: {target}")
         targets.append(target)
     return ("agents", *(target for target in targets if target != "agents"))
+
+
+def handle_skills_prune(
+    lifecycle: Lifecycle, *, apply: bool, include_manual: bool
+) -> int:
+    from .skill_prune import apply_prune, plan_prune
+    from .skills_sources import load_skills_sources
+
+    paths = lifecycle.paths
+    config = load_skills_sources(paths.skills_sources_file)
+    report = plan_prune(paths, config)
+    if apply:
+        report = apply_prune(paths, report, include_manual=include_manual)
+    return print_skill_prune_report(report, include_manual=include_manual)
 
 
 def handle_skills_command(lifecycle: Lifecycle, skills_command: str) -> int:

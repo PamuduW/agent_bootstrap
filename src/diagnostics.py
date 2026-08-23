@@ -73,6 +73,7 @@ class Diagnostics:
     def _doctor_issues(self, facts: _DiagnosticsFacts) -> list[DoctorIssue]:
         issues: list[DoctorIssue] = []
         issues.extend(self._token_doctor_issues())
+        issues.extend(self._agent_surface_issues())
 
         if not self.paths.global_agents.exists():
             issues.append(
@@ -250,6 +251,47 @@ class Diagnostics:
             target_text = ", ".join(targets) or "an assistant"
             return f"{status.message} Preserved conflicting {target_text} target(s)."
         return status.message
+
+    def _agent_surface_issues(self) -> list[DoctorIssue]:
+        """Report agent skill surfaces that lag the global lock.
+
+        `skills install` targets every agent in the manifest, but `skills
+        update` refreshes the global lock only. Cursor keeps its own store and
+        its own lock, so it silently falls behind. Agentbot deliberately does
+        not write into that store -- Cursor manages it, built-ins and all -- so
+        the honest thing is to report the lag and name the command that fixes
+        it.
+        """
+        issues: list[DoctorIssue] = []
+        global_lock = self.paths.global_skill_lock
+        if not global_lock.is_file():
+            return issues
+
+        cursor_lock = self.paths.agents_home / "cursor-skills-lock.json"
+        if not cursor_lock.is_file():
+            return issues
+
+        try:
+            global_mtime = global_lock.stat().st_mtime
+            cursor_mtime = cursor_lock.stat().st_mtime
+        except OSError:
+            return issues
+
+        if cursor_mtime >= global_mtime:
+            return issues
+
+        issues.append(
+            DoctorIssue(
+                level="warning",
+                scope="skills-cursor",
+                message=(
+                    f"Cursor skill lock {cursor_lock} is older than the global lock; "
+                    "'skills update' refreshes only the global surface. Run "
+                    "'./install.sh skills install' to refresh every agent in the manifest"
+                ),
+            )
+        )
+        return issues
 
     def _token_doctor_issues(self) -> list[DoctorIssue]:
         token_file = self.paths.config_home / "github.env"

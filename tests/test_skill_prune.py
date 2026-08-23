@@ -1,0 +1,199 @@
+"""Classification and removal for `agentbot skills prune`.
+
+Every case here is a state the real skill store has actually been in.
+"""
+
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from src.paths import AgentbotPaths
+from src.skill_prune import apply_prune, plan_prune
+from src.skills_sources import load_skills_sources
+
+
+class PruneTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._temp = tempfile.TemporaryDirectory()
+        self.root = Path(self._temp.name)
+        self.home = self.root / "home"
+        self.paths = AgentbotPaths(
+            root=self.root,
+            codex_home=self.home / ".codex",
+            claude_home=self.home / ".claude",
+            cursor_home=self.home / ".cursor",
+            config_home=self.home / ".config" / "agentbot",
+            agents_home=self.home / ".agents",
+        )
+        self.store = self.paths.agents_skills_home
+        self.store.mkdir(parents=True)
+
+    def tearDown(self) -> None:
+        self._temp.cleanup()
+
+    # --- fixtures -----------------------------------------------------
+    def _skill(self, name: str) -> Path:
+        directory = self.store / name
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "SKILL.md").write_text(f"---\nname: {name}\n---\n", encoding="utf-8")
+        return directory
+
+    def _lock(self, entries: dict[str, str]) -> None:
+        payload = {
+            "version": 3,
+            "skills": {name: {"source": repo} for name, repo in entries.items()},
+        }
+        self.paths.global_skill_lock.parent.mkdir(parents=True, exist_ok=True)
+        self.paths.global_skill_lock.write_text(json.dumps(payload), encoding="utf-8")
+
+    def _manifest(self, body: str):
+        path = self.paths.skills_sources_file
+        path.write_text(body, encoding="utf-8")
+        return load_skills_sources(path)
+
+    def _bridge(self, name: str) -> tuple[Path, Path]:
+        claude = self.paths.claude_skills_home
+        codex = self.paths.codex_home / "skills"
+        claude.mkdir(parents=True, exist_ok=True)
+        codex.mkdir(parents=True, exist_ok=True)
+        claude_link = claude / name
+        codex_link = codex / name
+        claude_link.symlink_to(self.store / name)
+        codex_link.symlink_to(self.store / name)
+        return claude_link, codex_link
+
+    BASE = (
+        "version: 1\nagents: [claude-code]\nscope: global\nsources:\n"
+        "  - id: owner\n    repo: owner/repo\n    skills: all\n"
+    )
+
+    # --- classification ------------------------------------------------
+    def test_a_skill_from_an_active_source_is_left_alone(self):
+        self._skill("keeper")
+        self._lock({"keeper": "owner/repo"})
+        report = plan_prune(self.paths, self._manifest(self.BASE))
+        self.assertEqual((), report.removable)
+
+    def test_an_excluded_wildcard_skill_is_removable(self):
+        self._skill("alpha")
+        self._skill("keeper")
+        self._lock({"alpha": "owner/repo", "keeper": "owner/repo"})
+        config = self._manifest(self.BASE + "    exclude:\n      - alpha\n")
+        report = plan_prune(self.paths, config)
+        self.assertEqual(["alpha"], [item.name for item in report.removable])
+        self.assertEqual("excluded", report.removable[0].reason)
+
+    def test_a_pin_to_an_inactive_source_is_orphaned(self):
+        self._skill("leftover")
+        self._lock({"leftover": "gone/repo"})
+        report = plan_prune(self.paths, self._manifest(self.BASE))
+        self.assertEqual(["leftover"], [item.name for item in report.removable])
+        self.assertEqual("orphaned", report.removable[0].reason)
+
+    def test_a_lock_pin_without_a_directory_is_a_stale_pin(self):
+        self._lock({"ghost": "owner/repo"})
+        report = plan_prune(self.paths, self._manifest(self.BASE))
+        self.assertEqual(["ghost"], [item.name for item in report.removable])
+        self.assertEqual("stale-pin", report.removable[0].reason)
+
+    def test_a_directory_without_a_lock_entry_is_manual_and_not_removable(self):
+        self._skill("graphify")
+        self._lock({})
+        report = plan_prune(self.paths, self._manifest(self.BASE))
+        self.assertEqual((), report.removable)
+        self.assertEqual(["graphify"], [item.name for item in report.manual])
+
+    def test_a_disabled_source_orphans_its_skills(self):
+        self._skill("dropped")
+        self._lock({"dropped": "owner/repo"})
+        config = self._manifest(self.BASE + "    enabled: false\n")
+        report = plan_prune(self.paths, config)
+        self.assertEqual(["dropped"], [item.name for item in report.removable])
+
+    # --- removal --------------------------------------------------------
+    def test_apply_removes_directory_lock_entry_and_both_bridges(self):
+        self._skill("alpha")
+        self._skill("keeper")
+        self._lock({"alpha": "owner/repo", "keeper": "owner/repo"})
+        claude_link, codex_link = self._bridge("alpha")
+        keeper_claude, _ = self._bridge("keeper")
+        config = self._manifest(self.BASE + "    exclude:\n      - alpha\n")
+
+        result = apply_prune(self.paths, plan_prune(self.paths, config))
+
+        self.assertEqual(("alpha",), result.removed)
+        self.assertFalse((self.store / "alpha").exists())
+        self.assertFalse(claude_link.is_symlink())
+        self.assertFalse(codex_link.is_symlink())
+        # the untouched skill survives, links and all
+        self.assertTrue((self.store / "keeper").is_dir())
+        self.assertTrue(keeper_claude.is_symlink())
+        lock = json.loads(self.paths.global_skill_lock.read_text(encoding="utf-8"))
+        self.assertNotIn("alpha", lock["skills"])
+        self.assertIn("keeper", lock["skills"])
+
+    def test_apply_leaves_manual_skills_unless_asked(self):
+        self._skill("graphify")
+        self._lock({})
+        config = self._manifest(self.BASE)
+
+        result = apply_prune(self.paths, plan_prune(self.paths, config))
+        self.assertEqual((), result.removed)
+        self.assertTrue((self.store / "graphify").is_dir())
+
+        result = apply_prune(
+            self.paths, plan_prune(self.paths, config), include_manual=True
+        )
+        self.assertEqual(("graphify",), result.removed)
+        self.assertFalse((self.store / "graphify").exists())
+
+    def test_a_bridge_link_pointing_outside_our_store_is_never_removed(self):
+        # A link the user or another installer owns must survive, even when the
+        # skill name matches something we are pruning.
+        self._skill("alpha")
+        self._lock({"alpha": "owner/repo"})
+        foreign = self.root / "elsewhere" / "alpha"
+        foreign.mkdir(parents=True)
+        claude = self.paths.claude_skills_home
+        claude.mkdir(parents=True, exist_ok=True)
+        link = claude / "alpha"
+        link.symlink_to(foreign)
+        config = self._manifest(self.BASE + "    exclude:\n      - alpha\n")
+
+        apply_prune(self.paths, plan_prune(self.paths, config))
+
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(foreign, link.resolve())
+
+    def test_planning_writes_nothing(self):
+        self._skill("alpha")
+        self._lock({"alpha": "owner/repo"})
+        config = self._manifest(self.BASE + "    exclude:\n      - alpha\n")
+        before = self.paths.global_skill_lock.read_text(encoding="utf-8")
+
+        plan_prune(self.paths, config)
+
+        self.assertTrue((self.store / "alpha").is_dir())
+        self.assertEqual(before, self.paths.global_skill_lock.read_text(encoding="utf-8"))
+
+
+class ManifestExcludeTests(unittest.TestCase):
+    def test_exclude_must_name_something_the_source_installs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "skills.sources.yaml"
+            path.write_text(
+                "version: 1\nagents: [claude-code]\nscope: global\nsources:\n"
+                "  - id: owner\n    repo: owner/repo\n    skills:\n      - real\n"
+                "    exclude:\n      - typo\n",
+                encoding="utf-8",
+            )
+            with self.assertRaises(Exception) as caught:
+                load_skills_sources(path)
+            self.assertIn("does not install", str(caught.exception))
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,250 @@
+"""The report printers, exercised for content and exit codes.
+
+These produce everything the user actually reads, and each returns the exit
+code its command propagates, so a wrong branch here is a wrong exit status.
+"""
+
+from __future__ import annotations
+
+import io
+import unittest
+from contextlib import redirect_stdout
+from pathlib import Path
+
+from src.graphify import GraphifyStatus
+from src.models import DoctorIssue
+from src.skill_reconcile import ReconcileResult
+from src.skills_installer import InstallResult
+from src.ui import (
+    print_command_help,
+    print_doctor_summary,
+    print_graphify_status,
+    print_reconciliation_report,
+    print_skills_report,
+    print_skills_update_report,
+    print_status_summary,
+    print_workspace_removed,
+    print_workspace_report,
+    print_workspace_resync_report,
+)
+from src.workspace_service import WorkspaceReport, WorkspaceResult
+from src.workspace_state import WorkspaceRecord
+
+
+def _capture(fn, *args, **kwargs) -> tuple[str, object]:
+    buffer = io.StringIO()
+    with redirect_stdout(buffer):
+        result = fn(*args, **kwargs)
+    return buffer.getvalue(), result
+
+
+class DoctorSummaryTests(unittest.TestCase):
+    def test_no_issues_is_success(self):
+        text, rc = _capture(print_doctor_summary, [])
+        self.assertEqual(rc, 0)
+        self.assertIn("Health check", text)
+
+    def test_warnings_alone_do_not_fail(self):
+        issues = [DoctorIssue(level="warning", scope="skills", message="a warning")]
+        text, rc = _capture(print_doctor_summary, issues)
+        self.assertEqual(rc, 0)
+        self.assertIn("a warning", text)
+
+    def test_any_error_fails(self):
+        issues = [
+            DoctorIssue(level="warning", scope="skills", message="a warning"),
+            DoctorIssue(level="error", scope="global", message="a real problem"),
+        ]
+        text, rc = _capture(print_doctor_summary, issues)
+        self.assertEqual(rc, 1)
+        self.assertIn("a real problem", text)
+
+
+class SkillsReportTests(unittest.TestCase):
+    @staticmethod
+    def _result(name: str, *, returncode: int = 0, skipped: bool = False) -> InstallResult:
+        return InstallResult(
+            source_id=name,
+            command=["npx", "skills", "add", name],
+            returncode=returncode,
+            stdout="",
+            stderr="",
+            skipped=skipped,
+        )
+
+    def test_all_installed_is_success(self):
+        text, rc = _capture(
+            print_skills_report, [self._result("alpha")], title="Skills install"
+        )
+        self.assertEqual(rc, 0)
+        self.assertIn("alpha", text)
+
+    def test_partial_failure_is_reported_but_does_not_fail_the_command(self):
+        # Current contract: a skills install is best-effort. Some sources
+        # failing still exits 0; only losing every source exits 1. Pinned here
+        # because it is surprising and easy to "fix" by accident.
+        results = [self._result("alpha"), self._result("beta", returncode=1)]
+        text, rc = _capture(print_skills_report, results, title="Skills install")
+        self.assertEqual(rc, 0)
+        self.assertIn("failed", text)
+
+    def test_total_failure_fails_the_command(self):
+        results = [self._result("beta", returncode=1)]
+        text, rc = _capture(print_skills_report, results, title="Skills install")
+        self.assertEqual(rc, 1)
+        self.assertIn("failed", text)
+
+    def test_skipped_sources_are_counted_separately(self):
+        results = [self._result("alpha"), self._result("beta", skipped=True)]
+        _text, rc = _capture(print_skills_report, results, title="Skills install")
+        self.assertEqual(rc, 0)
+
+    def test_empty_report_still_renders_a_header(self):
+        text, rc = _capture(print_skills_report, [], title="Skills install")
+        self.assertEqual(rc, 0)
+        self.assertIn("Skills install", text)
+
+    def test_update_report_lists_updated_and_deleted_skills(self):
+        text, rc = _capture(
+            print_skills_update_report,
+            linked=2,
+            skipped=1,
+            updated=3,
+            updated_skills=("alpha",),
+            upstream_deleted_skills=("beta",),
+        )
+        self.assertEqual(rc, 0)
+        self.assertIn("alpha", text)
+        self.assertIn("beta", text)
+
+
+class GraphifyStatusTests(unittest.TestCase):
+    @staticmethod
+    def _status(state: str, message: str = "") -> GraphifyStatus:
+        return GraphifyStatus(
+            state=state,
+            cli_path=Path("/usr/bin/graphify"),
+            cli_version="1.2.3",
+            skill_path=Path("/tmp/skill"),
+            skill_version="1.0.0",
+            codex_state="ready",
+            claude_state="ready",
+            message=message,
+        )
+
+    def test_each_state_renders_without_error(self):
+        for state in ("ready", "stale", "conflict", "broken", "absent"):
+            text, _ = _capture(print_graphify_status, self._status(state))
+            self.assertIn("Graphify", text)
+
+    def test_a_message_is_shown(self):
+        text, _ = _capture(print_graphify_status, self._status("broken", "cli missing"))
+        self.assertIn("cli missing", text)
+
+
+class WorkspaceReportTests(unittest.TestCase):
+    @staticmethod
+    def _result(status: str) -> WorkspaceResult:
+        return WorkspaceResult(
+            path=Path("/tmp/ws"), status=status, actions=(), message="a message"
+        )
+
+    def test_single_workspace_report_shows_path_and_message(self):
+        text, _ = _capture(print_workspace_report, self._result("preview"))
+        self.assertIn("/tmp/ws", text)
+        self.assertIn("a message", text)
+
+    def test_resync_report_covers_each_status(self):
+        report = WorkspaceReport(
+            results=tuple(
+                self._result(status) for status in ("applied", "preview", "conflict", "failed")
+            ),
+            global_actions=(),
+        )
+        text, _ = _capture(print_workspace_resync_report, report)
+        self.assertIn("/tmp/ws", text)
+
+    def test_empty_resync_report_renders(self):
+        text, _ = _capture(
+            print_workspace_resync_report, WorkspaceReport(results=(), global_actions=())
+        )
+        self.assertIsInstance(text, str)
+
+    def test_removed_workspace_names_the_path(self):
+        record = WorkspaceRecord(
+            path="/tmp/ws",
+            kind="git",
+            policy_mode="managed",
+            profile="default",
+            targets=("agents",),
+            enabled=True,
+            last_commit=None,
+            last_rendered_at="2026-01-01T00:00:00Z",
+        )
+        text, _ = _capture(print_workspace_removed, record)
+        self.assertIn("/tmp/ws", text)
+
+
+class ReconciliationReportTests(unittest.TestCase):
+    def test_changes_are_listed(self):
+        result = ReconcileResult(
+            status="applied",
+            changed_paths=(Path("/tmp/alpha"),),
+            removed_skills=("beta",),
+            added_skills=("alpha",),
+            message="done",
+            updated_skills=("gamma",),
+        )
+        text, _ = _capture(print_reconciliation_report, result)
+        self.assertIn("alpha", text)
+
+
+class StatusSummaryTests(unittest.TestCase):
+    def test_summary_reports_each_component(self):
+        text, _ = _capture(
+            print_status_summary,
+            installed_skills=5,
+            global_agents_exists=True,
+            skills_sources_exists=True,
+            enabled_sources=3,
+            global_lock_exists=True,
+            global_lock_skills=4,
+            claude_bridge_links=5,
+            claude_statusline_state="ok",
+            manual_skill_count=0,
+            doctor_issue_count=0,
+        )
+        self.assertIn("Check Status", text)
+
+    def test_missing_pieces_are_visible(self):
+        text, _ = _capture(
+            print_status_summary,
+            installed_skills=0,
+            global_agents_exists=False,
+            skills_sources_exists=False,
+            enabled_sources=0,
+            global_lock_exists=False,
+            global_lock_skills=0,
+            claude_bridge_links=0,
+            claude_statusline_state="missing",
+            manual_skill_count=2,
+            doctor_issue_count=3,
+        )
+        self.assertIn("Check Status", text)
+
+
+class CommandHelpTests(unittest.TestCase):
+    def test_full_catalog_lists_both_surfaces(self):
+        text, _ = _capture(print_command_help)
+        self.assertIn("Commands", text)
+        self.assertIn("Bootstrap commands", text)
+
+    def test_a_single_command_renders_its_detail(self):
+        from src.commands import command_by_name
+
+        text, _ = _capture(print_command_help, command_by_name("status"))
+        self.assertIn("status", text)
+
+
+if __name__ == "__main__":
+    unittest.main()

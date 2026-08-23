@@ -4,9 +4,10 @@ import hashlib
 import os
 import re
 import tempfile
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Mapping, Sequence
+from typing import Literal
 
 MANAGED_BEGIN = "<!-- BEGIN AGENTBOT MANAGED BASELINE -->"
 MANAGED_END = "<!-- END AGENTBOT MANAGED BASELINE -->"
@@ -60,7 +61,10 @@ def build_workspace_render_plan(
 ) -> WorkspaceRenderPlan:
     _validate_existing_paths(existing_files)
     targets = _normalize_targets(selected_targets)
-    base_prefix, base_project = split_base_template(base_template)
+    # Validates the base template up front: this raises when the "## Project"
+    # heading is missing, before any output is planned. The split itself is
+    # redone per target below.
+    split_base_template(base_template)
 
     existing_agents = existing_files.get("AGENTS.md")
     policy_mode: Literal["managed", "custom"]

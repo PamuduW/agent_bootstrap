@@ -9,13 +9,25 @@ line-length = 100
 extend-exclude = ["archive"]
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I"]
+# E/F/I were the original set. B catches likely bugs, UP keeps the syntax at the
+# py310 floor the project already declares, C4 and RUF are cheap correctness.
+select = ["E4", "E7", "E9", "F", "I", "B", "UP", "C4", "RUF"]
+# The breadcrumb separator "›" is deliberate and asserted by the TUI tests.
+ignore = ["RUF001"]
 
 [tool.coverage.run]
 branch = true
 source = ["src"]
 
 [tool.coverage.report]
-fail_under = 79
+# Raised from 79. 85 is the target; the gap is concentrated in render.py,
+# lifecycle.py, workspace_state.py, and command_runner.py.
+fail_under = 82
 show_missing = true
 skip_covered = true
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src"]
+warn_unused_ignores = true
+warn_redundant_casts = true

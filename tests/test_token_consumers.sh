@@ -3,43 +3,41 @@
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$ROOT/tests/lib/test_harness.sh"
+source "$ROOT/tests/lib/harness.sh"
 test_harness_setup "$ROOT"
 
-passed=0
-failed=0
+test_harness_report_init
 seq=0
-pass() { printf 'PASS: %s\n' "$1"; passed=$((passed + 1)); }
-fail() { printf 'FAIL: %s\n' "$1" >&2; failed=$((failed + 1)); }
-expect() { local name="$1"; shift; if "$@"; then pass "$name"; else fail "$name"; fi; }
+# `expect` is this suite's spelling of the shared `check`.
+expect() { check "$@"; }
 
 token() {
-  seq=$((seq + 1))
-  printf '%s_%s_%024d' "${1:-consumer}" "$(date +%s%N)" "$seq"
+	seq=$((seq + 1))
+	printf '%s_%s_%024d' "${1:-consumer}" "$(date +%s%N)" "$seq"
 }
 
 active_file() { printf '%s\n' "$XDG_CONFIG_HOME/agentbot/github.env"; }
 
 write_token_file() {
-  local file="$1" value="$2" mode="${3:-600}"
-  mkdir -p "$(dirname "$file")"
-  chmod 700 "$(dirname "$file")"
-  printf 'GITHUB_TOKEN=%s\n' "$value" >"$file"
-  chmod "$mode" "$file"
+	local file="$1" value="$2" mode="${3:-600}"
+	mkdir -p "$(dirname "$file")"
+	chmod 700 "$(dirname "$file")"
+	printf 'GITHUB_TOKEN=%s\n' "$value" >"$file"
+	chmod "$mode" "$file"
 }
 
 reset_state() {
-  rm -rf "$XDG_CONFIG_HOME/agentbot" "$XDG_CONFIG_HOME/agent_bootstrap"
-  unset GITHUB_TOKEN AGENTBOT_QUIET AGENTBOT_TUI
-  unset TEST_CHILD_PID_FILE TEST_CHILD_RELEASE_FILE TEST_PYTHON_EXIT
-  : >"$TEST_COMMAND_LOG"
-  : >"$TEST_URL_LOG"
-  : >"$TEST_SIBLING_LOG"
-  : >"$TEST_RELAUNCH_LOG"
+	rm -rf "$XDG_CONFIG_HOME/agentbot" "$XDG_CONFIG_HOME/agent_bootstrap"
+	unset GITHUB_TOKEN AGENTBOT_QUIET AGENTBOT_TUI
+	unset TEST_CHILD_PID_FILE TEST_CHILD_RELEASE_FILE TEST_PYTHON_EXIT
+	: >"$TEST_COMMAND_LOG"
+	: >"$TEST_URL_LOG"
+	: >"$TEST_SIBLING_LOG"
+	: >"$TEST_RELAUNCH_LOG"
 }
 
 install_child_fake() {
-  cat >"$TEST_FAKE_BIN/python3" <<'FAKE'
+	cat >"$TEST_FAKE_BIN/python3" <<'FAKE'
 #!/usr/bin/env bash
 set -u
 if [[ "${1:-}" == '-c' ]]; then exit 0; fi
@@ -58,124 +56,131 @@ if [[ -n "${TEST_CHILD_PID_FILE:-}" ]]; then
 fi
 exit "${TEST_PYTHON_EXIT:-0}"
 FAKE
-  chmod 700 "$TEST_FAKE_BIN/python3"
+	chmod 700 "$TEST_FAKE_BIN/python3"
 }
 
 run_install_script() {
-  bash "$ROOT/install.sh" "$@"
+	bash "$ROOT/install.sh" "$@"
 }
 
 test_sources_local_helper_only() {
-  grep -Fq 'source "${REPO_ROOT}/scripts/lib/github_token.sh"' "$ROOT/install.sh" || return 1
-  ! grep -Eq 'source .*dotfiles|source .*/agent_bootstrap/github\.env' "$ROOT/install.sh"
+	grep -Fq 'source "${REPO_ROOT}/scripts/lib/github_token.sh"' "$ROOT/install.sh" || return 1
+	! grep -Eq 'source .*dotfiles|source .*/agent_bootstrap/github\.env' "$ROOT/install.sh"
 }
 
 test_mutating_skills_children_are_authenticated() (
-  local subcmd
-  for subcmd in install update upgrade; do
-    reset_state
-    write_token_file "$(active_file)" "saved_$(token saved)"
-    run_install_script skills "$subcmd" >/dev/null || return 1
-    grep -q "^python3"$'\t-m\tsrc\.cli\t--root\t[^\t]*\tskills\t'"${subcmd}"$'\tvalid=yes\tsource=saved$' "$TEST_COMMAND_LOG" || return 1
-    [[ -z "${GITHUB_TOKEN:-}" ]] || return 1
-  done
+	local subcmd
+	for subcmd in install update upgrade; do
+		reset_state
+		write_token_file "$(active_file)" "saved_$(token saved)"
+		run_install_script skills "$subcmd" >/dev/null || return 1
+		grep -q "^python3"$'\t-m\tsrc\.cli\t--root\t[^\t]*\tskills\t'"${subcmd}"$'\tvalid=yes\tsource=saved$' "$TEST_COMMAND_LOG" || return 1
+		[[ -z "${GITHUB_TOKEN:-}" ]] || return 1
+	done
 )
 
 test_readonly_skills_children_are_unwrapped() (
-  local subcmd err
-  for subcmd in list doctor; do
-    reset_state
-    err="$TEST_ROOT/${subcmd}.err"
-    write_token_file "$(active_file)" "saved_$(token saved)"
-    run_install_script skills "$subcmd" >/dev/null 2>"$err" || return 1
-    grep -q "^python3"$'\t-m\tsrc\.cli\t--root\t[^\t]*\tskills\t'"${subcmd}"$'\tvalid=no\tsource=none$' "$TEST_COMMAND_LOG" || return 1
-    [[ ! -s "$err" ]] || return 1
-  done
+	local subcmd err
+	for subcmd in list doctor; do
+		reset_state
+		err="$TEST_ROOT/${subcmd}.err"
+		write_token_file "$(active_file)" "saved_$(token saved)"
+		run_install_script skills "$subcmd" >/dev/null 2>"$err" || return 1
+		grep -q "^python3"$'\t-m\tsrc\.cli\t--root\t[^\t]*\tskills\t'"${subcmd}"$'\tvalid=no\tsource=none$' "$TEST_COMMAND_LOG" || return 1
+		[[ ! -s "$err" ]] || return 1
+	done
 )
 
 test_repo_update_child_is_authenticated() (
-  reset_state
-  write_token_file "$(active_file)" "saved_$(token saved)"
-  AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
-  repo_update_run() {
-    printf -v "$3" '%s' current
-    printf -v "$4" '%s' current
-  }
-  run_update_backend --dry-run >/dev/null || return 1
-  grep -q $'^python3\t-m\tsrc\.cli\t--root\t[^\t]*\tstatus\tvalid=no\tsource=none$' "$TEST_COMMAND_LOG" || return 1
-  grep -q $'^python3\t-m\tsrc\.cli\t--root\t[^\t]*\tupdate\t--dry-run\tvalid=yes\tsource=saved$' "$TEST_COMMAND_LOG"
+	reset_state
+	write_token_file "$(active_file)" "saved_$(token saved)"
+	AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+	repo_update_run() {
+		printf -v "$3" '%s' current
+		printf -v "$4" '%s' current
+	}
+	run_update_backend_as update --dry-run >/dev/null || return 1
+	grep -q $'^python3\t-m\tsrc\.cli\t--root\t[^\t]*\tstatus\tvalid=no\tsource=none$' "$TEST_COMMAND_LOG" || return 1
+	grep -q $'^python3\t-m\tsrc\.cli\t--root\t[^\t]*\tupdate\t--dry-run\tvalid=yes\tsource=saved$' "$TEST_COMMAND_LOG"
 )
 
 test_bootstrap_child_is_authenticated() (
-  reset_state
-  write_token_file "$(active_file)" "saved_$(token saved)"
-  AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
-  check_skills_deps() { :; }
-  run_bootstrap_backend >/dev/null || return 1
-  grep -q $'^python3\t-m\tsrc\.cli\t--root\t[^\t]*\tbootstrap\tvalid=yes\tsource=saved$' "$TEST_COMMAND_LOG"
+	reset_state
+	write_token_file "$(active_file)" "saved_$(token saved)"
+	AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+	check_skills_deps() { :; }
+	run_bootstrap_backend >/dev/null || return 1
+	grep -q $'^python3\t-m\tsrc\.cli\t--root\t[^\t]*\tbootstrap\tvalid=yes\tsource=saved$' "$TEST_COMMAND_LOG"
 )
 
 test_environment_precedence() (
-  reset_state
-  write_token_file "$(active_file)" "saved_$(token saved)"
-  GITHUB_TOKEN="envpreferred_$(token parent)"
-  export GITHUB_TOKEN
-  run_install_script skills update >/dev/null || return 1
-  grep -q $'^python3\t-m\tsrc\.cli\t--root\t[^\t]*\tskills\tupdate\tvalid=yes\tsource=environment$' "$TEST_COMMAND_LOG" || return 1
-  [[ "$GITHUB_TOKEN" == envpreferred_* ]]
+	reset_state
+	write_token_file "$(active_file)" "saved_$(token saved)"
+	GITHUB_TOKEN="envpreferred_$(token parent)"
+	export GITHUB_TOKEN
+	run_install_script skills update >/dev/null || return 1
+	grep -q $'^python3\t-m\tsrc\.cli\t--root\t[^\t]*\tskills\tupdate\tvalid=yes\tsource=environment$' "$TEST_COMMAND_LOG" || return 1
+	[[ "$GITHUB_TOKEN" == envpreferred_* ]]
 )
 
 test_child_status_propagates() (
-  reset_state
-  TEST_PYTHON_EXIT=37
-  export TEST_PYTHON_EXIT
-  set +e
-  run_install_script skills install >/dev/null 2>&1
-  local rc=$?
-  set -e
-  [[ "$rc" -eq 37 ]]
+	reset_state
+	TEST_PYTHON_EXIT=37
+	export TEST_PYTHON_EXIT
+	set +e
+	run_install_script skills install >/dev/null 2>&1
+	local rc=$?
+	set -e
+	[[ "$rc" -eq 37 ]]
 )
 
 test_parent_never_gains_saved_token() (
-  reset_state
-  write_token_file "$(active_file)" "saved_$(token saved)"
-  AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
-  github_token_child bash -c '[[ -n "${GITHUB_TOKEN:-}" ]]' || return 1
-  [[ -z "${GITHUB_TOKEN:-}" ]]
+	reset_state
+	write_token_file "$(active_file)" "saved_$(token saved)"
+	AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+	github_token_child bash -c '[[ -n "${GITHUB_TOKEN:-}" ]]' || return 1
+	[[ -z "${GITHUB_TOKEN:-}" ]]
 )
 
 test_canary_and_proc_safety() (
-  reset_state
-  local canary pid='' job cmdline output="$TEST_ROOT/canary.out"
-  canary="saved_$(token canary)"
-  write_token_file "$(active_file)" "$canary"
-  TEST_CHILD_PID_FILE="$TEST_ROOT/python.pid"
-  TEST_CHILD_RELEASE_FILE="$TEST_ROOT/python.release"
-  export TEST_CHILD_PID_FILE TEST_CHILD_RELEASE_FILE
-  run_install_script skills update >"$output" 2>&1 &
-  job=$!
-  for _ in {1..200}; do
-    [[ -s "$TEST_CHILD_PID_FILE" ]] && { pid="$(<"$TEST_CHILD_PID_FILE")"; break; }
-    sleep 0.01
-  done
-  [[ -n "$pid" && -r "/proc/$pid/cmdline" ]] || { touch "$TEST_CHILD_RELEASE_FILE"; wait "$job"; return 1; }
-  cmdline="$(tr '\0' ' ' <"/proc/$pid/cmdline")"
-  touch "$TEST_CHILD_RELEASE_FILE"
-  wait "$job" || return 1
-  [[ "$cmdline" != *"$canary"* && "$cmdline" != *'GITHUB_TOKEN='* ]] || return 1
-  ! grep -FRq -- "$canary" "$output" "$TEST_COMMAND_LOG" "$TEST_URL_LOG" "$TEST_SIBLING_LOG" "$TEST_RELAUNCH_LOG" || return 1
-  ! "$TEST_REAL_GIT" -C "$ROOT" diff --no-ext-diff | grep -Fq -- "$canary"
+	reset_state
+	local canary pid='' job cmdline output="$TEST_ROOT/canary.out"
+	canary="saved_$(token canary)"
+	write_token_file "$(active_file)" "$canary"
+	TEST_CHILD_PID_FILE="$TEST_ROOT/python.pid"
+	TEST_CHILD_RELEASE_FILE="$TEST_ROOT/python.release"
+	export TEST_CHILD_PID_FILE TEST_CHILD_RELEASE_FILE
+	run_install_script skills update >"$output" 2>&1 &
+	job=$!
+	for _ in {1..200}; do
+		[[ -s "$TEST_CHILD_PID_FILE" ]] && {
+			pid="$(<"$TEST_CHILD_PID_FILE")"
+			break
+		}
+		sleep 0.01
+	done
+	[[ -n "$pid" && -r "/proc/$pid/cmdline" ]] || {
+		touch "$TEST_CHILD_RELEASE_FILE"
+		wait "$job"
+		return 1
+	}
+	cmdline="$(tr '\0' ' ' <"/proc/$pid/cmdline")"
+	touch "$TEST_CHILD_RELEASE_FILE"
+	wait "$job" || return 1
+	[[ "$cmdline" != *"$canary"* && "$cmdline" != *'GITHUB_TOKEN='* ]] || return 1
+	! grep -FRq -- "$canary" "$output" "$TEST_COMMAND_LOG" "$TEST_URL_LOG" "$TEST_SIBLING_LOG" "$TEST_RELAUNCH_LOG" || return 1
+	! "$TEST_REAL_GIT" -C "$ROOT" diff --no-ext-diff | grep -Fq -- "$canary"
 )
 
 test_no_token_bearing_arguments() {
-  ! grep -En -- '(-H|--header)[[:space:]].*Authorization|https?://[^/[:space:]]*@|GITHUB_TOKEN=.*run_cli' "$ROOT/install.sh"
+	! grep -En -- '(-H|--header)[[:space:]].*Authorization|https?://[^/[:space:]]*@|GITHUB_TOKEN=.*run_cli' "$ROOT/install.sh"
 }
 
 test_sole_migration_owner() {
-  local matches
-  matches="$(grep -RIl --exclude=github_token.sh 'agent_bootstrap/github.env' "$ROOT/install.sh" "$ROOT/bin" "$ROOT/scripts" 2>/dev/null || true)"
-  [[ -z "$matches" ]] || return 1
-  ! grep -Eq 'github_token_(migrate_legacy|read|write)' "$ROOT/install.sh"
+	local matches
+	matches="$(grep -RIl --exclude=github_token.sh 'agent_bootstrap/github.env' "$ROOT/install.sh" "$ROOT/bin" "$ROOT/scripts" 2>/dev/null || true)"
+	[[ -z "$matches" ]] || return 1
+	! grep -Eq 'github_token_(migrate_legacy|read|write)' "$ROOT/install.sh"
 }
 
 install_child_fake

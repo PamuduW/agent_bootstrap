@@ -1,111 +1,86 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
+# shellcheck disable=SC1091,SC2034  # Loader paths are rooted beside this file; palette globals are published.
 
-# shellcheck disable=SC2034  # palette globals are consumed by sourced menu modules
-tui_init_colors() {
-	if [[ -n "${NO_COLOR:-}" ]]; then
-		C_RESET=''; C_BOLD=''; C_DIM=''; C_WHITE=''; C_GREEN=''; C_YELLOW=''; C_CYAN=''; C_ORANGE=''; C_RED=''
-		return 0
-	fi
-	C_RESET=$'\e[0m'; C_BOLD=$'\e[1m'; C_DIM=$'\e[2m'; C_WHITE=$'\e[37m'
-	C_GREEN=$'\e[32m'; C_YELLOW=$'\e[33m'; C_CYAN=$'\e[36m'
-	C_ORANGE=$'\e[38;5;208m'; C_RED=$'\e[31m'
+# Agentbot TUI.
+#
+# The implementation is the shared terminal stack in scripts/lib/shared/tui/,
+# which is kept byte-identical with the sibling repository (see
+# scripts/sync-shared.sh; the gate fails if the copies diverge). This file is
+# the Agentbot-facing naming layer over it, so existing tui_* callers and the
+# AGENTBOT_* environment seams keep working.
+
+_AGENTBOT_TUI_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/shared/tui" && pwd)"
+
+# One TTY adapter, two addressing forms. Paths are the default; descriptors are
+# used where a caller must share one read position across several prompts (the
+# token menu reads a choice, then a secret, then a confirmation from the same
+# stream). Both Agentbot spellings map onto the shared adapter's names.
+DOTFILES_TTY_INPUT="${AGENTBOT_TUI_INPUT:-${DOTFILES_TTY_INPUT:-/dev/tty}}"
+DOTFILES_TTY_OUTPUT="${AGENTBOT_TUI_OUTPUT:-${DOTFILES_TTY_OUTPUT:-/dev/tty}}"
+export DOTFILES_TTY_INPUT DOTFILES_TTY_OUTPUT
+
+source "$_AGENTBOT_TUI_DIR/colors.sh"
+source "$_AGENTBOT_TUI_DIR/tty.sh"
+source "$_AGENTBOT_TUI_DIR/menu_render.sh"
+source "$_AGENTBOT_TUI_DIR/report_table.sh"
+source "$_AGENTBOT_TUI_DIR/ui.sh"
+source "$_AGENTBOT_TUI_DIR/menu_descriptions.sh"
+source "$_AGENTBOT_TUI_DIR/menu_keys.sh"
+source "$_AGENTBOT_TUI_DIR/menu_simple.sh"
+source "$_AGENTBOT_TUI_DIR/menu_paging.sh"
+source "$_AGENTBOT_TUI_DIR/menu_checkbox.sh"
+source "$_AGENTBOT_TUI_DIR/menu_runner.sh"
+
+# Re-resolve the TTY seam after a caller changes AGENTBOT_TUI_INPUT/OUTPUT
+# mid-process (the token and workspace menus do this to capture output).
+tui_refresh_tty_seam() {
+	DOTFILES_TTY_INPUT="${AGENTBOT_TUI_INPUT:-/dev/tty}"
+	DOTFILES_TTY_OUTPUT="${AGENTBOT_TUI_OUTPUT:-/dev/tty}"
+	DOTFILES_TTY_IN_FD="${AGENTBOT_TUI_IN_FD:-}"
+	DOTFILES_TTY_OUT_FD="${AGENTBOT_TUI_OUT_FD:-}"
+	export DOTFILES_TTY_INPUT DOTFILES_TTY_OUTPUT
+	menu_tty_invalidate_size
 }
 
+tui_init_colors() { ui_init_colors; }
 tui_init_colors
 
+# Agentbot reads its width override from AGENTBOT_MENU_COLS.
 tui_cols() {
-	local cols="${AGENTBOT_MENU_COLS:-}"
-	if [[ -z "$cols" && ( -t 0 || -t 1 ) ]]; then
-		cols="$(stty size </dev/tty 2>/dev/null || true)"
-		cols="${cols##* }"
+	if [[ -n "${AGENTBOT_MENU_COLS:-}" ]]; then
+		printf '%s\n' "$AGENTBOT_MENU_COLS"
+		return 0
 	fi
-	[[ "$cols" =~ ^[0-9]+$ ]] || cols=80
-	((cols < 20)) && cols=20
-	printf '%s\n' "$cols"
+	menu_tty_cols
 }
 
-tui_fit() {
-	local text="$1" width="$2"
-	((width < 1)) && width=1
-	if ((${#text} > width)); then
-		if ((width > 3)); then printf '%s...' "${text:0:width-3}"; else printf '%s' "${text:0:width}"; fi
-	else
-		printf '%s' "$text"
-	fi
+tui_fit() { menu_fit_line "$1" "$(($2 + 1))"; }
+tui_clear() { ui_clear; }
+tui_header() { ui_print_header "$1" "${2:-}" "${3:-$(tui_cols)}"; }
+tui_section() { ui_print_section "$1" "${2:-$(tui_cols)}"; }
+tui_shortcuts() { ui_format_shortcuts "$@"; }
+tui_color_input_hint() { ui_color_input_hint "$1"; }
+tui_pause() {
+	tui_refresh_tty_seam
+	ui_pause
 }
-
-tui_clear() {
-	if [[ -t 0 ]]; then
-		tput clear 2>/dev/null || printf '\033[2J\033[H' >/dev/tty
-	fi
+tui_wait_back() {
+	tui_refresh_tty_seam
+	ui_wait_back
 }
-
-tui_header() {
-	local title="$1" breadcrumb="${2:-}" cols="${3:-$(tui_cols)}"
-	printf '  %s%s%s%s\e[K\n' "$C_BOLD" "$C_ORANGE" "$(tui_fit "=== ${title} ===" "$((cols - 2))")" "$C_RESET"
-	if [[ -n "$breadcrumb" ]]; then
-		printf '  %s%s%s\e[K\n' "$C_DIM" "$(tui_fit "$breadcrumb" "$((cols - 2))")" "$C_RESET"
-	fi
-	printf '\e[K\n'
-}
-
-tui_section() {
-	local label="$1" cols="${2:-$(tui_cols)}"
-	printf '  %s%s%s%s\e[K\n' "$C_BOLD" "$C_YELLOW" "$(tui_fit "$label" "$((cols - 2))")" "$C_RESET"
-}
-
-tui_shortcuts() {
-	local key label first=true
-	(($# > 0 && $# % 2 == 0)) || return 2
-	while (($#)); do
-		key="$1"; label="$2"; shift 2
-		[[ "$first" == true ]] || printf '   '
-		printf '%s%s%s %s' "$C_CYAN" "$key" "$C_RESET" "$label"
-		first=false
-	done
-}
-
-tui_color_input_hint() {
-	local hint="$1" cyan="${C_CYAN:-}" reset="${C_RESET:-}" dim="${C_DIM:-}"
-	local key_start="${reset}${cyan}" key_end="${reset}${dim}"
-	hint="${hint//Up\/Down/${key_start}Up\/Down${key_end}}"
-	hint="${hint//Enter confirm/${key_start}Enter${key_end} confirm}"
-	hint="${hint//   q back/   ${key_start}q${key_end} back}"
-	printf '%s' "$hint"
-}
+tui_redraw_up() { menu_redraw_up "$1"; }
 
 tui_confirm() {
-	local prompt="$1" answer='' input="${AGENTBOT_TUI_INPUT:-/dev/tty}" output="${AGENTBOT_TUI_OUTPUT:-/dev/tty}"
-	if [[ -n "${AGENTBOT_TUI_IN_FD:-}" && -n "${AGENTBOT_TUI_OUT_FD:-}" ]]; then
-		printf '%s [y/N]: ' "$prompt" >&"$AGENTBOT_TUI_OUT_FD"
-		IFS= read -r answer <&"$AGENTBOT_TUI_IN_FD" || true
-	else
-		printf '%s [y/N]: ' "$prompt" >"$output"
-		IFS= read -r answer <"$input" || true
-	fi
-	case "$answer" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
+	tui_refresh_tty_seam
+	ui_confirm_yes_no "$1" true
 }
 
-tui_pause() {
-	local ignored='' input="${AGENTBOT_TUI_INPUT:-/dev/tty}" output="${AGENTBOT_TUI_OUTPUT:-/dev/tty}"
-	if [[ -n "${AGENTBOT_TUI_IN_FD:-}" && -n "${AGENTBOT_TUI_OUT_FD:-}" ]]; then
-		printf '\nPress %sEnter%s to continue: ' "$C_CYAN" "$C_RESET" >&"$AGENTBOT_TUI_OUT_FD"
-		IFS= read -r ignored <&"$AGENTBOT_TUI_IN_FD" || true
-	else
-		printf '\n' >"$output"
-		printf 'Press %sEnter%s to continue: ' "$C_CYAN" "$C_RESET" >>"$output"
-		IFS= read -r ignored <"$input" || true
-	fi
-}
-
-tui_wait_back() {
-	local ignored='' input="${AGENTBOT_TUI_INPUT:-/dev/tty}" output="${AGENTBOT_TUI_OUTPUT:-/dev/tty}"
-	printf '\n' >"$output"
-	printf '%sq%s or %sEnter%s to return: ' "$C_CYAN" "$C_RESET" "$C_CYAN" "$C_RESET" >>"$output"
-	IFS= read -r ignored <"$input" || true
-}
-
+# --- Four-column tables -------------------------------------------------
+#
+# Widths are proportional to the terminal, which is what Agentbot always did
+# and is why its tables stay readable below ~90 columns. Dotfiles' fixed-width
+# report tables live alongside as rt_print_four_column_*.
 tui_table_widths() {
 	local cols="$1" available
 	available=$((cols - 11))
@@ -118,6 +93,7 @@ tui_table_widths() {
 	((TUI_TABLE_W2 < 1)) && TUI_TABLE_W2=1
 	((TUI_TABLE_W3 < 1)) && TUI_TABLE_W3=1
 	((TUI_TABLE_W4 < 1)) && TUI_TABLE_W4=1
+	return 0
 }
 
 tui_table_cell() {
@@ -129,20 +105,19 @@ tui_table_cell() {
 	return 0
 }
 
-tui_table_rule() {
-	local width="$1" rule
-	printf -v rule '%*s' "$width" ''
-	printf '%s' "${rule// /-}"
-}
+tui_table_rule() { _rt_rule "$1"; }
 
 tui_table_header() {
 	local cols="$1" h1="$2" h2="$3" h3="$4" h4="$5"
 	tui_table_widths "$cols"
 	printf '  %s%s' "$C_BOLD" "$C_WHITE"
 	tui_table_cell "$h1" "$TUI_TABLE_W1"
-	printf ' | '; tui_table_cell "$h2" "$TUI_TABLE_W2"
-	printf ' | '; tui_table_cell "$h3" "$TUI_TABLE_W3"
-	printf ' | '; tui_table_cell "$h4" "$TUI_TABLE_W4"
+	printf ' | '
+	tui_table_cell "$h2" "$TUI_TABLE_W2"
+	printf ' | '
+	tui_table_cell "$h3" "$TUI_TABLE_W3"
+	printf ' | '
+	tui_table_cell "$h4" "$TUI_TABLE_W4"
 	printf '%s\n' "$C_RESET"
 	printf '  %s%s-+-%s-+-%s-+-%s%s\n' "$C_DIM" \
 		"$(tui_table_rule "$TUI_TABLE_W1")" "$(tui_table_rule "$TUI_TABLE_W2")" \
@@ -152,63 +127,25 @@ tui_table_header() {
 tui_table_row() {
 	local cols="$1" t1="$2" t2="$3" t3="$4" t4="$5" color3="${6:-}" color4="${7:-}"
 	tui_table_widths "$cols"
-	printf '  '; tui_table_cell "$t1" "$TUI_TABLE_W1"
-	printf ' | '; tui_table_cell "$t2" "$TUI_TABLE_W2"
-	printf ' | '; tui_table_cell "$t3" "$TUI_TABLE_W3" "$color3"
-	printf ' | '; tui_table_cell "$t4" "$TUI_TABLE_W4" "$color4"
+	printf '  '
+	tui_table_cell "$t1" "$TUI_TABLE_W1"
+	printf ' | '
+	tui_table_cell "$t2" "$TUI_TABLE_W2"
+	printf ' | '
+	tui_table_cell "$t3" "$TUI_TABLE_W3" "$color3"
+	printf ' | '
+	tui_table_cell "$t4" "$TUI_TABLE_W4" "$color4"
 	printf '\n'
 }
 
-tui_menu_desc_lines() {
-	local cursor="$1" lines=0 line desc
-	desc="${MENU_SIMPLE_DESCS[$cursor]:-}"
-	while IFS= read -r line; do lines=$((lines + 1)); done <<<"$desc"
-	printf '%s\n' "$lines"
-}
+# --- Menu ---------------------------------------------------------------
+#
+# menu_simple_run comes from the shared stack and reports its choice in
+# MENU_SIMPLE_RESULT. These remain for the Agentbot suites that assert on
+# geometry directly.
+tui_menu_desc_lines() { menu_desc_footer_rows MENU_SIMPLE; }
+tui_menu_lines() { _menu_simple_menu_lines "${#MENU_SIMPLE_LABELS[@]}"; }
+tui_menu_draw() { _menu_simple_draw "$1" "${2:-$(tui_cols)}"; }
 
-tui_menu_lines() {
-	local cursor="${1:-0}" desc_lines
-	desc_lines="$(tui_menu_desc_lines "$cursor")"
-	printf '%s\n' $((1 + 2 + 2 + ${#MENU_SIMPLE_LABELS[@]} + 1 + desc_lines))
-}
-
-tui_redraw_up() { printf '\033[%dA' "$1"; }
-
-tui_menu_draw() {
-	local cursor="$1" cols="${2:-80}" i prefix row desc
-	local title="${MENU_SIMPLE_TITLE:-Agentbot}" breadcrumb="${MENU_SIMPLE_BREADCRUMB:-Agentbot}"
-	tui_header "$title" "$breadcrumb" "$cols"
-	printf '  %s%s%s\e[K\n\e[K\n' "$C_DIM" "$(tui_color_input_hint "$(tui_fit 'Up/Down navigate   Enter confirm   q back' "$((cols - 2))")")" "$C_RESET"
-	for i in "${!MENU_SIMPLE_LABELS[@]}"; do
-		prefix=' '; [[ "$i" -eq "$cursor" ]] && prefix='>'
-		row="${prefix} $((i + 1)). ${MENU_SIMPLE_LABELS[$i]}"
-		if [[ "$i" -eq "$cursor" ]]; then
-			printf '  %s%s%s\e[K\n' "$C_BOLD" "$(tui_fit "$row" "$((cols - 2))")" "$C_RESET"
-		else
-			printf '  %s\e[K\n' "$(tui_fit "$row" "$((cols - 2))")"
-		fi
-	done
-	printf '\e[K\n'
-	desc="${MENU_SIMPLE_DESCS[$cursor]:-}"
-	while IFS= read -r line; do printf '  %s%s%s\e[K\n' "$C_DIM" "$(tui_fit "$line" "$((cols - 2))")" "$C_RESET"; done <<<"$desc"
-}
-
-menu_simple_run() {
-	local cursor=0 cols key seq next menu_lines next_lines
-	cols="$(tui_cols)"; menu_lines="$(tui_menu_lines "$cursor")"
-	tui_clear; tui_menu_draw "$cursor" "$cols" >/dev/tty
-	while true; do
-		IFS= read -rsn1 key </dev/tty || { MENU_SIMPLE_RESULT=''; return 1; }
-		case "$key" in
-		$'\e')
-			seq=''; while IFS= read -rsn1 -t 0.01 next </dev/tty; do seq+="$next"; done
-			case "$seq" in '[A'|'OA') ((cursor > 0)) && cursor=$((cursor - 1)) ;; '[B'|'OB') ((cursor + 1 < ${#MENU_SIMPLE_LABELS[@]})) && cursor=$((cursor + 1)) ;; esac
-			;;
-		q|Q|$'\003') MENU_SIMPLE_RESULT=''; return 1 ;;
-		'') MENU_SIMPLE_RESULT="${MENU_SIMPLE_KEYS[$cursor]}"; return 0 ;;
-		esac
-		next_lines="$(tui_menu_lines "$cursor")"
-		if [[ "$next_lines" == "$menu_lines" ]]; then tui_redraw_up "$menu_lines" >/dev/tty; else tui_clear; fi
-		menu_lines="$next_lines"; tui_menu_draw "$cursor" "$cols" >/dev/tty
-	done
-}
+# Submenu helpers are defined by the shared menu_runner.sh:
+#   tui_submenu_loop, tui_menu_declare_owns_pause

@@ -4,9 +4,10 @@ import json
 import re
 import shutil
 import tempfile
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any
 
 import yaml
 
@@ -102,7 +103,7 @@ def build_reconcile_plan(
     updates: set[str] = set()
 
     for source in config.active_sources():
-        available = set(str(name) for name in discovered.get(source.id, ()))
+        available = {str(name) for name in discovered.get(source.id, ())}
         if source.skills == ["*"]:
             owned = _source_owned_lock_names(lock or {}, source.repo)
             additions = available - owned
@@ -381,9 +382,11 @@ def apply_reconcile_plan(
         for skill in sorted(added):
             source_dir = checkout_dirs.get(skill)
             target = agents_home / skill
-            if not (target.exists() or target.is_symlink()) and source_dir is None:
-                raise ReconcileError(f"wildcard skill {skill!r} was discovered without a checkout directory")
             if not (target.exists() or target.is_symlink()):
+                if source_dir is None:
+                    raise ReconcileError(
+                        f"wildcard skill {skill!r} was discovered without a checkout directory"
+                    )
                 agents_home.mkdir(parents=True, exist_ok=True)
                 shutil.copytree(source_dir, target)
                 changed.append(target)
@@ -411,7 +414,7 @@ def apply_reconcile_plan(
         changed_paths = tuple(dict.fromkeys(changed))
         status = "applied-with-local-changes" if any(_tracked(path, paths.root) for path in changed_paths) else "applied"
         return ReconcileResult(status, changed_paths, tuple(sorted(removed)), tuple(sorted(added)))
-    except Exception as error:  # noqa: BLE001
+    except Exception as error:
         _restore(backup)
         return ReconcileResult(
             "failed",

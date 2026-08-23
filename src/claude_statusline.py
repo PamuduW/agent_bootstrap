@@ -89,7 +89,11 @@ def inspect_claude_statusline(paths: AgentbotPaths) -> StatuslineState:
     desired = _read_text(source) if source_exists else ""
     installed = destination.is_file()
     existing = _read_text(destination) if installed else ""
-    managed = bool(existing) and (MANAGED_MARKER in existing or (desired and existing == desired))
+    # bool() on the whole expression: `desired and ...` yields "" rather than
+    # False when `desired` is empty, and StatuslineState.managed is a bool.
+    managed = bool(existing) and bool(
+        MANAGED_MARKER in existing or (desired and existing == desired)
+    )
     in_sync = bool(desired) and existing == desired
     settings_wired = _settings_points_at_managed(paths.claude_home / "settings.json")
     return StatuslineState(

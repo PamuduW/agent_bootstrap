@@ -57,8 +57,10 @@ agentbot_menu_dispatch() {
 	token) agentbot_menu_token || rc=$? ;;
 	workspaces) agentbot_menu_workspaces || rc=$? ;;
 	libraries) agentbot_menu_libraries || rc=$? ;;
-	doctor) agentbot_menu_doctor || rc=$? ;;
-	*) printf 'Unknown Agentbot menu action: %s\n' "$choice" >&2; rc=2 ;;
+	*)
+		printf 'Unknown Agentbot menu action: %s\n' "$choice" >&2
+		rc=2
+		;;
 	esac
 	if ((rc != 0)); then
 		printf '%sAction failed (exit %d).%s\n' "$C_RED" "$rc" "$C_RESET" >&2
@@ -79,12 +81,13 @@ agentbot_menu_loop() {
 		[[ "$choice" == quit ]] && return 0
 		tui_clear
 		rc=0
+		# A nested menu that paused for its own actions sets MENU_OWNS_PAUSE, so
+		# the parent does not add a stale second pause after it exits. A failed
+		# child still pauses, so its error stays visible before the redraw.
+		MENU_OWNS_PAUSE=false
 		agentbot_menu_dispatch "$choice" || rc=$?
 		[[ "${AGENTBOT_MENU_QUIT:-false}" == true ]] && return 0
-		# Nested menus own their action pauses and return directly to this menu;
-		# do not add a stale parent pause after they exit. Failed child launches
-		# still pause so their error remains visible before the parent redraws.
-		if ((rc != 0)) || [[ "$choice" != token && "$choice" != workspaces && "$choice" != libraries ]]; then
+		if ((rc != 0)) || [[ "${MENU_OWNS_PAUSE:-false}" != true ]]; then
 			tui_pause
 		fi
 	done

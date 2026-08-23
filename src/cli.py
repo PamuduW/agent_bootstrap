@@ -4,10 +4,11 @@ import argparse
 import json
 import os
 import sys
-from dataclasses import asdict
+from collections.abc import Callable
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from .commands import COMMANDS, command_by_name
+from .commands import COMMANDS, CommandSpec, command_by_name
 from .diagnostics import Diagnostics
 from .graphify import GraphifyIntegration
 from .lifecycle import Lifecycle
@@ -68,113 +69,158 @@ def main() -> int:
         diagnostics=diagnostics,
         graphify=GraphifyIntegration(paths),
     )
+    context = CommandContext(args=args, paths=paths, diagnostics=diagnostics, lifecycle=lifecycle)
+
+    if command in ARCHIVED_COMMANDS:
+        return _archived_command_error(command)
+    handler = COMMAND_HANDLERS.get(command)
+    if handler is None:
+        raise SystemExit(f"unknown command: {command}")
 
     try:
-        if command in ARCHIVED_COMMANDS:
-            return _archived_command_error(command)
-        if command == "status":
-            if getattr(args, "status_json", False):
-                print_status_json(diagnostics)
-                return 0
-            return print_status(
-                diagnostics,
-                include_issues=bool(getattr(args, "status_doctor", False)),
-            )
-        if command == "global":
-            lifecycle.render_global()
-            return 0
-        if command == "doctor":
-            return print_doctor(diagnostics)
-        if command == "graphify":
-            graphify_command = getattr(args, "graphify_command", None) or "status"
-            status = (
-                lifecycle.setup_graphify()
-                if graphify_command == "setup"
-                else lifecycle.graphify_status()
-            )
-            print_graphify_status(status)
-            if graphify_command == "status":
-                return 1 if status.state == "broken" else 0
-            return 0 if status.state in {"ready", "conflict", "stale"} else 1
-        if command in {"update", "upgrade"}:
-            plan = lifecycle.plan_update()
-            print_update_plan(plan, command=command)
-            if bool(getattr(args, "dry_run", False)):
-                return 0
-            if bool(getattr(args, "interactive", False)):
-                if not confirm_update_plan():
-                    print("  Update cancelled.")
-                    return 0
-            elif not bool(getattr(args, "confirm", False)) and (
-                plan.reconcile.wildcard_additions
-                or plan.reconcile.wildcard_removals
-                or plan.reconcile.manifest_changes
-            ):
-                print("  confirmation_required: rerun with --yes to apply this plan")
-                return 0
-            outcome = lifecycle.apply_update(plan)
-            print_update_outcome(outcome)
-            result = outcome.reconcile
-            if result is not None:
-                print_reconciliation_report(result)
-            workspace_report = outcome.workspace_report
-            if workspace_report is not None:
-                print_workspace_resync_report(workspace_report)
-            if outcome.status not in {"applied", "applied-with-local-changes"}:
-                return 1
-            return (
-                1
-                if _workspace_report_has_failures(workspace_report)
-                else 0
-            )
-        if command == "workspace":
-            targets = parse_workspace_targets(args.targets)
-            if args.yes:
-                result = lifecycle.apply_workspace(
-                    Path(args.path),
-                    profile=args.profile,
-                    targets=targets,
-                    register=True,
-                )
-            else:
-                result = lifecycle.preview_workspace(
-                    Path(args.path),
-                    profile=args.profile,
-                    targets=targets,
-                )
-            print_workspace_report(result)
-            return 1 if result.status in {"conflict", "failed"} else 0
-        if command == "workspaces":
-            if args.remove:
-                removed = lifecycle.remove_workspace(Path(args.remove))
-                print_workspace_removed(removed)
-            elif args.paths0:
-                for record in lifecycle.list_workspaces():
-                    sys.stdout.write(f"{record.path}\0")
-            else:
-                print_workspace_list(lifecycle.list_workspaces())
-            return 0
-        if command == "resync":
-            if args.yes and args.dry_run:
-                raise ValueError("resync cannot use --yes and --dry-run together")
-            if args.all and args.paths:
-                raise ValueError("resync cannot combine --all with explicit PATH values")
-            if not args.all and not args.paths:
-                raise ValueError("resync requires --all or at least one PATH")
-            report = lifecycle.resync_workspaces(
-                apply=bool(args.yes),
-                paths=() if args.all else tuple(Path(path) for path in args.paths),
-            )
-            print_workspace_resync_report(report)
-            return 1 if any(item.status in {"conflict", "failed"} for item in report.results) else 0
-        if command == "bootstrap":
-            return run_bootstrap_command(lifecycle, paths)
-        if command == "skills":
-            return handle_skills_command(lifecycle, args.skills_command)
-        raise SystemExit(f"unknown command: {command}")
+        return handler(context)
     except (SkillsInstallError, ValueError, OSError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
+
+
+@dataclass(frozen=True)
+class CommandContext:
+    """Everything a command handler needs, assembled once by main()."""
+
+    args: argparse.Namespace
+    paths: AgentbotPaths
+    diagnostics: Diagnostics
+    lifecycle: Lifecycle
+
+
+def _handle_status(context: CommandContext) -> int:
+    if bool(getattr(context.args, "status_json", False)):
+        print_status_json(context.diagnostics)
+        return 0
+    return print_status(
+        context.diagnostics,
+        include_issues=bool(getattr(context.args, "status_doctor", False)),
+    )
+
+
+def _handle_global(context: CommandContext) -> int:
+    context.lifecycle.render_global()
+    return 0
+
+
+def _handle_doctor(context: CommandContext) -> int:
+    return print_doctor(context.diagnostics)
+
+
+def _handle_graphify(context: CommandContext) -> int:
+    graphify_command = getattr(context.args, "graphify_command", None) or "status"
+    status = (
+        context.lifecycle.setup_graphify()
+        if graphify_command == "setup"
+        else context.lifecycle.graphify_status()
+    )
+    print_graphify_status(status)
+    if graphify_command == "status":
+        return 1 if status.state == "broken" else 0
+    return 0 if status.state in {"ready", "conflict", "stale"} else 1
+
+
+def _handle_update(context: CommandContext) -> int:
+    args = context.args
+    command = args.command
+    plan = context.lifecycle.plan_update()
+    print_update_plan(plan, command=command)
+    if bool(getattr(args, "dry_run", False)):
+        return 0
+    if bool(getattr(args, "interactive", False)):
+        if not confirm_update_plan():
+            print("  Update cancelled.")
+            return 0
+    elif not bool(getattr(args, "confirm", False)) and (
+        plan.reconcile.wildcard_additions
+        or plan.reconcile.wildcard_removals
+        or plan.reconcile.manifest_changes
+    ):
+        print("  confirmation_required: rerun with --yes to apply this plan")
+        return 0
+
+    outcome = context.lifecycle.apply_update(plan)
+    print_update_outcome(outcome)
+    if outcome.reconcile is not None:
+        print_reconciliation_report(outcome.reconcile)
+    workspace_report = outcome.workspace_report
+    if workspace_report is not None:
+        print_workspace_resync_report(workspace_report)
+    if outcome.status not in {"applied", "applied-with-local-changes"}:
+        return 1
+    return 1 if _workspace_report_has_failures(workspace_report) else 0
+
+
+def _handle_workspace(context: CommandContext) -> int:
+    args = context.args
+    targets = parse_workspace_targets(args.targets)
+    if args.yes:
+        result = context.lifecycle.apply_workspace(
+            Path(args.path), profile=args.profile, targets=targets, register=True
+        )
+    else:
+        result = context.lifecycle.preview_workspace(
+            Path(args.path), profile=args.profile, targets=targets
+        )
+    print_workspace_report(result)
+    return 1 if result.status in {"conflict", "failed"} else 0
+
+
+def _handle_workspaces(context: CommandContext) -> int:
+    args = context.args
+    if args.remove:
+        print_workspace_removed(context.lifecycle.remove_workspace(Path(args.remove)))
+    elif args.paths0:
+        for record in context.lifecycle.list_workspaces():
+            sys.stdout.write(f"{record.path}\0")
+    else:
+        print_workspace_list(context.lifecycle.list_workspaces())
+    return 0
+
+
+def _handle_resync(context: CommandContext) -> int:
+    args = context.args
+    if args.yes and args.dry_run:
+        raise ValueError("resync cannot use --yes and --dry-run together")
+    if args.all and args.paths:
+        raise ValueError("resync cannot combine --all with explicit PATH values")
+    if not args.all and not args.paths:
+        raise ValueError("resync requires --all or at least one PATH")
+    report = context.lifecycle.resync_workspaces(
+        apply=bool(args.yes),
+        paths=() if args.all else tuple(Path(path) for path in args.paths),
+    )
+    print_workspace_resync_report(report)
+    return 1 if any(item.status in {"conflict", "failed"} for item in report.results) else 0
+
+
+def _handle_bootstrap(context: CommandContext) -> int:
+    return run_bootstrap_command(context.lifecycle, context.paths)
+
+
+def _handle_skills(context: CommandContext) -> int:
+    return handle_skills_command(context.lifecycle, context.args.skills_command)
+
+
+COMMAND_HANDLERS: dict[str, Callable[[CommandContext], int]] = {
+    "status": _handle_status,
+    "global": _handle_global,
+    "doctor": _handle_doctor,
+    "graphify": _handle_graphify,
+    "update": _handle_update,
+    "upgrade": _handle_update,
+    "workspace": _handle_workspace,
+    "workspaces": _handle_workspaces,
+    "resync": _handle_resync,
+    "bootstrap": _handle_bootstrap,
+    "skills": _handle_skills,
+}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -316,7 +362,7 @@ def parse_workspace_targets(value: str | None) -> tuple[str, ...] | None:
         if target in targets:
             raise ValueError(f"--targets contains duplicates: {target}")
         targets.append(target)
-    return ("agents",) + tuple(target for target in targets if target != "agents")
+    return ("agents", *(target for target in targets if target != "agents"))
 
 
 def handle_skills_command(lifecycle: Lifecycle, skills_command: str) -> int:
@@ -325,7 +371,7 @@ def handle_skills_command(lifecycle: Lifecycle, skills_command: str) -> int:
             results = lifecycle.install_skills()
             skills_rc = print_skills_report(results, title="Skills install")
             lifecycle.refresh_outputs()
-        except Exception as error:  # noqa: BLE001
+        except Exception as error:
             print_header("Skills install", "Agentbot › Skills install")
             print(f"  Error: {error}")
             return 1
@@ -337,7 +383,7 @@ def handle_skills_command(lifecycle: Lifecycle, skills_command: str) -> int:
             result = lifecycle.update_skills()
             update_report = parse_update_output(result.stdout, result.stderr)
             outputs = lifecycle.refresh_outputs()
-        except Exception as error:  # noqa: BLE001
+        except Exception as error:
             print(f"  Error: {error}")
             return 1
         return print_skills_update_report(
@@ -426,9 +472,13 @@ def print_doctor(diagnostics: Diagnostics) -> int:
 
 def print_help_command(topic: str | None, *, output_format: str = "plain") -> int:
     if output_format == "menu":
-        for spec in COMMANDS:
-            print(f"{spec.name}\t{spec.behavior}\t{spec.surface}\t{spec.summary}")
+        for command_spec in COMMANDS:
+            print(
+                f"{command_spec.name}\t{command_spec.behavior}"
+                f"\t{command_spec.surface}\t{command_spec.summary}"
+            )
         return 0
+    spec: CommandSpec | None
     try:
         spec = command_by_name(topic) if topic else None
     except KeyError:

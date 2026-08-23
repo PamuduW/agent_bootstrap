@@ -5,9 +5,10 @@ import os
 import re
 import stat
 import tempfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Literal
+from typing import Any, Literal
 
 WORKSPACE_STATE_VERSION = 1
 WORKSPACE_TARGETS = frozenset({"agents", "claude", "copilot", "cursor"})

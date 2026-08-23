@@ -4,12 +4,14 @@ import json
 from collections.abc import Callable
 from hashlib import sha256
 from pathlib import Path
+from typing import cast
 
 from .claude_bridge import BridgeResult, bridge_claude_skills
 from .command_runner import CommandRunner
 from .diagnostics import Diagnostics
 from .graphify import GraphifyIntegration, GraphifyStatus
 from .models import (
+    DiagnosticsSnapshot,
     InstallOutcome,
     OutputRefreshOutcome,
     UpdateOutcome,
@@ -44,7 +46,10 @@ class Lifecycle:
         diagnostics: Diagnostics | None = None,
         graphify: GraphifyIntegration | None = None,
         workspace_service: WorkspaceService | None = None,
-        install_skills: Callable[[AgentbotPaths], list[InstallResult]] = install_skills,
+        # Called two ways: with just paths for a plain install, and with a
+        # `checkouts` mapping on the planned-update path (see
+        # _planned_installer below), so the signature stays open.
+        install_skills: Callable[..., list[InstallResult]] = install_skills,
         update_skills: Callable[[AgentbotPaths], InstallResult] = update_skills,
         refresh_outputs: Callable[[], OutputRefreshOutcome] | None = None,
         bridge_skills: Callable[..., BridgeResult] = bridge_claude_skills,
@@ -196,13 +201,20 @@ class Lifecycle:
                     reconcile.status,
                     "Update plan applied.",
                     reconcile=reconcile,
-                    graphify=stage.get("graphify"),
-                    workspace_report=stage.get("workspace_report"),
-                    diagnostics=stage.get("diagnostics"),
+                    # `stage` is a loosely-typed staging dict; these three keys
+                    # are populated by the update applier with the matching
+                    # dataclasses, which the dict type cannot express.
+                    graphify=cast("GraphifyStatus | None", stage.get("graphify")),
+                    workspace_report=cast(
+                        "WorkspaceReport | None", stage.get("workspace_report")
+                    ),
+                    diagnostics=cast(
+                        "DiagnosticsSnapshot | None", stage.get("diagnostics")
+                    ),
                 )
         except StaleSourceCatalogError as error:
             return UpdateOutcome("stale-plan", str(error))
-        except Exception as error:  # noqa: BLE001
+        except Exception as error:
             return UpdateOutcome("failed", str(error))
 
     def _update_transaction_paths(self, plan: UpdatePlan) -> tuple[Path, ...]:

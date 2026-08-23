@@ -80,7 +80,10 @@ agentbot_menu_workspaces_dispatch() {
 		fi
 		;;
 	remove) agentbot_menu_workspaces_remove_recorded || rc=$? ;;
-	*) printf 'Unknown Workspaces action: %s\n' "$choice" >&2; rc=2 ;;
+	*)
+		printf 'Unknown Workspaces action: %s\n' "$choice" >&2
+		rc=2
+		;;
 	esac
 	if ((rc != 0)); then
 		printf '%sAction failed (exit %d).%s\n' "$C_RED" "$rc" "$C_RESET" >&2
@@ -89,6 +92,7 @@ agentbot_menu_workspaces_dispatch() {
 }
 
 agentbot_menu_workspaces() {
+	tui_menu_declare_owns_pause
 	local choice rc
 
 	MENU_SIMPLE_TITLE='Workspaces'

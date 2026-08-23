@@ -8,7 +8,9 @@ _agentbot_command_rows() {
 
 _agentbot_command_lib_menu_for_surface() {
 	local surface="$1" name behavior row_surface summary
-	MENU_SIMPLE_LABELS=(); MENU_SIMPLE_KEYS=(); MENU_SIMPLE_DESCS=()
+	MENU_SIMPLE_LABELS=()
+	MENU_SIMPLE_KEYS=()
+	MENU_SIMPLE_DESCS=()
 	while IFS=$'\t' read -r name behavior row_surface summary; do
 		[[ "$row_surface" == "$surface" ]] || continue
 		MENU_SIMPLE_LABELS+=("${name} [${behavior}] — ${summary}")
@@ -49,10 +51,14 @@ agentbot_menu_command_lib() {
 				_agentbot_command_lib_backend_menu
 				menu_simple_run || break
 				choice="${MENU_SIMPLE_RESULT:-}"
-				tui_clear; _agentbot_command_lib_detail "$choice"; tui_wait_back
+				tui_clear
+				_agentbot_command_lib_detail "$choice"
+				tui_wait_back
 			done
 			continue
 		fi
-		tui_clear; _agentbot_command_lib_detail "$choice"; tui_wait_back
+		tui_clear
+		_agentbot_command_lib_detail "$choice"
+		tui_wait_back
 	done
 }

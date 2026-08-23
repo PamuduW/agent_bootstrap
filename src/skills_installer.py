@@ -210,6 +210,8 @@ def _skill_folder_hash(skill_dir: Path) -> str:
 
 
 def _record_github_checkout_lock(source: SkillSourceEntry, checkout: Path, lock_file: Path) -> None:
+    if source.repo is None:
+        raise SkillsInstallError(f"source {source.id!r} has no repository to record")
     try:
         import json
 

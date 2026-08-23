@@ -4,7 +4,3 @@
 agentbot_menu_status() {
 	agentbot_run_backend status --doctor
 }
-
-agentbot_menu_doctor() {
-	agentbot_menu_status
-}

@@ -52,7 +52,7 @@ class UpdateLifecycleTests(unittest.TestCase):
         from src.workspace_service import WorkspaceReport
 
         with tempfile.TemporaryDirectory() as temporary:
-            root, home, paths = self._fixture(temporary)
+            _root, home, paths = self._fixture(temporary)
             graphify = mock.Mock()
             graphify.status.return_value = GraphifyStatus(
                 "not-installed",
@@ -91,7 +91,7 @@ class UpdateLifecycleTests(unittest.TestCase):
         from src.workspace_service import WorkspaceReport
 
         with tempfile.TemporaryDirectory() as temporary:
-            root, home, paths = self._fixture(temporary)
+            _root, home, paths = self._fixture(temporary)
             graphify = mock.Mock()
             graphify.status.return_value = GraphifyStatus(
                 "not-installed",

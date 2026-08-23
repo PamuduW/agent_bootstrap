@@ -34,7 +34,8 @@ agentbot_graphify_validate_rows() {
 	local help_text="$1" row _label command _description top
 	for row in "${GRAPHIFY_SHELL_ROWS[@]}" "${GRAPHIFY_PLATFORM_ROWS[@]}"; do
 		IFS='|' read -r _label command _description <<<"$row"
-		top="${command#graphify }"; top="${top%% *}"
+		top="${command#graphify }"
+		top="${top%% *}"
 		grep -Eq "^[[:space:]]{2}${top}([[:space:]]|$)" <<<"$help_text" || return 1
 	done
 }
@@ -70,7 +71,9 @@ _agentbot_graphify_command_menu() {
 	local section="$1" row label command description
 	MENU_SIMPLE_TITLE='Graphify commands'
 	MENU_SIMPLE_BREADCRUMB="Agentbot › Graphify Lib › ${section^}"
-	MENU_SIMPLE_LABELS=(); MENU_SIMPLE_KEYS=(); MENU_SIMPLE_DESCS=()
+	MENU_SIMPLE_LABELS=()
+	MENU_SIMPLE_KEYS=()
+	MENU_SIMPLE_DESCS=()
 	while IFS= read -r row; do
 		IFS='|' read -r label command description <<<"$row"
 		MENU_SIMPLE_LABELS+=("${label} — ${description}")
@@ -81,7 +84,8 @@ _agentbot_graphify_command_menu() {
 
 _agentbot_graphify_render_detail() {
 	local command="$1" section="$2" row label candidate description cols
-	cols="$(tui_cols)"; description=''
+	cols="$(tui_cols)"
+	description=''
 	while IFS= read -r row; do
 		IFS='|' read -r label candidate description <<<"$row"
 		[[ "$candidate" == "$command" ]] && break
@@ -112,14 +116,18 @@ agentbot_menu_graphify_lib() {
 		menu_simple_run || return 0
 		section="${MENU_SIMPLE_RESULT:-}"
 		if [[ "$section" == boundary ]]; then
-			tui_clear; _agentbot_graphify_render_boundary; tui_wait_back
+			tui_clear
+			_agentbot_graphify_render_boundary
+			tui_wait_back
 			continue
 		fi
 		while true; do
 			_agentbot_graphify_command_menu "$section"
 			menu_simple_run || break
 			command="${MENU_SIMPLE_RESULT:-}"
-			tui_clear; _agentbot_graphify_render_detail "$command" "$section"; tui_wait_back
+			tui_clear
+			_agentbot_graphify_render_detail "$command" "$section"
+			tui_wait_back
 		done
 	done
 }

@@ -20,6 +20,9 @@ _agentbot_token_menu_line() {
 	printf -v "$out_var" '%s' "$value"
 }
 
+# This menu reads a choice, a secret, and a confirmation from one stream, so it
+# hands the shared prompts its open descriptors rather than paths: reopening a
+# path would restart it and re-read the choice.
 _agentbot_token_menu_confirm() {
 	AGENTBOT_TUI_IN_FD="$AGENTBOT_TOKEN_MENU_IN_FD" \
 		AGENTBOT_TUI_OUT_FD="$AGENTBOT_TOKEN_MENU_OUT_FD" \
@@ -151,5 +154,6 @@ agentbot_token_config_menu() {
 }
 
 agentbot_menu_token() {
+	tui_menu_declare_owns_pause
 	agentbot_token_config_menu
 }

@@ -2,17 +2,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-# shellcheck source=tests/lib/test_harness.sh
-source "$ROOT/tests/lib/test_harness.sh"
+# shellcheck source=tests/lib/harness.sh
+source "$ROOT/tests/lib/harness.sh"
 test_harness_setup "$ROOT"
 AGENTBOT_MENU_SOURCE_ONLY=1 source "$ROOT/scripts/menu.sh"
 AGENTBOT_HOME="$ROOT"
 export AGENTBOT_HOME
 
-passed=0 failed=0
-pass() { printf 'PASS: %s\n' "$1"; passed=$((passed + 1)); }
-fail() { printf 'FAIL: %s\n' "$1" >&2; failed=$((failed + 1)); }
-check() { local name="$1"; shift; if "$@"; then pass "$name"; else fail "$name"; fi; }
+test_harness_report_init
 
 strip_ansi_stream() { sed $'s/\033\\[[0-9;?]*[A-Za-z]//g; s/[[:space:]]*$//'; }
 
@@ -29,7 +26,8 @@ test_main_menu_snapshot() {
 test_width_and_palette_snapshots() (
 	local cols output plain line
 	for cols in 48 80 120; do
-		NO_COLOR=1; tui_init_colors
+		NO_COLOR=1
+		tui_init_colors
 		output="$({
 			tui_header 'Check Status' 'Agentbot › Check Status' "$cols"
 			tui_section Health "$cols"
@@ -39,8 +37,13 @@ test_width_and_palette_snapshots() (
 		[[ "$output" == *'=== Check Status ==='* && "$output" == *'Health'* ]] || return 1
 		while IFS= read -r line; do ((${#line} <= cols)) || return 1; done <<<"$output"
 
-		unset NO_COLOR; tui_init_colors
-		output="$(tui_header 'Check Status' 'Agentbot › Check Status' "$cols"; tui_section Health "$cols"; tui_table_header "$cols" component installed available action)"
+		unset NO_COLOR
+		tui_init_colors
+		output="$(
+			tui_header 'Check Status' 'Agentbot › Check Status' "$cols"
+			tui_section Health "$cols"
+			tui_table_header "$cols" component installed available action
+		)"
 		[[ "$output" == *$'\033[1m\033[38;5;208m=== Check Status ==='* ]] || return 1
 		[[ "$output" == *$'\033[1m\033[33mHealth'* ]] || return 1
 		[[ "$output" == *$'\033[1m\033[37m'* ]] || return 1
@@ -62,7 +65,8 @@ test_draw_clears_line_tails_and_matches_frame_height() (
 )
 
 test_shortcuts_use_cyan_tokens() (
-	unset NO_COLOR; tui_init_colors
+	unset NO_COLOR
+	tui_init_colors
 	local output
 	output="$(tui_color_input_hint 'Up/Down navigate   Enter confirm   q back')"
 	[[ "$output" == *$'\033[36mUp/Down'* ]] || return 1
@@ -73,7 +77,8 @@ test_shortcuts_use_cyan_tokens() (
 test_pause_uses_one_blank_line_and_shared_prompt() (
 	local input="$TEST_ROOT/pause.input" output="$TEST_ROOT/pause.output"
 	printf '\n' >"$input"
-	NO_COLOR=1; tui_init_colors
+	NO_COLOR=1
+	tui_init_colors
 	AGENTBOT_TUI_INPUT="$input" AGENTBOT_TUI_OUTPUT="$output" tui_pause
 	[[ "$(<"$output")" == $'\nPress Enter to continue: ' ]]
 )

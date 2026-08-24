@@ -238,7 +238,7 @@ def _snapshot(paths: Iterable[Path], root: Path) -> Path:
         if path.is_symlink():
             destination.symlink_to(path.readlink())
         elif path.is_dir():
-            shutil.copytree(path, destination)
+            shutil.copytree(path, destination, symlinks=True)
         else:
             shutil.copy2(path, destination)
         manifest.append(f"{index}\t{path}\texists")
@@ -264,7 +264,7 @@ def _restore(snapshot: Path) -> None:
         if saved.is_symlink():
             path.symlink_to(saved.readlink())
         elif saved.is_dir():
-            shutil.copytree(saved, path)
+            shutil.copytree(saved, path, symlinks=True)
         else:
             shutil.copy2(saved, path)
 

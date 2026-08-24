@@ -246,6 +246,54 @@ class ReconcileApplyTests(unittest.TestCase):
         self.assertIsNotNone(result.backup_path)
         self.assertNotIn(self.root, result.backup_path.parents)
 
+    def test_failed_reconciliation_restores_valid_and_dangling_skill_links(self) -> None:
+        from src.skill_reconcile import apply_reconcile_plan, build_reconcile_plan
+        from src.skills_sources import load_skills_sources
+
+        claude_skills = self.claude / "skills"
+        claude_skills.mkdir(parents=True)
+        valid_target = self.agents / "keep"
+        dangling_target = self.agents / "future"
+        (claude_skills / "keep").symlink_to(valid_target)
+        (claude_skills / "future").symlink_to(dangling_target)
+        config = load_skills_sources(self.root / "skills.sources.yaml")
+        plan = build_reconcile_plan(
+            config,
+            discovered={"explicit": ("gone", "keep"), "wildcard": ("old",)},
+            lock=json.loads(self.lock.read_text(encoding="utf-8")),
+        )
+        paths, patches = self._paths()
+        backup = self.root / "reconcile-backup"
+        backup.mkdir()
+
+        def fail_validation() -> None:
+            raise RuntimeError("test rollback")
+
+        with (
+            patches[0],
+            patches[1],
+            mock.patch("src.skill_reconcile.tempfile.mkdtemp", return_value=str(backup)),
+        ):
+            try:
+                result = apply_reconcile_plan(
+                    paths,
+                    config,
+                    plan,
+                    confirm=True,
+                    validate=fail_validation,
+                    extra_affected=(claude_skills,),
+                )
+            except Exception as error:  # pragma: no cover - regression diagnostic
+                self.fail(f"reconciliation snapshot raised instead of rolling back: {error}")
+
+        self.assertEqual("failed", result.status)
+        self.assertEqual("test rollback", result.message)
+        self.assertTrue((claude_skills / "keep").is_symlink())
+        self.assertEqual(valid_target, (claude_skills / "keep").readlink())
+        self.assertTrue((claude_skills / "future").is_symlink())
+        self.assertEqual(dangling_target, (claude_skills / "future").readlink())
+        self.assertFalse((claude_skills / "future").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

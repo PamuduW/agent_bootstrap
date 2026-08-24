@@ -111,10 +111,13 @@ Only that block is refreshed from base/AGENTS.md. The ## Project section and all
 other content remain project-owned. An existing unmarked AGENTS.md is preserved
 as custom policy and is never overwritten by base resync.
 
-CLAUDE.md is a generated pointer to AGENTS.md. Cursor receives a generated
-copy of the resolved AGENTS.md. Cursor receives the generated
-.cursor/rules/agentbot-policy.mdc Project Rule with alwaysApply: true. The
-Cursor filename describes policy, not skill installation.
+CLAUDE.md is a generated pointer to AGENTS.md. Cursor receives the generated
+.cursor/rules/agentbot-policy.mdc Project Rule with alwaysApply: true, which is
+also a pointer rather than a copy: Cursor applies .cursor/rules/, AGENTS.md, and
+CLAUDE.md together, so rendering the policy into the rule loaded it twice per
+request. Cursor-only behavior, if any is ever needed, belongs in that rule;
+portable policy does not. The Cursor filename describes policy, not skill
+installation.
 
 ### Profiles and targets
 

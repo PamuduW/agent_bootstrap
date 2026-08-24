@@ -291,6 +291,37 @@ class WorkspaceRenderTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unsupported workspace target"):
             build_workspace_render_plan(self.base_agents, {}, ("../AGENTS.md",))
 
+    def test_cursor_rule_points_at_agents_md_instead_of_copying_it(self) -> None:
+        # Cursor applies .cursor/rules/, AGENTS.md, and CLAUDE.md together, so a
+        # full copy here is the same policy loaded twice per request.
+        from src.workspace_render import render_cursor
+
+        rule = render_cursor()
+
+        self.assertIn("AGENTS.md", rule)
+        self.assertIn("alwaysApply: true", rule)
+        # The policy body must not appear. Sample distinctive lines from the
+        # base template rather than trusting a length check.
+        for marker in ("## Safety floor", "## Definition of done", "## Repository workflow"):
+            self.assertNotIn(marker, rule)
+        self.assertNotIn(MANAGED_BEGIN, rule)
+
+    def test_cursor_rule_stays_small(self) -> None:
+        # An absolute cap, not a ratio against the fixture: self.base_agents is
+        # a short stub, whereas the real policy is several kilobytes. The point
+        # is that this file never grows into a second copy of anything.
+        from src.workspace_render import render_cursor
+
+        self.assertLess(len(render_cursor()), 1024)
+
+    def test_claude_and_cursor_adapters_both_point_rather_than_duplicate(self) -> None:
+        # The two hosts that read multiple surfaces use the same shape.
+        from src.workspace_render import render_claude, render_cursor
+
+        for rendered in (render_claude(), render_cursor()):
+            self.assertIn("AGENTS.md", rendered)
+            self.assertNotIn("## Safety floor", rendered)
+
 
 if __name__ == "__main__":
     unittest.main()

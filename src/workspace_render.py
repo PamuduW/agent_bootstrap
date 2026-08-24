@@ -127,7 +127,7 @@ def build_workspace_render_plan(
 
     renderers = {
         "claude": lambda: render_claude(),
-        "cursor": lambda: render_cursor(resolved_agents),
+        "cursor": lambda: render_cursor(),
     }
     for target in ("claude", "cursor"):
         if target not in targets:
@@ -324,14 +324,27 @@ def render_claude() -> str:
     )
 
 
-def render_cursor(resolved_agents: str) -> str:
+def render_cursor() -> str:
+    """A pointer, not a copy.
+
+    Cursor reads `.cursor/rules/`, `AGENTS.md`, and `CLAUDE.md` and applies all
+    of them. Rendering the full policy here meant Cursor loaded it twice --
+    once from AGENTS.md and again from this file -- for every request. Cursor
+    has no import syntax, so this states the reference in prose instead, the
+    same shape CLAUDE.md already uses.
+
+    Cursor-only behavior, if any is ever needed, belongs here. Portable policy
+    does not.
+    """
     return (
         "---\n"
         "description: Agentbot-managed repository instructions\n"
         "alwaysApply: true\n"
         "---\n\n"
         f"{GENERATED_HEADER}\n\n"
-        f"{resolved_agents}"
+        "IMPORTANT: Read and follow all instructions in AGENTS.md at the "
+        "repository root before starting any task. It is the canonical policy "
+        "for this repository; this file adds nothing to it.\n"
     )
 
 

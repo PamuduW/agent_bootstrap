@@ -11,7 +11,11 @@ from pathlib import Path
 from typing import Any, Literal
 
 WORKSPACE_STATE_VERSION = 1
-WORKSPACE_TARGETS = frozenset({"agents", "claude", "copilot", "cursor"})
+WORKSPACE_TARGETS = frozenset({"agents", "claude", "cursor"})
+# Targets that used to be supported. A stored record naming one is migrated on
+# load rather than rejected: refusing would make the whole registry unreadable
+# and take `resync --all` down with it.
+RETIRED_WORKSPACE_TARGETS = frozenset({"copilot"})
 COMMIT_PATTERN = re.compile(r"^[0-9a-fA-F]{1,40}$")
 
 
@@ -173,7 +177,8 @@ class WorkspaceStore:
         workspaces = raw.get("workspaces")
         if not isinstance(workspaces, list):
             raise ValueError("invalid workspace state: workspaces must be a list")
-        records = tuple(WorkspaceRecord.from_dict(item) for item in workspaces)
+        records = tuple(_migrate_retired_targets(item) for item in workspaces)
+        records = tuple(WorkspaceRecord.from_dict(item) for item in records)
         if len({record.path for record in records}) != len(records):
             raise ValueError("invalid workspace state: duplicate workspace path")
         return tuple(sorted(records, key=lambda record: record.path))
@@ -203,6 +208,22 @@ class WorkspaceStore:
             raise ValueError(f"workspace state path is not a regular file: {self.state_file}")
         if stat.S_IMODE(self.state_file.stat().st_mode) != 0o600:
             raise ValueError(f"workspace state file must have mode 600: {self.state_file}")
+
+
+def _migrate_retired_targets(item: Any) -> Any:
+    """Drop retired targets from a stored record before it is validated."""
+    if not isinstance(item, dict):
+        return item
+    targets = item.get("targets")
+    if not isinstance(targets, list):
+        return item
+    kept = [target for target in targets if target not in RETIRED_WORKSPACE_TARGETS]
+    if len(kept) == len(targets):
+        return item
+    migrated = dict(item)
+    # "agents" is always rendered, so a record cannot end up empty.
+    migrated["targets"] = kept or ["agents"]
+    return migrated
 
 
 def load_workspace_records(state_file: Path) -> tuple[WorkspaceRecord, ...]:

@@ -21,10 +21,16 @@ PROJECT_HEADING = re.compile(r"(?m)^## Project[ \t]*(?:\n|$)")
 OUTPUT_PATHS = {
     "agents": "AGENTS.md",
     "claude": "CLAUDE.md",
-    "copilot": ".github/copilot-instructions.md",
     "cursor": ".cursor/rules/agentbot-policy.mdc",
 }
 WORKSPACE_TARGETS = frozenset(OUTPUT_PATHS)
+# Outputs from targets Agentbot no longer supports. Nothing renders these, but
+# an existing file still carries the managed markers, so the orphan check keeps
+# reporting it -- otherwise dropping a target would make its leftover file
+# invisible and permanently stale.
+RETIRED_OUTPUT_PATHS = {
+    "copilot": ".github/copilot-instructions.md",
+}
 LEGACY_CLAUDE_CONTENT = (
     "IMPORTANT: Read and follow all instructions in AGENTS.md before starting any task.\n\n"
     "@AGENTS.md\n"
@@ -121,10 +127,9 @@ def build_workspace_render_plan(
 
     renderers = {
         "claude": lambda: render_claude(),
-        "copilot": lambda: render_copilot(resolved_agents),
         "cursor": lambda: render_cursor(resolved_agents),
     }
-    for target in ("claude", "copilot", "cursor"):
+    for target in ("claude", "cursor"):
         if target not in targets:
             continue
         relative_path = OUTPUT_PATHS[target]
@@ -317,10 +322,6 @@ def render_claude() -> str:
         "IMPORTANT: Read and follow all instructions in AGENTS.md before starting any task.\n\n"
         "@AGENTS.md\n"
     )
-
-
-def render_copilot(resolved_agents: str) -> str:
-    return f"{GENERATED_HEADER}\n\n# Repository instructions\n\n{resolved_agents}"
 
 
 def render_cursor(resolved_agents: str) -> str:

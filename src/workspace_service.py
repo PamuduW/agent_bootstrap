@@ -228,14 +228,15 @@ class WorkspaceService:
         away from the policy every other surface is following. Resync only walks
         registered targets, so without this the drift is invisible.
         """
-        from .workspace_render import MANAGED_BEGIN, OUTPUT_PATHS
+        from .workspace_render import MANAGED_BEGIN, OUTPUT_PATHS, RETIRED_OUTPUT_PATHS
 
         root = Path(record.path)
         if not root.is_dir():
             return []
 
         orphans: list[WorkspaceResult] = []
-        for target, relative_path in sorted(OUTPUT_PATHS.items()):
+        candidates = {**OUTPUT_PATHS, **RETIRED_OUTPUT_PATHS}
+        for target, relative_path in sorted(candidates.items()):
             if target in record.targets:
                 continue
             candidate = root / relative_path
@@ -254,8 +255,13 @@ class WorkspaceService:
                     "conflict",
                     (),
                     f"{relative_path} is Agentbot-generated but {target!r} is not a "
-                    "registered target; it will never be refreshed. Re-register with "
-                    f"--{target}, or delete the file if it is no longer wanted",
+                    "registered target; it will never be refreshed. "
+                    + (
+                        f"Support for {target!r} was removed, so delete the file."
+                        if target in RETIRED_OUTPUT_PATHS
+                        else f"Re-register with --{target}, or delete the file "
+                        "if it is no longer wanted."
+                    ),
                 )
             )
         return orphans

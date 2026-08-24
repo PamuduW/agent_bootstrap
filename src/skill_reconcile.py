@@ -388,6 +388,9 @@ def apply_reconcile_plan(
                         f"wildcard skill {skill!r} was discovered without a checkout directory"
                     )
                 agents_home.mkdir(parents=True, exist_ok=True)
+                # No symlinks=True here, unlike _snapshot/_restore above: the
+                # source is a temporary checkout that is deleted afterwards, so
+                # preserving links would leave them dangling. Materialize.
                 shutil.copytree(source_dir, target)
                 changed.append(target)
             owner_source = source_by_id.get(checkout_owner.get(skill, ""))

@@ -95,7 +95,6 @@ target/AGENTS.md
   project-owned ## Project section
         |
         +--> target/CLAUDE.md
-        +--> target/.github/copilot-instructions.md
         +--> target/.cursor/rules/agentbot-policy.mdc
 ```
 
@@ -112,7 +111,7 @@ Only that block is refreshed from base/AGENTS.md. The ## Project section and all
 other content remain project-owned. An existing unmarked AGENTS.md is preserved
 as custom policy and is never overwritten by base resync.
 
-CLAUDE.md is a generated pointer to AGENTS.md. Copilot receives a generated
+CLAUDE.md is a generated pointer to AGENTS.md. Cursor receives a generated
 copy of the resolved AGENTS.md. Cursor receives the generated
 .cursor/rules/agentbot-policy.mdc Project Rule with alwaysApply: true. The
 Cursor filename describes policy, not skill installation.
@@ -120,7 +119,7 @@ Cursor filename describes policy, not skill installation.
 ### Profiles and targets
 
 agentos.yaml contains the intentionally small safe-default profile. The fixed
-Phase 2 targets are agents, claude, copilot, and cursor. With no selector,
+Phase 2 targets are agents, claude, and cursor. With no selector,
 Agentbot selects all four. Codex and agents are aliases for the canonical
 AGENTS.md target; no separate Codex file is created. Any custom selection still
 includes AGENTS.md.
@@ -145,7 +144,7 @@ atomic, and credential-free. It is never written into a project or Git-tracked.
 ```
 agentbot boot
 agentbot boot --claude
-agentbot boot --copilot
+agentbot boot --cursor
 agentbot boot --cursor
 agentbot boot --codex
 

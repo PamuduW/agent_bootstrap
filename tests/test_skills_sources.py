@@ -168,7 +168,7 @@ sources:
         )
         argv = build_add_argv(
             source,
-            agents=["cursor", "codex", "claude-code", "github-copilot"],
+            agents=["cursor", "codex", "claude-code"],
         )
 
         self.assertEqual(
@@ -189,8 +189,6 @@ sources:
                 "codex",
                 "-a",
                 "claude-code",
-                "-a",
-                "github-copilot",
                 "-g",
                 "-y",
             ],

@@ -499,9 +499,11 @@ def install_skills(
     dry_run: bool = False,
     checkouts: Mapping[str, Path] | None = None,
 ) -> list[InstallResult]:
+    from .skill_prune import enforce_exclusions
+
     config = load_skills_sources(paths.skills_sources_file)
     progress = _print_install_progress if os.environ.get("AGENTBOT_TUI") else None
-    return install_all(
+    results = install_all(
         config,
         dry_run=dry_run,
         cwd=paths.root,
@@ -509,6 +511,12 @@ def install_skills(
         progress=progress,
         checkouts=checkouts,
     )
+    if not dry_run:
+        # `skills add` has no exclusion flag, so apply the manifest's exclusions
+        # here -- before the Claude and Codex bridges run.
+        for name in enforce_exclusions(paths, config):
+            _print_install_progress(f"excluded by manifest, removed: {name}")
+    return results
 
 
 def _print_install_progress(message: str) -> None:

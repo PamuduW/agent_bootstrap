@@ -7,7 +7,7 @@ from typing import Any
 import yaml
 
 SUPPORTED_VERSION = 1
-WORKSPACE_TARGETS = frozenset({"agents", "claude", "copilot", "cursor"})
+WORKSPACE_TARGETS = frozenset({"agents", "claude", "cursor"})
 
 
 @dataclass(frozen=True)

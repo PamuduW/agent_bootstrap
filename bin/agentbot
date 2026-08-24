@@ -2,99 +2,115 @@
 set -euo pipefail
 
 if [[ -n "${AGENTBOT_HOME:-}" && -d "$AGENTBOT_HOME" ]]; then
-  AGENTBOT_HOME="$(cd "$AGENTBOT_HOME" && pwd)"
+	AGENTBOT_HOME="$(cd "$AGENTBOT_HOME" && pwd)"
 else
-  # Resolve the executable first: install.sh exposes Agentbot through
-  # ~/bin/agentbot, and BASH_SOURCE would otherwise resolve that symlink's
-  # directory instead of this repository.
-  AGENTBOT_SCRIPT="$(readlink -f "${BASH_SOURCE[0]}")"
-  AGENTBOT_HOME="$(cd "$(dirname "$AGENTBOT_SCRIPT")/.." && pwd)"
+	# Resolve the executable first: install.sh exposes Agentbot through
+	# ~/bin/agentbot, and BASH_SOURCE would otherwise resolve that symlink's
+	# directory instead of this repository.
+	AGENTBOT_SCRIPT="$(readlink -f "${BASH_SOURCE[0]}")"
+	AGENTBOT_HOME="$(cd "$(dirname "$AGENTBOT_SCRIPT")/.." && pwd)"
 fi
 export AGENTBOT_HOME
 
-agentbot_die() { printf '[err] %s\n' "$*" >&2; return 1; }
+agentbot_die() {
+	printf '[err] %s\n' "$*" >&2
+	return 1
+}
 agentbot_info() { printf '[info] %s\n' "$*"; }
 
 agentbot_has_tty() {
-  case "${AGENTBOT_TTY:-}" in 1|true) return 0 ;; 0|false) return 1 ;; esac
-  local tty_fd
-  exec {tty_fd}<>/dev/tty 2>/dev/null || return 1
-  [[ -t "$tty_fd" ]]
+	case "${AGENTBOT_TTY:-}" in 1 | true) return 0 ;; 0 | false) return 1 ;; esac
+	local tty_fd
+	exec {tty_fd}<>/dev/tty 2>/dev/null || return 1
+	[[ -t "$tty_fd" ]]
 }
 
 agentbot_load_menu() {
-  if [[ "${AGENTBOT_MENU_LOADED:-0}" != 1 ]]; then
-    # shellcheck source=/dev/null
-    source "$AGENTBOT_HOME/scripts/menu.sh"
-    AGENTBOT_MENU_LOADED=1
-  fi
+	if [[ "${AGENTBOT_MENU_LOADED:-0}" != 1 ]]; then
+		# shellcheck source=/dev/null
+		source "$AGENTBOT_HOME/scripts/menu.sh"
+		AGENTBOT_MENU_LOADED=1
+	fi
 }
 
 agentbot_run_menu() {
-  agentbot_load_menu
-  agentbot_menu_loop
+	agentbot_load_menu
+	agentbot_menu_loop
 }
 
 agentbot_run_token() {
-  agentbot_load_menu
-  agentbot_token_config_menu
+	agentbot_load_menu
+	agentbot_token_config_menu
 }
 agentbot_run_backend() { "$AGENTBOT_HOME/install.sh" "$@"; }
 
-AGENTBOT_BOOT_OPTIONAL_FLAGS=(--claude --copilot --cursor)
-AGENTBOT_BOOT_DEFAULTS=(true false true)
+# Positional pair: DEFAULTS[i] is the default for OPTIONAL_FLAGS[i]. Keep them
+# the same length -- removing a flag without removing its default silently
+# shifts every default after it.
+AGENTBOT_BOOT_OPTIONAL_FLAGS=(--claude --cursor)
+AGENTBOT_BOOT_DEFAULTS=(true true)
 
 agentbot_boot() {
-  local target='' profile='' selectors_seen=false arg i flag
-  local -a selected=()
-  for i in "${!AGENTBOT_BOOT_OPTIONAL_FLAGS[@]}"; do selected+=("${AGENTBOT_BOOT_DEFAULTS[$i]}"); done
+	local target='' profile='' selectors_seen=false arg i flag
+	local -a selected=()
+	for i in "${!AGENTBOT_BOOT_OPTIONAL_FLAGS[@]}"; do selected+=("${AGENTBOT_BOOT_DEFAULTS[$i]}"); done
 
-  while (($#)); do
-    arg="$1"; shift
-    case "$arg" in
-      --profile)
-        [[ $# -gt 0 ]] || { agentbot_die '--profile requires a name'; return 1; }
-        profile="$1"
-        shift
-        ;;
-      --agents|--codex|--claude|--copilot|--cursor)
-        if [[ "$selectors_seen" == false ]]; then
-          for i in "${!selected[@]}"; do selected[i]=false; done
-          selectors_seen=true
-        fi
-        if [[ "$arg" != --agents && "$arg" != --codex ]]; then
-          for i in "${!AGENTBOT_BOOT_OPTIONAL_FLAGS[@]}"; do
-            flag="${AGENTBOT_BOOT_OPTIONAL_FLAGS[$i]}"
-            if [[ "$arg" == "$flag" ]]; then
-              selected[i]=true
-              break
-            fi
-          done
-        fi
-        ;;
-      --*)
-        agentbot_die "unknown boot selector: $arg"
-        return 1
-        ;;
-      *)
-        [[ -z "$target" ]] || { agentbot_die 'boot accepts only one TARGET directory'; return 1; }
-        target="$arg"
-        ;;
-    esac
-  done
-  target="${target:-$PWD}"
-  [[ -d "$target" && -w "$target" ]] || { agentbot_die "boot target must be a writable directory: $target"; return 1; }
+	while (($#)); do
+		arg="$1"
+		shift
+		case "$arg" in
+		--profile)
+			[[ $# -gt 0 ]] || {
+				agentbot_die '--profile requires a name'
+				return 1
+			}
+			profile="$1"
+			shift
+			;;
+		--agents | --codex | --claude | --cursor)
+			if [[ "$selectors_seen" == false ]]; then
+				for i in "${!selected[@]}"; do selected[i]=false; done
+				selectors_seen=true
+			fi
+			if [[ "$arg" != --agents && "$arg" != --codex ]]; then
+				for i in "${!AGENTBOT_BOOT_OPTIONAL_FLAGS[@]}"; do
+					flag="${AGENTBOT_BOOT_OPTIONAL_FLAGS[$i]}"
+					if [[ "$arg" == "$flag" ]]; then
+						selected[i]=true
+						break
+					fi
+				done
+			fi
+			;;
+		--*)
+			agentbot_die "unknown boot selector: $arg"
+			return 1
+			;;
+		*)
+			[[ -z "$target" ]] || {
+				agentbot_die 'boot accepts only one TARGET directory'
+				return 1
+			}
+			target="$arg"
+			;;
+		esac
+	done
+	target="${target:-$PWD}"
+	[[ -d "$target" && -w "$target" ]] || {
+		agentbot_die "boot target must be a writable directory: $target"
+		return 1
+	}
 
-  local targets_csv=agents
-  for i in "${!selected[@]}"; do
-    [[ "${selected[$i]}" == true ]] || continue
-    targets_csv+=",${AGENTBOT_BOOT_OPTIONAL_FLAGS[$i]#--}"
-  done
+	local targets_csv=agents
+	for i in "${!selected[@]}"; do
+		[[ "${selected[$i]}" == true ]] || continue
+		targets_csv+=",${AGENTBOT_BOOT_OPTIONAL_FLAGS[$i]#--}"
+	done
 
-  local -a backend_args=(workspace --yes)
-  [[ -n "$profile" ]] && backend_args+=(--profile "$profile")
-  backend_args+=(--targets "$targets_csv" "$target")
-  agentbot_run_backend "${backend_args[@]}"
+	local -a backend_args=(workspace --yes)
+	[[ -n "$profile" ]] && backend_args+=(--profile "$profile")
+	backend_args+=(--targets "$targets_csv" "$target")
+	agentbot_run_backend "${backend_args[@]}"
 }
 
 agentbot_usage() {
@@ -102,24 +118,25 @@ agentbot_usage() {
 }
 
 agentbot_main() {
-  local command="${1:-}"
-  [[ $# -eq 0 ]] || shift
-  case "$command" in
-    '')
-      if agentbot_has_tty; then agentbot_run_menu
-      else agentbot_die 'No usable controlling TTY. Use agentbot help or an explicit command such as agentbot install.'; fi
-      ;;
-    status|install|full|doctor) agentbot_run_backend "$command" "$@" ;;
-    boot) agentbot_boot "$@" ;;
-    workspace|workspaces|resync) agentbot_run_backend "$command" "$@" ;;
-    graphify) agentbot_run_backend graphify "$@" ;;
-    token) agentbot_run_token "$@" ;;
-    update|upgrade) agentbot_run_backend "$command" "$@" ;;
-    help|-h|--help) agentbot_usage "$@" ;;
-    *) agentbot_die "unknown command: $command (run agentbot help)" ;;
-  esac
+	local command="${1:-}"
+	[[ $# -eq 0 ]] || shift
+	case "$command" in
+	'')
+		if agentbot_has_tty; then
+			agentbot_run_menu
+		else agentbot_die 'No usable controlling TTY. Use agentbot help or an explicit command such as agentbot install.'; fi
+		;;
+	status | install | full | doctor) agentbot_run_backend "$command" "$@" ;;
+	boot) agentbot_boot "$@" ;;
+	workspace | workspaces | resync) agentbot_run_backend "$command" "$@" ;;
+	graphify) agentbot_run_backend graphify "$@" ;;
+	token) agentbot_run_token "$@" ;;
+	update | upgrade) agentbot_run_backend "$command" "$@" ;;
+	help | -h | --help) agentbot_usage "$@" ;;
+	*) agentbot_die "unknown command: $command (run agentbot help)" ;;
+	esac
 }
 
 if [[ "${AGENTBOT_SOURCE_ONLY:-0}" != 1 ]]; then
-  agentbot_main "$@"
+	agentbot_main "$@"
 fi

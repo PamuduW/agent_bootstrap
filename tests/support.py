@@ -48,7 +48,7 @@ def temporary_git_workspace() -> Iterator[Path]:
 def write_skills_manifest(root: Path, *, sources: str = "sources: []\n") -> Path:
     manifest = root / "skills.sources.yaml"
     manifest.write_text(
-        f"version: 1\nagents: [cursor, codex, claude-code, github-copilot]\nscope: global\n{sources}",
+        f"version: 1\nagents: [cursor, codex, claude-code]\nscope: global\n{sources}",
         encoding="utf-8",
     )
     return manifest

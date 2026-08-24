@@ -291,7 +291,7 @@ def build_parser() -> argparse.ArgumentParser:
     workspace.add_argument("--profile", help="Workspace profile name")
     workspace.add_argument(
         "--targets",
-        help="Comma-separated outputs: agents,claude,copilot,cursor (codex aliases agents)",
+        help="Comma-separated outputs: agents,claude,cursor (codex aliases agents)",
     )
     workspace.add_argument("--yes", action="store_true", help="Apply and register the render")
     workspace.add_argument("path", help="Workspace directory")

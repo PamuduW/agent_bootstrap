@@ -32,14 +32,13 @@ class WorkspaceRenderTests(unittest.TestCase):
         plan = build_workspace_render_plan(
             self.base_agents,
             {},
-            ("agents", "claude", "copilot", "cursor"),
+            ("agents", "claude", "cursor"),
         )
 
         self.assertEqual(
             (
                 "AGENTS.md",
                 "CLAUDE.md",
-                ".github/copilot-instructions.md",
                 ".cursor/rules/agentbot-policy.mdc",
             ),
             plan.paths(),
@@ -109,7 +108,6 @@ class WorkspaceRenderTests(unittest.TestCase):
     def test_each_compatibility_target_uses_a_sibling_review_name(self) -> None:
         targets = (
             ("claude", "CLAUDE.md", "CLAUDE_temp.md"),
-            ("copilot", ".github/copilot-instructions.md", ".github/copilot-instructions_temp.md"),
             ("cursor", ".cursor/rules/agentbot-policy.mdc", ".cursor/rules/agentbot-policy_temp.mdc"),
         )
 
@@ -125,10 +123,10 @@ class WorkspaceRenderTests(unittest.TestCase):
                 self.assertEqual("create", plan.action_for(review_path).kind)
 
     def test_every_custom_selection_still_plans_agents(self) -> None:
-        plan = build_workspace_render_plan(self.base_agents, {}, ("copilot",))
+        plan = build_workspace_render_plan(self.base_agents, {}, ("cursor",))
 
         self.assertEqual(
-            ("AGENTS.md", ".github/copilot-instructions.md"),
+            ("AGENTS.md", ".cursor/rules/agentbot-policy.mdc"),
             plan.paths(),
         )
 
@@ -270,7 +268,7 @@ class WorkspaceRenderTests(unittest.TestCase):
         first = build_workspace_render_plan(
             self.base_agents,
             {},
-            ("agents", "claude", "copilot", "cursor"),
+            ("agents", "claude", "cursor"),
         )
         apply_workspace_render_plan(
             self.root,
@@ -284,7 +282,7 @@ class WorkspaceRenderTests(unittest.TestCase):
         second = build_workspace_render_plan(
             self.base_agents,
             current,
-            ("agents", "claude", "copilot", "cursor"),
+            ("agents", "claude", "cursor"),
         )
 
         self.assertTrue(all(action.kind == "unchanged" for action in second.actions))

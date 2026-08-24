@@ -29,7 +29,6 @@ agents:
   - cursor
   - codex
   - claude-code
-  - github-copilot
 scope: global
 sources:
   - id: superpowers
@@ -83,7 +82,7 @@ sources:
         )
         expected_argv = build_add_argv(
             source,
-            agents=["cursor", "codex", "claude-code", "github-copilot"],
+            agents=["cursor", "codex", "claude-code"],
         )
         mock_run.return_value = self._success_result("superpowers", expected_argv)
 

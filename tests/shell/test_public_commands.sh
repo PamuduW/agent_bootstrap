@@ -107,6 +107,7 @@ test_boot_selectors_and_atomic_validation() {
 	mkdir -p "$target"
 	XDG_CONFIG_HOME="$config" AGENTBOT_HOME="$ROOT" "$AGENTBOT" boot "$target" >/dev/null
 	[[ -f "$target/AGENTS.md" && -f "$target/CLAUDE.md" && -f "$target/.cursor/rules/agentbot-policy.mdc" ]] || return 1
+	# Copilot is no longer a supported target; no boot path may produce one.
 	[[ ! -e "$target/.github/copilot-instructions.md" ]] || return 1
 	rm -rf "$target" "$config"
 	mkdir -p "$target"

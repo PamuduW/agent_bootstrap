@@ -109,7 +109,7 @@ optional CLI already exists; it never builds project graphs or installs hooks.
 ## Workspaces and policy ownership
 
 `base/AGENTS.md` is the canonical project scaffold. A generated workspace
-always includes `AGENTS.md`; Claude, Copilot, and Cursor outputs are selected
+always includes `AGENTS.md`; Claude and Cursor outputs are selected
 compatibility surfaces. Agentbot rewrites only its marked managed block and
 preserves project-owned content. Unmarked conflicting files are not replaced.
 

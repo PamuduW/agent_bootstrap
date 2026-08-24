@@ -146,6 +146,27 @@ def plan_prune(paths: AgentbotPaths, config: SkillsSourcesConfig) -> PruneReport
     return PruneReport(candidates=tuple(candidates))
 
 
+def enforce_exclusions(paths: AgentbotPaths, config: SkillsSourcesConfig) -> tuple[str, ...]:
+    """Remove skills the manifest excludes, right after an install.
+
+    `exclude:` has to mean "never present", not "prunable later". The Skills
+    CLI installs everything a `skills: all` source publishes and has no
+    exclusion flag, so the exclusion is applied here instead: immediately after
+    install, before the Claude and Codex bridges ever see the directory.
+
+    Without this, `exclude:` was a treadmill -- every install re-added and
+    re-pinned the excluded skills, and only a separate `skills prune` removed
+    them again.
+    """
+    report = plan_prune(paths, config)
+    excluded = PruneReport(
+        candidates=tuple(item for item in report.candidates if item.reason == "excluded")
+    )
+    if not excluded.candidates:
+        return ()
+    return apply_prune(paths, excluded).removed
+
+
 def _unlink_bridge(link: Path, owned_root: Path) -> None:
     """Remove a bridge symlink, but only one that points into our own store."""
     if not link.is_symlink():

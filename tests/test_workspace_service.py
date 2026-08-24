@@ -312,6 +312,35 @@ class WorkspaceServiceTests(unittest.TestCase):
 
         self.assertEqual([], self.workspace_service._orphaned_output_results(record))
 
+    def test_a_retired_target_output_is_reported_with_delete_advice(self):
+        from src.workspace_state import WorkspaceRecord
+
+        workspace = self.root / "ws-retired"
+        (workspace / ".github").mkdir(parents=True)
+        (workspace / ".github" / "copilot-instructions.md").write_text(
+            "<!-- BEGIN AGENTBOT MANAGED BASELINE -->\nold\n"
+            "<!-- END AGENTBOT MANAGED BASELINE -->\n",
+            encoding="utf-8",
+        )
+        record = WorkspaceRecord(
+            path=str(workspace),
+            kind="directory",
+            policy_mode="managed",
+            profile="safe-default",
+            targets=("agents",),
+            enabled=True,
+            last_commit=None,
+            last_rendered_at=None,
+        )
+
+        orphans = self.workspace_service._orphaned_output_results(record)
+
+        self.assertEqual(1, len(orphans))
+        self.assertIn("copilot-instructions.md", orphans[0].message)
+        # Retired targets cannot be re-registered, so the advice must differ.
+        self.assertIn("was removed, so delete the file", orphans[0].message)
+        self.assertNotIn("Re-register", orphans[0].message)
+
 
 if __name__ == "__main__":
     unittest.main()

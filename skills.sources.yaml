@@ -1,7 +1,7 @@
 # skills.sources.yaml — curated upstream skill sources for agent_bootstrap
 # Install template (every entry):
 #   npx --yes skills add <repo> --skill <name> ... \
-#     -a cursor -a codex -a claude-code -a github-copilot -g -y
+#     -a cursor -a codex -a claude-code -g -y
 # Use `skills: all` to install every skill supplied by a source; otherwise use
 # a YAML list of explicit skill names.
 #
@@ -13,7 +13,6 @@ agents:
   - cursor
   - codex
   - claude-code
-  - github-copilot
 scope: global
 
 sources:

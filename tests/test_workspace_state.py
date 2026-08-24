@@ -39,7 +39,7 @@ class WorkspaceStateTests(unittest.TestCase):
                 kind="git",
                 policy_mode="managed",
                 profile="safe-default",
-                targets=("agents", "claude", "copilot", "cursor"),
+                targets=("agents", "claude", "cursor"),
                 enabled=True,
                 last_commit="a1b2c3d",
                 last_rendered_at="2026-07-18T00:00:00Z",
@@ -172,6 +172,80 @@ class WorkspaceStateTests(unittest.TestCase):
 
         self.assertEqual(record, removed)
         self.assertEqual((), store.load())
+
+
+    def test_a_stored_retired_target_is_migrated_not_rejected(self) -> None:
+        # Dropping a target must not make the whole registry unreadable and take
+        # `resync --all` down with it.
+        from src.workspace_state import WorkspaceStore
+
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary) / "workspaces.json"
+            state.parent.chmod(0o700)
+            state.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "workspaces": [
+                            {
+                                "path": temporary,
+                                "kind": "directory",
+                                "policy_mode": "managed",
+                                "profile": "safe-default",
+                                "targets": ["agents", "copilot", "cursor"],
+                                "enabled": True,
+                                "last_commit": None,
+                                "last_rendered_at": None,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            state.chmod(0o600)
+
+            records = WorkspaceStore(state).load()
+
+            self.assertEqual(1, len(records))
+            self.assertEqual(("agents", "cursor"), records[0].targets)
+
+    def test_a_record_of_only_retired_targets_falls_back_to_agents(self) -> None:
+        from src.workspace_state import WorkspaceStore
+
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary) / "workspaces.json"
+            state.parent.chmod(0o700)
+            state.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "workspaces": [
+                            {
+                                "path": temporary,
+                                "kind": "directory",
+                                "policy_mode": "managed",
+                                "profile": "safe-default",
+                                "targets": ["copilot"],
+                                "enabled": True,
+                                "last_commit": None,
+                                "last_rendered_at": None,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            state.chmod(0o600)
+
+            records = WorkspaceStore(state).load()
+
+            self.assertEqual(("agents",), records[0].targets)
+
+    def test_copilot_is_not_a_supported_target(self) -> None:
+        from src.workspace_state import RETIRED_WORKSPACE_TARGETS, WORKSPACE_TARGETS
+
+        self.assertNotIn("copilot", WORKSPACE_TARGETS)
+        self.assertIn("copilot", RETIRED_WORKSPACE_TARGETS)
 
 
 if __name__ == "__main__":

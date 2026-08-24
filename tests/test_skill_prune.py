@@ -195,5 +195,65 @@ class ManifestExcludeTests(unittest.TestCase):
             self.assertIn("does not install", str(caught.exception))
 
 
+class EnforceExclusionsTests(PruneTests):
+    """`exclude:` must mean "never present", not "prunable later"."""
+
+    def test_install_time_enforcement_removes_excluded_skills(self):
+        from src.skill_prune import enforce_exclusions
+
+        self._skill("alpha")
+        self._skill("keeper")
+        self._lock({"alpha": "owner/repo", "keeper": "owner/repo"})
+        claude_link, codex_link = self._bridge("alpha")
+        config = self._manifest(self.BASE + "    exclude:\n      - alpha\n")
+
+        removed = enforce_exclusions(self.paths, config)
+
+        self.assertEqual(("alpha",), removed)
+        self.assertFalse((self.store / "alpha").exists())
+        self.assertFalse(claude_link.is_symlink())
+        self.assertFalse(codex_link.is_symlink())
+        self.assertTrue((self.store / "keeper").is_dir())
+
+    def test_enforcement_leaves_orphans_and_manual_skills_alone(self):
+        # Only `excluded` is enforced at install time. Removing an orphan or a
+        # user-placed skill mid-install would be a surprise; that stays an
+        # explicit `skills prune`.
+        from src.skill_prune import enforce_exclusions
+
+        self._skill("leftover")
+        self._skill("graphify")
+        self._lock({"leftover": "gone/repo"})
+        config = self._manifest(self.BASE)
+
+        self.assertEqual((), enforce_exclusions(self.paths, config))
+        self.assertTrue((self.store / "leftover").is_dir())
+        self.assertTrue((self.store / "graphify").is_dir())
+
+    def test_enforcement_is_a_no_op_when_nothing_is_excluded(self):
+        from src.skill_prune import enforce_exclusions
+
+        self._skill("keeper")
+        self._lock({"keeper": "owner/repo"})
+        config = self._manifest(self.BASE)
+
+        self.assertEqual((), enforce_exclusions(self.paths, config))
+        self.assertTrue((self.store / "keeper").is_dir())
+
+    def test_reinstalling_does_not_resurrect_an_excluded_skill(self):
+        # The treadmill: install re-adds and re-pins, so enforcement has to run
+        # every time, not once.
+        from src.skill_prune import enforce_exclusions
+
+        config = self._manifest(self.BASE + "    exclude:\n      - alpha\n")
+        for _ in range(2):
+            self._skill("alpha")  # stand in for `skills add` re-adding it
+            self._lock({"alpha": "owner/repo"})
+            enforce_exclusions(self.paths, config)
+            self.assertFalse((self.store / "alpha").exists())
+            lock = json.loads(self.paths.global_skill_lock.read_text(encoding="utf-8"))
+            self.assertNotIn("alpha", lock["skills"])
+
+
 if __name__ == "__main__":
     unittest.main()

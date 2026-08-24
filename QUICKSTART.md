@@ -22,14 +22,13 @@ cd /any/path/agent_bootstrap
 
 Then in any project folder or project repo: `agentbot boot`. It creates or
 preserves `AGENTS.md`, renders the default Claude/Cursor surfaces, and records
-the canonical folder or Git root in private local state. Copilot instructions
-are opt-in with `agentbot boot --copilot`.
+the canonical folder or Git root in private local state.
 
 Useful explicit selections:
 
 ```bash
 agentbot boot --claude
-agentbot boot --copilot
+agentbot boot --cursor
 agentbot boot --cursor
 agentbot boot --codex
 ```

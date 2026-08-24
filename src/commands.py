@@ -76,13 +76,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         (
             option("--agents | --codex", "Include canonical AGENTS.md.", "always"),
             option("--claude", "Include generated Claude output.", "selected"),
-            option("--copilot", "Include generated Copilot instructions.", "off"),
             option("--cursor", "Include generated Cursor rules.", "selected"),
             option("--profile NAME", "Select a workspace profile.", "safe"),
             option("TARGET", "Target directory.", "current directory"),
         ),
         "May write selected Agentbot-managed policy outputs and update the private workspace registry.",
-        ("agentbot boot", "agentbot boot --copilot /path/to/repo"), ("workspace", "workspaces"),
+        ("agentbot boot", "agentbot boot --cursor /path/to/repo"), ("workspace", "workspaces"),
         "public",
     ),
     CommandSpec(
@@ -90,7 +89,7 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Preview or apply one workspace render.",
         (
             option("--profile NAME", "Select a workspace profile.", "safe"),
-            option("--targets LIST", "Select agents, claude, copilot, or cursor outputs.", "profile defaults"),
+            option("--targets LIST", "Select agents, claude, or cursor outputs.", "profile defaults"),
             option("--yes", "Apply and register instead of previewing.", "off"),
             option("PATH", "Workspace directory.", "required"),
         ),

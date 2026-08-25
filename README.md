@@ -116,13 +116,30 @@ rejects graph, MCP, or indexing changes before running Boost interactively.
 Agentbot never passes `--accept-terms`; Boost presents its own agreement. Use
 `agentbot boost status|setup|off` for inspection, repair, or removal.
 
-Two details worth knowing. The Claude row reads `unregistered` when Boost's hook
-files exist but nothing references them under `hooks` in `settings.json`, since
-the filter only runs once Claude is told about it. And Boost's `status-line`
-component edits `~/.claude/statusline-command.sh` in place, keeping the Agentbot
-marker; Agentbot detects that, leaves the file alone instead of refreshing it,
-and Doctor reports it. Run `agentbot boost off` to get the managed statusline
-back.
+A few details worth knowing.
+
+A host row reads `unregistered` when Boost's hook files exist but the host's
+config registers none of them, since the filter only runs once the host is told
+about it, and `partial` when something registered is missing from disk. Both
+Claude and Codex are judged this way.
+
+`unsafe-config` also covers repository-level overrides. Boost reads the first
+`.boost/config.toml` it finds — working directory, then git root, then home —
+and does not merge them, so a repository config silently drops the global
+`tracing.upload = false` inside that repository. Agentbot checks registered
+workspaces and names any that leave upload enabled; `boost setup` cannot fix
+those, because it writes the global file that is being shadowed.
+
+`agentbot boost off` removes one host per call and never passes `--dry-run`
+alongside `--uninstall`. In Boost v0.12.6 that combination is not a preview: it
+performs the removal and prints the plan as though it had not.
+
+Boost's `status-line` component edits `~/.claude/statusline-command.sh` in
+place, keeping the Agentbot marker; Agentbot detects that, leaves the file alone
+instead of refreshing it, and Doctor reports it. Run `agentbot boost off` to get
+the managed statusline back. The managed statusline calls `boost status-line`
+itself to show session savings; set `AGENTBOT_STATUSLINE_BOOST=0` to skip that
+process spawn per render.
 
 ## Workspaces and policy ownership
 

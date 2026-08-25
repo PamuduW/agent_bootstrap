@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import fcntl
+import json
 import os
 import re
 import shutil
 import stat
 import tempfile
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -33,6 +38,8 @@ class BoostStatus:
 
 DEFAULT_BOOST_TIMEOUT_SECONDS = 300
 BOOST_TIMEOUT_ENV = "AGENTBOT_BOOST_TIMEOUT_SECONDS"
+CONFIG_LOCK_TIMEOUT_SECONDS = 5.0
+_CONFIG_LOCK_POLL_SECONDS = 0.05
 _FORBIDDEN_PLAN_RE = re.compile(
     r"boost[ -]?graph|\bmcp\b|background (?:index|watch)|(?:^|[\s/])\.boost(?:/|$)",
     re.IGNORECASE | re.MULTILINE,
@@ -81,6 +88,12 @@ class BoostIntegration:
         elif claude_state == "missing" and codex_state == "missing":
             state = "cli-only"
             message = "Boost CLI is installed; Claude and Codex are not integrated."
+        elif claude_state == "unregistered":
+            state = "partial"
+            message = (
+                "Boost hook files are installed for Claude but not registered in "
+                "settings.json, so nothing is filtered. Rerun 'agentbot boost setup'."
+            )
         elif claude_state != "ready" or codex_state != "ready":
             state = "partial"
             message = "Boost integration is incomplete for Claude or Codex."
@@ -101,7 +114,40 @@ class BoostIntegration:
             message,
         )
 
+    @contextmanager
+    def _config_lock(self) -> Iterator[None]:
+        """Hold Boost's own config lock across the read-modify-write.
+
+        Boost rewrites config.toml on its own schedule to refresh remote feature
+        flags, and guards it with this zero-byte lock file. Writing without the
+        lock means whichever process calls os.replace last wins, silently
+        dropping either our safety keys or Boost's flags.
+        """
+        lock_path = self.config_path.with_name(f"{self.config_path.name}.lock")
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        deadline = time.monotonic() + CONFIG_LOCK_TIMEOUT_SECONDS
+        with open(lock_path, "a+", encoding="utf-8") as handle:
+            while True:
+                try:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        raise ValueError(
+                            f"Could not acquire the Boost config lock at {lock_path}; "
+                            "another Boost process is holding it. Retry once it exits."
+                        ) from None
+                    time.sleep(_CONFIG_LOCK_POLL_SECONDS)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
     def ensure_safe_config(self) -> None:
+        with self._config_lock():
+            self._ensure_safe_config_locked()
+
+    def _ensure_safe_config_locked(self) -> None:
         path = self.config_path
         existing = path.read_text(encoding="utf-8") if path.is_file() else ""
         if path.exists() and (path.is_symlink() or not path.is_file()):
@@ -266,7 +312,27 @@ class BoostIntegration:
             self.paths.claude_home / "hooks" / "boost-hook-claude.sh",
             self.paths.claude_home / "rules" / "boost-awareness.md",
         )
-        return "ready" if all(path.is_file() for path in required) else "missing"
+        if not all(path.is_file() for path in required):
+            return "missing"
+        # The hook scripts existing is not the same as Claude running them.
+        # Boost's rewrite filter only takes effect once the hook is registered
+        # under `hooks` in settings.json, so check the registration too --
+        # otherwise an inert install reports "ready". This mirrors the
+        # hooks.json check `_codex_state` already does.
+        return "ready" if self._claude_hook_registered() else "unregistered"
+
+    def _claude_hook_registered(self) -> bool:
+        try:
+            raw = (self.paths.claude_home / "settings.json").read_text(encoding="utf-8")
+            hooks = json.loads(raw).get("hooks")
+        except (OSError, json.JSONDecodeError, AttributeError):
+            return False
+        if not isinstance(hooks, dict) or not hooks:
+            return False
+        # Claude nests hooks as event -> matchers -> hooks -> command, and the
+        # shape has changed before. Scan the serialized subtree for the hook
+        # name rather than hard-coding a traversal that a schema change breaks.
+        return "boost-hook-claude" in json.dumps(hooks)
 
     def _codex_state(self) -> str:
         required = (

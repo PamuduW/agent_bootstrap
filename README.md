@@ -116,6 +116,14 @@ rejects graph, MCP, or indexing changes before running Boost interactively.
 Agentbot never passes `--accept-terms`; Boost presents its own agreement. Use
 `agentbot boost status|setup|off` for inspection, repair, or removal.
 
+Two details worth knowing. The Claude row reads `unregistered` when Boost's hook
+files exist but nothing references them under `hooks` in `settings.json`, since
+the filter only runs once Claude is told about it. And Boost's `status-line`
+component edits `~/.claude/statusline-command.sh` in place, keeping the Agentbot
+marker; Agentbot detects that, leaves the file alone instead of refreshing it,
+and Doctor reports it. Run `agentbot boost off` to get the managed statusline
+back.
+
 ## Workspaces and policy ownership
 
 `base/AGENTS.md` is the canonical project scaffold. A generated workspace

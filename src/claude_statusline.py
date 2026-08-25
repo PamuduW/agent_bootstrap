@@ -14,6 +14,13 @@ from .models import DoctorIssue
 from .paths import AgentbotPaths
 
 MANAGED_MARKER = "# Managed by Agentbot."
+# Boost's `status-line` component edits this script in place rather than
+# replacing it, so the Agentbot marker survives its edit. Without an explicit
+# check, the managed-file path below reads that as "stale" and overwrites
+# Boost's work -- and `boost setup` refreshes outputs immediately after
+# `boost init`, so the revert would land in the same command. Boost has no
+# --no-status-line flag to opt out of, so detect it here instead.
+BOOST_STATUSLINE_MARKERS = ("boost-status-line-prev-command", "boost status-line")
 STATUSLINE_SCRIPT_NAME = "statusline-command.sh"
 STATUSLINE_SETTINGS_COMMAND = f"~/.claude/{STATUSLINE_SCRIPT_NAME}"
 _STATUSLINE_SHELL_WRAPPERS = {
@@ -38,6 +45,8 @@ class StatuslineState:
     jq_available: bool
     script_action: str = "unchanged"
     settings_action: str = "unchanged"
+    # Declared last so the existing positional order is unchanged.
+    boost_wrapped: bool = False
 
     @property
     def status_label(self) -> str:
@@ -45,6 +54,8 @@ class StatuslineState:
             return "missing source"
         if not self.installed:
             return "not installed"
+        if self.boost_wrapped:
+            return "boost-wrapped"
         if self.managed and not self.in_sync:
             return "stale"
         if not self.managed:
@@ -60,7 +71,7 @@ class StatuslineState:
         label = self.status_label
         if label == "ok":
             return "ok"
-        if label in {"user-owned", "script only"}:
+        if label in {"user-owned", "script only", "boost-wrapped"}:
             return "check"
         if label == "needs jq":
             return "check"
@@ -95,8 +106,10 @@ def inspect_claude_statusline(paths: AgentbotPaths) -> StatuslineState:
         MANAGED_MARKER in existing or (desired and existing == desired)
     )
     in_sync = bool(desired) and existing == desired
+    boost_wrapped = _has_boost_statusline(existing)
     settings_wired = _settings_points_at_managed(paths.claude_home / "settings.json")
     return StatuslineState(
+        boost_wrapped=boost_wrapped,
         source_exists=source_exists,
         installed=installed,
         in_sync=in_sync,
@@ -132,6 +145,18 @@ def doctor_claude_statusline(
                 message=(
                     f"Claude statusline is not installed at {destination}; "
                     "run './install.sh global' or './install.sh update --yes'"
+                ),
+            )
+        )
+    elif state.boost_wrapped:
+        issues.append(
+            DoctorIssue(
+                level="warning",
+                scope="claude-statusline",
+                message=(
+                    f"Claude statusline at {destination} was wrapped by Boost; "
+                    "Agentbot is leaving it alone and will not refresh it from "
+                    f"{source}. Run 'agentbot boost off' to restore it"
                 ),
             )
         )
@@ -198,6 +223,10 @@ def install_claude_statusline(paths: AgentbotPaths) -> StatuslineInstallResult:
     )
 
 
+def _has_boost_statusline(content: str) -> bool:
+    return any(marker in content for marker in BOOST_STATUSLINE_MARKERS)
+
+
 def _read_text(path: Path) -> str:
     text = path.read_text(encoding="utf-8")
     if text and not text.endswith("\n"):
@@ -215,6 +244,12 @@ def _sync_statusline_script(destination: Path, desired: str) -> str:
         existing = destination.read_text(encoding="utf-8")
         if not existing.endswith("\n"):
             existing += "\n"
+        if _has_boost_statusline(existing):
+            # Boost wrapped the script. Reverting it here would silently undo an
+            # integration the user asked for; `agentbot boost off` is the
+            # supported way to remove it.
+            _ensure_executable(destination)
+            return "preserved_boost"
         if MANAGED_MARKER not in existing and existing != desired:
             # Preserve a user-authored script that Agentbot does not own.
             _ensure_executable(destination)

@@ -307,3 +307,69 @@ class ClaudeStatuslineTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BoostWrappedStatuslineTests(ClaudeStatuslineTests):
+    """Boost edits this script in place, so the Agentbot marker survives.
+
+    Without an explicit check the managed path reads that as "stale" and
+    reverts it -- and `agentbot boost setup` refreshes outputs right after
+    `boost init`, so the revert would land in the same command.
+    """
+
+    WRAPPED = (
+        "#!/bin/bash\n"
+        "# Managed by Agentbot. Edit global/claude/statusline-command.sh, then run ./install.sh global.\n"
+        "# boost-status-line-prev-command: ~/.claude/statusline-command.sh.orig\n"
+        "printf '%s' \"$input\" | boost status-line 2>/dev/null || true\n"
+    )
+
+    def _install_wrapped(self):
+        from src.claude_statusline import install_claude_statusline
+
+        destination = self.claude_home / "statusline-command.sh"
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(self.WRAPPED, encoding="utf-8")
+        return destination, install_claude_statusline(self._paths())
+
+    def test_a_boost_wrapped_statusline_is_not_reverted(self):
+        destination, result = self._install_wrapped()
+
+        self.assertEqual("preserved_boost", result.script_action)
+        self.assertEqual(self.WRAPPED, destination.read_text(encoding="utf-8"))
+        self.assertTrue(result.state.boost_wrapped)
+        self.assertEqual("boost-wrapped", result.state.status_label)
+        self.assertEqual("check", result.state.status_result)
+
+    def test_preserving_it_is_reported_not_silent(self):
+        from src.claude_statusline import doctor_claude_statusline
+
+        self._install_wrapped()
+        messages = [
+            issue.message
+            for issue in doctor_claude_statusline(self._paths())
+            if issue.scope == "claude-statusline"
+        ]
+
+        self.assertTrue(
+            any("wrapped by Boost" in message for message in messages),
+            f"expected a Boost statusline warning, got {messages}",
+        )
+
+    def test_an_unwrapped_managed_statusline_still_refreshes(self):
+        from src.claude_statusline import install_claude_statusline
+
+        destination = self.claude_home / "statusline-command.sh"
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(
+            "#!/bin/bash\n# Managed by Agentbot. stale\necho old\n", encoding="utf-8"
+        )
+
+        result = install_claude_statusline(self._paths())
+
+        self.assertEqual("updated", result.script_action)
+        self.assertFalse(result.state.boost_wrapped)
+        self.assertEqual(
+            self.source.read_text(encoding="utf-8"),
+            destination.read_text(encoding="utf-8"),
+        )

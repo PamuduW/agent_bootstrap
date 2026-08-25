@@ -6,6 +6,24 @@ from unittest import mock
 
 import tomllib
 
+_BOOST_CLAUDE_SETTINGS = json.dumps(
+    {
+        "hooks": {
+            "PreToolUse": [
+                {
+                    "matcher": "Bash",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "~/.claude/hooks/boost-hook-claude.sh",
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+)
+
 
 class BoostIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -90,6 +108,9 @@ class BoostIntegrationTests(unittest.TestCase):
                 (paths.claude_home / "hooks/boost-hook-claude.sh").write_text("hook\n")
                 (paths.claude_home / "rules").mkdir(parents=True)
                 (paths.claude_home / "rules/boost-awareness.md").write_text("rule\n")
+                (paths.claude_home / "settings.json").write_text(
+                    _BOOST_CLAUDE_SETTINGS
+                )
                 (paths.codex_home / "hooks").mkdir(parents=True)
                 (paths.codex_home / "hooks/boost-hook-codex.sh").write_text("hook\n")
                 (paths.codex_home / "hooks/boost-sync.sh").write_text("hook\n")
@@ -220,6 +241,7 @@ class BoostIntegrationTests(unittest.TestCase):
             (self.claude / "hooks/boost-hook-claude.sh").write_text("hook\n")
             (self.claude / "rules").mkdir(parents=True)
             (self.claude / "rules/boost-awareness.md").write_text("rule\n")
+            (self.claude / "settings.json").write_text(_BOOST_CLAUDE_SETTINGS)
             self.assertEqual("partial", integration.status().state)
             (self.codex / "hooks").mkdir(parents=True)
             for name in ("boost-hook-codex.sh", "boost-sync.sh"):
@@ -251,3 +273,103 @@ class BoostIntegrationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BoostClaudeRegistrationTests(BoostIntegrationTests):
+    """Hook files on disk do not mean Claude runs them."""
+
+    def _install_claude_hook_files(self) -> None:
+        (self.claude / "hooks").mkdir(parents=True, exist_ok=True)
+        (self.claude / "rules").mkdir(parents=True, exist_ok=True)
+        (self.claude / "hooks/boost-hook-claude.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+        (self.claude / "rules/boost-awareness.md").write_text("# boost\n", encoding="utf-8")
+
+    def _settings(self, payload: dict) -> None:
+        self.claude.mkdir(parents=True, exist_ok=True)
+        (self.claude / "settings.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    def test_hook_files_without_settings_registration_are_unregistered(self) -> None:
+        integration = self._integration_type()(self._paths())
+        self._install_claude_hook_files()
+        self._settings({"statusLine": {"command": "~/.claude/statusline-command.sh"}})
+
+        self.assertEqual("unregistered", integration._claude_state())
+
+    def test_registered_hook_reads_ready(self) -> None:
+        integration = self._integration_type()(self._paths())
+        self._install_claude_hook_files()
+        self._settings(
+            {
+                "hooks": {
+                    "PreToolUse": [
+                        {
+                            "matcher": "Bash",
+                            "hooks": [{"type": "command", "command": "~/.claude/hooks/boost-hook-claude.sh"}],
+                        }
+                    ]
+                }
+            }
+        )
+
+        self.assertEqual("ready", integration._claude_state())
+
+    def test_missing_hook_files_still_read_missing(self) -> None:
+        integration = self._integration_type()(self._paths())
+        self.assertEqual("missing", integration._claude_state())
+
+    def test_unparseable_settings_do_not_claim_registration(self) -> None:
+        integration = self._integration_type()(self._paths())
+        self._install_claude_hook_files()
+        self.claude.mkdir(parents=True, exist_ok=True)
+        (self.claude / "settings.json").write_text("{not json", encoding="utf-8")
+
+        self.assertEqual("unregistered", integration._claude_state())
+
+
+class BoostConfigLockTests(BoostIntegrationTests):
+    def test_safe_config_write_holds_the_boost_lock(self) -> None:
+        import fcntl
+
+        integration = self._integration_type()(self._paths())
+        lock_path = self.root / ".boost/config.toml.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path.touch()
+
+        observed: list[bool] = []
+        original = integration._ensure_safe_config_locked
+
+        def _record() -> None:
+            # A second exclusive flock must fail while the write is in flight.
+            with open(lock_path, "a+", encoding="utf-8") as probe:
+                try:
+                    fcntl.flock(probe.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    observed.append(False)
+                    fcntl.flock(probe.fileno(), fcntl.LOCK_UN)
+                except OSError:
+                    observed.append(True)
+            original()
+
+        with mock.patch.object(integration, "_ensure_safe_config_locked", _record):
+            integration.ensure_safe_config()
+
+        self.assertEqual([True], observed)
+
+    def test_a_held_lock_fails_loudly_instead_of_racing(self) -> None:
+        import fcntl
+
+        from src.boost import CONFIG_LOCK_TIMEOUT_SECONDS
+
+        self.assertGreater(CONFIG_LOCK_TIMEOUT_SECONDS, 0)
+        integration = self._integration_type()(self._paths())
+        lock_path = self.root / ".boost/config.toml.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path.touch()
+
+        with open(lock_path, "a+", encoding="utf-8") as holder:
+            fcntl.flock(holder.fileno(), fcntl.LOCK_EX)
+            with mock.patch("src.boost.CONFIG_LOCK_TIMEOUT_SECONDS", 0.1):
+                with self.assertRaises(ValueError) as caught:
+                    integration.ensure_safe_config()
+            fcntl.flock(holder.fileno(), fcntl.LOCK_UN)
+
+        self.assertIn("lock", str(caught.exception).lower())

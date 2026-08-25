@@ -134,7 +134,9 @@ an individual shell suite under `tests/test_*.sh`.
 - Keep Boost CLI installation disabled by default and owned by Dotfiles.
   Agentbot may preview and configure only Claude/Codex shell-output integration
   with `--no-boostgraph`; never pass `--accept-terms`, enable MCP/BoostGraph, or
-  install/update the Boost binary from this repository.
+  install/update the Boost binary from this repository. Boost has no
+  `--no-status-line` opt-out, so a Boost-wrapped `statusline-command.sh` is
+  detected and preserved, never refreshed over.
 - The TUI does not register repositories. Keep explicit `boot` and
   `workspace --yes` CLI setup available. `workspaces --remove PATH` changes
   only the private registry and never removes or regenerates workspace files.

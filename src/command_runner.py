@@ -59,7 +59,7 @@ class CommandResult:
         if len(detail) > max_length:
             if max_length <= 3:
                 return detail[:max_length]
-            return f"...{detail[-max_length + 3:]}"
+            return f"...{detail[-max_length + 3 :]}"
         return detail
 
 
@@ -123,3 +123,33 @@ class CommandRunner:
             _redact(completed.stderr, redactions),
             _redactions=redactions,
         )
+
+    def run_interactive(
+        self,
+        argv: Sequence[str],
+        *,
+        cwd: Path | str | None = None,
+        timeout_seconds: float,
+        env: Mapping[str, str] | None = None,
+    ) -> CommandResult:
+        if not argv or any(not isinstance(argument, str) for argument in argv):
+            raise ValueError("argv must be a non-empty sequence of strings")
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        try:
+            completed = subprocess.run(
+                list(argv),
+                cwd=str(cwd) if cwd is not None else None,
+                check=False,
+                timeout=timeout_seconds,
+                env=dict(env) if env is not None else None,
+                shell=False,
+            )
+        except subprocess.TimeoutExpired:
+            return CommandResult(124, timed_out=True)
+        except FileNotFoundError:
+            return CommandResult(127, stderr="executable not found", missing_executable=True)
+        except OSError as error:
+            message = error.strerror or error.__class__.__name__
+            return CommandResult(126, stderr=f"unable to start process: {message}")
+        return CommandResult(completed.returncode)

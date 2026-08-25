@@ -6,6 +6,7 @@ import stat
 from dataclasses import dataclass
 from pathlib import Path
 
+from .boost import BoostIntegration, BoostStatus
 from .claude_statusline import (
     StatuslineState,
     doctor_claude_statusline,
@@ -27,6 +28,7 @@ class _DiagnosticsFacts:
     statusline: StatuslineState
     graphify_status: GraphifyStatus
     graphify_official: bool
+    boost_status: BoostStatus
 
 
 class Diagnostics:
@@ -52,9 +54,7 @@ class Diagnostics:
             global_lock_skills=self._count_global_lock_skills(self.paths),
             managed_skill_count=len(facts.managed_names),
             manual_skill_count=len(
-                self._unmanaged_skill_dirs(
-                    set(facts.managed_names), set(facts.declared_names)
-                )
+                self._unmanaged_skill_dirs(set(facts.managed_names), set(facts.declared_names))
             ),
             claude_bridge_links=claude_bridge_links,
             claude_statusline_state=facts.statusline.status_label,
@@ -95,9 +95,7 @@ class Diagnostics:
         issues.extend(doctor_claude_statusline(self.paths, state=facts.statusline))
         managed_names = set(facts.managed_names)
         declared_names = set(facts.declared_names)
-        managed_dirs = {
-            skill_dir.name: skill_dir for skill_dir in installed_skill_dirs(self.paths)
-        }
+        managed_dirs = {skill_dir.name: skill_dir for skill_dir in installed_skill_dirs(self.paths)}
         codex_skills = self.paths.codex_home / "skills"
         if facts.graphify_official and facts.graphify_status.state != "ready":
             level = "error" if facts.graphify_status.state == "broken" else "warning"
@@ -107,6 +105,15 @@ class Diagnostics:
                     scope="graphify",
                     message=self._graphify_doctor_message(facts.graphify_status),
                 )
+            )
+        if facts.boost_status.cli_path is not None and facts.boost_status.state != "ready":
+            level = (
+                "error"
+                if facts.boost_status.state in {"broken", "forbidden", "unsafe-config"}
+                else "warning"
+            )
+            issues.append(
+                DoctorIssue(level, "boost", self._boost_doctor_message(facts.boost_status))
             )
 
         for name in managed_names:
@@ -127,8 +134,7 @@ class Diagnostics:
                         level="error",
                         scope="codex",
                         message=(
-                            f"Managed Codex skill link for {name!r} is missing or broken: "
-                            f"{target}"
+                            f"Managed Codex skill link for {name!r} is missing or broken: {target}"
                         ),
                     )
                 )
@@ -179,10 +185,7 @@ class Diagnostics:
                 active_sources = config.active_sources()
                 enabled_sources = len(active_sources)
                 declared_names = {
-                    skill
-                    for source in active_sources
-                    for skill in source.skills
-                    if skill != "*"
+                    skill for source in active_sources for skill in source.skills if skill != "*"
                 }
 
         graphify = GraphifyIntegration(self.paths)
@@ -193,6 +196,7 @@ class Diagnostics:
             statusline=inspect_claude_statusline(self.paths),
             graphify_status=self.graphify_status(),
             graphify_official=graphify.version_path.is_file(),
+            boost_status=BoostIntegration(self.paths).status(),
         )
 
     def status_summary(self) -> dict[str, object]:
@@ -233,10 +237,7 @@ class Diagnostics:
     @staticmethod
     def _graphify_doctor_message(status: GraphifyStatus) -> str:
         if status.state == "skill-without-cli":
-            return (
-                f"{status.message} Install it through Dotfiles or run: "
-                "uv tool install graphifyy"
-            )
+            return f"{status.message} Install it through Dotfiles or run: uv tool install graphifyy"
         if status.state == "stale":
             return f"{status.message} Run `agentbot graphify setup` to refresh the skill."
         if status.state == "conflict":
@@ -250,6 +251,16 @@ class Diagnostics:
             ]
             target_text = ", ".join(targets) or "an assistant"
             return f"{status.message} Preserved conflicting {target_text} target(s)."
+        return status.message
+
+    @staticmethod
+    def _boost_doctor_message(status: BoostStatus) -> str:
+        if status.state in {"cli-only", "partial"}:
+            return f"{status.message} Run `agentbot boost setup`."
+        if status.state == "unsafe-config":
+            return f"{status.message} Run `agentbot boost setup` to restore safe flags."
+        if status.state == "forbidden":
+            return f"{status.message} Run `agentbot boost off` and inspect the reported files."
         return status.message
 
     def _agent_surface_issues(self) -> list[DoctorIssue]:
@@ -309,11 +320,7 @@ class Diagnostics:
             mode = stat.S_IMODE(token_file.stat().st_mode)
             content = token_file.read_text(encoding="utf-8")
         except OSError as error:
-            return [
-                DoctorIssue(
-                    "warning", "token", f"saved GitHub token cannot be read: {error}"
-                )
-            ]
+            return [DoctorIssue("warning", "token", f"saved GitHub token cannot be read: {error}")]
         if mode != 0o600:
             return [
                 DoctorIssue(
@@ -328,18 +335,10 @@ class Diagnostics:
             or not lines[0].endswith("\n")
             or not lines[0].startswith("GITHUB_TOKEN=")
         ):
-            return [
-                DoctorIssue(
-                    "warning", "token", "saved GitHub token has malformed assignment"
-                )
-            ]
+            return [DoctorIssue("warning", "token", "saved GitHub token has malformed assignment")]
         value = lines[0][len("GITHUB_TOKEN=") : -1]
         if len(value) < 20 or re.fullmatch(r"[A-Za-z0-9_]+", value) is None:
-            return [
-                DoctorIssue(
-                    "warning", "token", "saved GitHub token has an invalid value"
-                )
-            ]
+            return [DoctorIssue("warning", "token", "saved GitHub token has an invalid value")]
         return []
 
     @staticmethod

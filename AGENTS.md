@@ -131,6 +131,10 @@ an individual shell suite under `tests/test_*.sh`.
   exists, main Agentbot Install and Update run only
   `graphify install --platform agents`; CLI absence is a non-failing skip and
   setup failure fails the main flow. Neither path builds project graphs.
+- Keep Boost CLI installation disabled by default and owned by Dotfiles.
+  Agentbot may preview and configure only Claude/Codex shell-output integration
+  with `--no-boostgraph`; never pass `--accept-terms`, enable MCP/BoostGraph, or
+  install/update the Boost binary from this repository.
 - The TUI does not register repositories. Keep explicit `boot` and
   `workspace --yes` CLI setup available. `workspaces --remove PATH` changes
   only the private registry and never removes or regenerates workspace files.

@@ -1,0 +1,253 @@
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+import tomllib
+
+
+class BoostIntegrationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.codex = self.root / ".codex"
+        self.claude = self.root / ".claude"
+        (self.root / "global").mkdir()
+        (self.root / "global/AGENTS.md").write_text("# baseline\n", encoding="utf-8")
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def _paths(self):
+        from src.paths import AgentbotPaths
+
+        return AgentbotPaths(
+            self.root,
+            self.codex,
+            self.claude,
+            self.root / ".cursor",
+            config_home=self.root / ".config/agentbot",
+            agents_home=self.root / ".agents",
+        )
+
+    def _integration_type(self):
+        try:
+            from src.boost import BoostIntegration
+        except ModuleNotFoundError:
+            self.fail("src.boost.BoostIntegration is missing")
+        return BoostIntegration
+
+    def test_safe_config_merge_preserves_unrelated_valid_toml(self) -> None:
+        BoostIntegration = self._integration_type()
+        config = self.root / ".boost/config.toml"
+        config.parent.mkdir()
+        config.write_text(
+            'accept_terms = "yes"\n\n[hooks]\nexclude_commands = ["vim"]\n'
+            "\n[tracing]\nreport = false\nupload = true\n",
+            encoding="utf-8",
+        )
+
+        integration = BoostIntegration(self._paths())
+        integration.ensure_safe_config()
+
+        parsed = tomllib.loads(config.read_text(encoding="utf-8"))
+        self.assertEqual("yes", parsed["accept_terms"])
+        self.assertEqual(["vim"], parsed["hooks"]["exclude_commands"])
+        self.assertFalse(parsed["tracing"]["report"])
+        self.assertFalse(parsed["tracing"]["upload"])
+        self.assertFalse(parsed["update"]["auto_update"])
+
+    def test_setup_runs_gated_shell_only_plan_without_accept_terms(self) -> None:
+        from src.command_runner import CommandResult
+
+        BoostIntegration = self._integration_type()
+        boost = self.root / "bin/boost"
+        boost.parent.mkdir()
+        boost.write_text("binary", encoding="utf-8")
+        paths = self._paths()
+
+        class Runner:
+            def __init__(self) -> None:
+                self.calls: list[list[str]] = []
+                self.interactive_calls: list[list[str]] = []
+
+            def run(self, argv, **_kwargs):
+                self.calls.append(list(argv))
+                if argv[-1] == "version":
+                    return CommandResult(0, stdout="boost v0.12.6\n")
+                return CommandResult(
+                    0,
+                    stdout=(
+                        "Claude Code global settings.json patch\n"
+                        "Codex CLI global hooks.json and BOOST.md\n"
+                    ),
+                )
+
+            def run_interactive(self, argv, **_kwargs):
+                self.interactive_calls.append(list(argv))
+                (paths.claude_home / "hooks").mkdir(parents=True)
+                (paths.claude_home / "hooks/boost-hook-claude.sh").write_text("hook\n")
+                (paths.claude_home / "rules").mkdir(parents=True)
+                (paths.claude_home / "rules/boost-awareness.md").write_text("rule\n")
+                (paths.codex_home / "hooks").mkdir(parents=True)
+                (paths.codex_home / "hooks/boost-hook-codex.sh").write_text("hook\n")
+                (paths.codex_home / "hooks/boost-sync.sh").write_text("hook\n")
+                (paths.codex_home / "BOOST.md").write_text("# Boost\n")
+                (paths.codex_home / "hooks.json").write_text(
+                    json.dumps({"hooks": {"PreToolUse": ["boost-hook-codex.sh"]}})
+                )
+                return CommandResult(0)
+
+        runner = Runner()
+        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+            status = BoostIntegration(paths, runner=runner).setup()
+
+        expected = [
+            str(boost),
+            "init",
+            "--no-boostgraph",
+            "--claude",
+            "--codex",
+        ]
+        self.assertIn([*expected[:2], "--dry-run", *expected[2:]], runner.calls)
+        self.assertEqual([expected], runner.interactive_calls)
+        self.assertNotIn("--accept-terms", runner.interactive_calls[0])
+        self.assertEqual("ready", status.state)
+
+    def test_setup_rejects_forbidden_graph_plan_before_writing(self) -> None:
+        from src.command_runner import CommandResult
+
+        BoostIntegration = self._integration_type()
+        boost = self.root / "boost"
+        boost.write_text("binary", encoding="utf-8")
+        runner = mock.Mock()
+
+        def run(argv, **_kwargs):
+            if argv[-1] == "version":
+                return CommandResult(0, stdout="boost v0.12.6\n")
+            return CommandResult(0, stdout="write MCP config and start BoostGraph watcher\n")
+
+        runner.run.side_effect = run
+
+        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+            status = BoostIntegration(self._paths(), runner=runner).setup()
+
+        self.assertEqual("broken", status.state)
+        self.assertIn("forbidden", status.message.lower())
+        runner.run_interactive.assert_not_called()
+
+    def test_off_uninstalls_only_claude_and_codex_integrations(self) -> None:
+        from src.command_runner import CommandResult
+
+        BoostIntegration = self._integration_type()
+        boost = self.root / "boost"
+        boost.write_text("binary", encoding="utf-8")
+        runner = mock.Mock()
+
+        def run(argv, **_kwargs):
+            if argv[-1] == "version":
+                return CommandResult(0, stdout="boost v0.12.6\n")
+            return CommandResult(0, stdout="Claude Code\nCodex CLI\n")
+
+        runner.run.side_effect = run
+        runner.run_interactive.return_value = CommandResult(0)
+
+        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+            BoostIntegration(self._paths(), runner=runner).off()
+
+        argv = runner.run_interactive.call_args.args[0]
+        self.assertEqual(
+            [
+                str(boost),
+                "init",
+                "--uninstall",
+                "--no-boostgraph",
+                "--claude",
+                "--codex",
+            ],
+            argv,
+        )
+        self.assertNotIn("--yes", argv)
+        self.assertIn(
+            [
+                str(boost),
+                "init",
+                "--dry-run",
+                "--uninstall",
+                "--no-boostgraph",
+                "--claude",
+                "--codex",
+            ],
+            [call.args[0] for call in runner.run.call_args_list],
+        )
+
+    def test_setup_rejects_a_plan_missing_a_requested_target(self) -> None:
+        from src.command_runner import CommandResult
+
+        BoostIntegration = self._integration_type()
+        boost = self.root / "boost"
+        boost.write_text("binary", encoding="utf-8")
+        runner = mock.Mock()
+
+        def run(argv, **_kwargs):
+            if argv[-1] == "version":
+                return CommandResult(0, stdout="boost v0.12.6\n")
+            return CommandResult(0, stdout="Claude Code global settings.json patch\n")
+
+        runner.run.side_effect = run
+        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+            status = BoostIntegration(self._paths(), runner=runner).setup()
+
+        self.assertEqual("broken", status.state)
+        self.assertIn("Claude and Codex", status.message)
+        runner.run_interactive.assert_not_called()
+
+    def test_status_reports_cli_only_partial_ready_and_forbidden_states(self) -> None:
+        from src.boost import BoostIntegration
+        from src.command_runner import CommandResult
+
+        boost = self.root / "boost"
+        boost.write_text("binary", encoding="utf-8")
+        runner = mock.Mock()
+        runner.run.return_value = CommandResult(0, stdout="boost v0.12.6\n")
+        integration = BoostIntegration(self._paths(), runner=runner)
+        integration.ensure_safe_config()
+
+        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+            self.assertEqual("cli-only", integration.status().state)
+            (self.claude / "hooks").mkdir(parents=True)
+            (self.claude / "hooks/boost-hook-claude.sh").write_text("hook\n")
+            (self.claude / "rules").mkdir(parents=True)
+            (self.claude / "rules/boost-awareness.md").write_text("rule\n")
+            self.assertEqual("partial", integration.status().state)
+            (self.codex / "hooks").mkdir(parents=True)
+            for name in ("boost-hook-codex.sh", "boost-sync.sh"):
+                (self.codex / "hooks" / name).write_text("hook\n")
+            (self.codex / "hooks.json").write_text("{}\n")
+            (self.codex / "BOOST.md").write_text("# Boost\n")
+            self.assertEqual("ready", integration.status().state)
+            (self.codex / "hooks.json").write_text('{"server":"boostgraph"}\n')
+            self.assertEqual("forbidden", integration.status().state)
+            self.assertEqual("forbidden", integration.setup().state)
+            runner.run_interactive.assert_not_called()
+
+    def test_invalid_timeout_and_invalid_config_fail_cleanly(self) -> None:
+        from src.boost import BoostIntegration
+
+        integration = BoostIntegration(self._paths())
+        with mock.patch.dict("os.environ", {"AGENTBOT_BOOST_TIMEOUT_SECONDS": "bad"}):
+            with self.assertRaises(ValueError):
+                integration._timeout_seconds()
+        with mock.patch.dict("os.environ", {"AGENTBOT_BOOST_TIMEOUT_SECONDS": "0"}):
+            with self.assertRaises(ValueError):
+                integration._timeout_seconds()
+
+        integration.config_path.parent.mkdir()
+        integration.config_path.write_text("not valid toml = [\n", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            integration.ensure_safe_config()
+
+
+if __name__ == "__main__":
+    unittest.main()

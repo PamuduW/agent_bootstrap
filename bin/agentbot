@@ -129,7 +129,7 @@ agentbot_main() {
 	status | install | full | doctor) agentbot_run_backend "$command" "$@" ;;
 	boot) agentbot_boot "$@" ;;
 	workspace | workspaces | resync) agentbot_run_backend "$command" "$@" ;;
-	graphify) agentbot_run_backend graphify "$@" ;;
+	graphify | boost) agentbot_run_backend "$command" "$@" ;;
 	token) agentbot_run_token "$@" ;;
 	update | upgrade) agentbot_run_backend "$command" "$@" ;;
 	help | -h | --help) agentbot_usage "$@" ;;

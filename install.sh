@@ -354,6 +354,7 @@ Usage: ./install.sh <command> [args]
   global                     Refresh managed global outputs
   workspace|workspaces|resync Manage registered workspace outputs
   graphify status|setup      Inspect or repair generic Graphify Agent Skills
+  boost status|setup|off     Inspect or manage Boost Claude/Codex integration
   help                       Show this rescue summary
 
 For the complete command and option reference, run: agentbot help
@@ -412,9 +413,9 @@ main() {
 		check_python_deps
 		run_cli "$cmd" "${@:2}"
 		;;
-	graphify)
+	graphify | boost)
 		check_python_deps
-		run_cli graphify "${@:2}"
+		run_cli "$cmd" "${@:2}"
 		;;
 	all | interactive | import-local | remove-managed | delete-local)
 		die "${cmd} is archived — see archive/docs/README.md"

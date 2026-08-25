@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 class CommandRunnerTests(unittest.TestCase):
@@ -97,6 +98,43 @@ class CommandRunnerTests(unittest.TestCase):
         self.assertEqual(0, result.returncode)
         self.assertFalse(marker.exists())
         self.assertIn(root.name, result.stdout)
+
+    def test_interactive_runner_returns_process_status_and_missing_executable(self) -> None:
+        from src.command_runner import CommandRunner
+
+        runner = CommandRunner()
+        success = runner.run_interactive(
+            [sys.executable, "-c", "raise SystemExit(0)"], timeout_seconds=5
+        )
+        failure = runner.run_interactive(
+            [sys.executable, "-c", "raise SystemExit(7)"], timeout_seconds=5
+        )
+        missing = runner.run_interactive(
+            ["agentbot-interactive-command-that-does-not-exist"], timeout_seconds=1
+        )
+
+        self.assertEqual(0, success.returncode)
+        self.assertEqual(7, failure.returncode)
+        self.assertTrue(missing.missing_executable)
+
+    def test_interactive_runner_validates_arguments_and_reports_timeout(self) -> None:
+        from src.command_runner import CommandRunner
+
+        runner = CommandRunner()
+        with self.assertRaises(ValueError):
+            runner.run_interactive([], timeout_seconds=1)
+        with self.assertRaises(ValueError):
+            runner.run_interactive([sys.executable], timeout_seconds=0)
+        timed_out = runner.run_interactive(
+            [sys.executable, "-c", "import time; time.sleep(2)"],
+            timeout_seconds=0.01,
+        )
+        self.assertTrue(timed_out.timed_out)
+
+        with mock.patch("src.command_runner.subprocess.run", side_effect=OSError("no pty")):
+            failed = runner.run_interactive([sys.executable], timeout_seconds=1)
+        self.assertEqual(126, failed.returncode)
+        self.assertIn("unable to start process", failed.stderr)
 
 
 if __name__ == "__main__":

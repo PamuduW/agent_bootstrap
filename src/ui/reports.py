@@ -41,7 +41,10 @@ def print_command_help(spec: CommandSpec | None = None) -> None:
             print_section(label)
             print()
             print_table(
-                [(item.name, item.summary, item.behavior) for item in commands_for_surface(surface)],
+                [
+                    (item.name, item.summary, item.behavior)
+                    for item in commands_for_surface(surface)
+                ],
                 headers=("command", "description", "behavior"),
                 wrap_details=True,
             )
@@ -124,34 +127,50 @@ def print_status_summary(
             TableSection(
                 label="── Skills & baseline ──",
                 rows=(
-            ("Installed skills", str(installed_skills), "ok" if installed_skills else "check"),
-            ("Global AGENTS.md", "global/AGENTS.md", "ok" if global_agents_exists else "missing"),
-            ("Skills manifest", manifest_detail, "ok" if skills_sources_exists else "missing"),
-            (
-                "Global skill lock",
-                lock_detail,
-                "ok" if global_lock_exists and global_lock_skills != 0 else "check",
-            ),
-            (
-                "Claude bridge",
-                f"{claude_bridge_links} symlink(s)" if claude_bridge_links else "none",
-                "ok" if claude_bridge_links else "check",
-            ),
-            (
-                "Claude statusline",
-                claude_statusline_state,
-                "ok" if claude_statusline_state == "ok" else "check",
-            ),
-            (
-                "Manual skills",
-                f"{manual_skill_count} outside managed sources" if manual_skill_count else "none",
-                "info" if manual_skill_count else "ok",
-            ),
-            (
-                "Doctor",
-                "no issues" if doctor_issue_count == 0 else f"{doctor_issue_count} issue(s)",
-                "ok" if doctor_issue_count == 0 else "check",
-            ),
+                    (
+                        "Installed skills",
+                        str(installed_skills),
+                        "ok" if installed_skills else "check",
+                    ),
+                    (
+                        "Global AGENTS.md",
+                        "global/AGENTS.md",
+                        "ok" if global_agents_exists else "missing",
+                    ),
+                    (
+                        "Skills manifest",
+                        manifest_detail,
+                        "ok" if skills_sources_exists else "missing",
+                    ),
+                    (
+                        "Global skill lock",
+                        lock_detail,
+                        "ok" if global_lock_exists and global_lock_skills != 0 else "check",
+                    ),
+                    (
+                        "Claude bridge",
+                        f"{claude_bridge_links} symlink(s)" if claude_bridge_links else "none",
+                        "ok" if claude_bridge_links else "check",
+                    ),
+                    (
+                        "Claude statusline",
+                        claude_statusline_state,
+                        "ok" if claude_statusline_state == "ok" else "check",
+                    ),
+                    (
+                        "Manual skills",
+                        f"{manual_skill_count} outside managed sources"
+                        if manual_skill_count
+                        else "none",
+                        "info" if manual_skill_count else "ok",
+                    ),
+                    (
+                        "Doctor",
+                        "no issues"
+                        if doctor_issue_count == 0
+                        else f"{doctor_issue_count} issue(s)",
+                        "ok" if doctor_issue_count == 0 else "check",
+                    ),
                 ),
             ),
         ),
@@ -212,6 +231,40 @@ def print_graphify_status(status) -> None:
         ("Agent Skills", skill_detail, "ok" if status.skill_path.is_file() else "missing"),
         ("Codex", status.codex_state, "ok" if status.codex_state == "linked" else "check"),
         ("Claude", status.claude_state, "ok" if status.claude_state == "linked" else "check"),
+    ]
+    print_table(rows)
+    print()
+    print(f"  {status.message}")
+
+
+def print_boost_status(status) -> None:
+    """Render Boost CLI, safety, and Claude/Codex integration state."""
+    print_header("Boost", "Agentbot › Boost")
+    rows = [
+        ("State", status.state, status.state),
+        (
+            "CLI",
+            str(status.cli_path) if status.cli_path else "not installed",
+            "ok" if status.cli_path else "missing",
+        ),
+        ("CLI version", status.cli_version or "—", "ok" if status.cli_version else "check"),
+        (
+            "Tracing upload",
+            "disabled" if status.upload_disabled else "not disabled",
+            "ok" if status.upload_disabled else "check",
+        ),
+        (
+            "Auto-update",
+            "disabled" if status.auto_update_disabled else "not disabled",
+            "ok" if status.auto_update_disabled else "check",
+        ),
+        (
+            "BoostGraph / MCP",
+            status.graph_state,
+            "ok" if status.graph_state == "absent" else "error",
+        ),
+        ("Claude", status.claude_state, "ok" if status.claude_state == "ready" else "check"),
+        ("Codex", status.codex_state, "ok" if status.codex_state == "ready" else "check"),
     ]
     print_table(rows)
     print()
@@ -466,7 +519,9 @@ def print_skill_prune_report(report, *, include_manual: bool = False) -> int:
 
     removable = len(report.removable)
     if removable:
-        print(f"  {_c(str(removable), YELLOW)} skill(s) would be removed. Rerun with --yes to apply.")
+        print(
+            f"  {_c(str(removable), YELLOW)} skill(s) would be removed. Rerun with --yes to apply."
+        )
     if report.manual:
         print(
             f"  {_c(str(len(report.manual)), DIM)} manual skill(s) are user-placed and are "

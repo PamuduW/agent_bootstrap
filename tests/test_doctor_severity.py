@@ -8,6 +8,47 @@ from unittest.mock import patch
 
 
 class DoctorSeverityTests(unittest.TestCase):
+    def test_installed_boost_with_unsafe_config_is_an_error(self) -> None:
+        from src.boost import BoostStatus
+        from src.diagnostics import Diagnostics
+        from src.paths import AgentbotPaths
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "global").mkdir()
+            (root / "global/AGENTS.md").write_text("# baseline\n", encoding="utf-8")
+            paths = AgentbotPaths(root, root / "codex", root / "claude", root / "cursor")
+            status = BoostStatus(
+                "unsafe-config",
+                root / "boost",
+                "boost v0.12.6",
+                root / ".boost/config.toml",
+                False,
+                False,
+                "ready",
+                "ready",
+                "absent",
+                "Boost privacy or update pinning is not safely configured.",
+            )
+            with patch("src.diagnostics.BoostIntegration.status", return_value=status):
+                issues = Diagnostics(paths).doctor_issues()
+
+            self.assertTrue(
+                any(issue.level == "error" and issue.scope == "boost" for issue in issues)
+            )
+
+    def test_missing_boost_does_not_create_a_doctor_issue(self) -> None:
+        from src.diagnostics import Diagnostics
+        from src.paths import AgentbotPaths
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "global").mkdir()
+            (root / "global/AGENTS.md").write_text("# baseline\n", encoding="utf-8")
+            paths = AgentbotPaths(root, root / "codex", root / "claude", root / "cursor")
+            issues = Diagnostics(paths).doctor_issues()
+            self.assertFalse(any(issue.scope == "boost" for issue in issues))
+
     def test_unsafe_saved_token_is_actionable_warning_without_value_leak(self) -> None:
         from src.diagnostics import Diagnostics
         from src.paths import AgentbotPaths
@@ -30,7 +71,9 @@ class DoctorSeverityTests(unittest.TestCase):
                 agents_home=root / ".agents",
             )
             issues = Diagnostics(paths).doctor_issues()
-            self.assertTrue(any(issue.level == "warning" and issue.scope == "token" for issue in issues))
+            self.assertTrue(
+                any(issue.level == "warning" and issue.scope == "token" for issue in issues)
+            )
             self.assertFalse(any("short" in issue.message for issue in issues))
 
     def test_warning_only_doctor_is_success(self) -> None:
@@ -38,7 +81,9 @@ class DoctorSeverityTests(unittest.TestCase):
         from src.ui import print_doctor_summary
 
         with redirect_stdout(io.StringIO()):
-            rc = print_doctor_summary([DoctorIssue(level="warning", scope="skills", message="manual skill")])
+            rc = print_doctor_summary(
+                [DoctorIssue(level="warning", scope="skills", message="manual skill")]
+            )
         self.assertEqual(0, rc)
 
     def test_errors_fail_even_with_warnings(self) -> None:
@@ -46,10 +91,12 @@ class DoctorSeverityTests(unittest.TestCase):
         from src.ui import print_doctor_summary
 
         with redirect_stdout(io.StringIO()):
-            rc = print_doctor_summary([
-                DoctorIssue(level="warning", scope="skills", message="manual skill"),
-                DoctorIssue(level="error", scope="global", message="missing baseline"),
-            ])
+            rc = print_doctor_summary(
+                [
+                    DoctorIssue(level="warning", scope="skills", message="manual skill"),
+                    DoctorIssue(level="error", scope="global", message="missing baseline"),
+                ]
+            )
         self.assertEqual(1, rc)
 
     def test_official_graphify_skill_uses_graphify_scope_instead_of_manual_warning(self) -> None:
@@ -102,9 +149,13 @@ class DoctorSeverityTests(unittest.TestCase):
             with patch.dict(os.environ, {"HOME": str(home)}, clear=False):
                 issues = Diagnostics(paths).doctor_issues()
 
-            manual_messages = [issue.message for issue in issues if "Manual skill 'graphify'" in issue.message]
+            manual_messages = [
+                issue.message for issue in issues if "Manual skill 'graphify'" in issue.message
+            ]
             self.assertTrue(manual_messages)
-            self.assertTrue(all("outside managed sources" in message for message in manual_messages))
+            self.assertTrue(
+                all("outside managed sources" in message for message in manual_messages)
+            )
 
     def test_broken_official_graphify_state_is_an_error(self) -> None:
         from src.diagnostics import Diagnostics
@@ -138,12 +189,15 @@ class DoctorSeverityTests(unittest.TestCase):
                 "missing",
                 "Graphify skill setup failed: subprocess failed",
             )
-            with patch.dict(os.environ, {"HOME": str(home)}, clear=False), patch.object(
-                service, "graphify_status", return_value=status
+            with (
+                patch.dict(os.environ, {"HOME": str(home)}, clear=False),
+                patch.object(service, "graphify_status", return_value=status),
             ):
                 issues = service.doctor_issues()
 
-            self.assertTrue(any(issue.level == "error" and issue.scope == "graphify" for issue in issues))
+            self.assertTrue(
+                any(issue.level == "error" and issue.scope == "graphify" for issue in issues)
+            )
 
     def test_cursor_lock_older_than_the_global_lock_is_a_warning(self) -> None:
         import os

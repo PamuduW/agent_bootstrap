@@ -5,6 +5,7 @@ from pathlib import Path
 
 class LifecycleTests(unittest.TestCase):
     def test_install_orders_each_stage_once_and_returns_typed_outcome(self) -> None:
+        from src.boost import BoostStatus
         from src.graphify import GraphifyStatus
         from src.lifecycle import Lifecycle
         from src.models import DiagnosticsSnapshot, OutputRefreshOutcome
@@ -37,6 +38,18 @@ class LifecycleTests(unittest.TestCase):
                 claude_statusline_state="missing",
                 issues=(),
             )
+            boost_status = BoostStatus(
+                "not-installed",
+                None,
+                None,
+                root / ".boost/config.toml",
+                False,
+                False,
+                "missing",
+                "missing",
+                "absent",
+                "Boost CLI is not installed.",
+            )
 
             class FakeGraphify:
                 def refresh_if_enabled(self):
@@ -47,6 +60,11 @@ class LifecycleTests(unittest.TestCase):
                 def collect(self):
                     events.append("diagnostics")
                     return diagnostics_snapshot
+
+            class FakeBoost:
+                def setup_if_cli_available(self):
+                    events.append("boost")
+                    return boost_status
 
             def install_skills(_paths):
                 events.append("skills")
@@ -60,14 +78,16 @@ class LifecycleTests(unittest.TestCase):
                 paths,
                 diagnostics=FakeDiagnostics(),
                 graphify=FakeGraphify(),
+                boost=FakeBoost(),
                 install_skills=install_skills,
                 refresh_outputs=refresh_outputs,
             )
             outcome = lifecycle.install()
 
-            self.assertEqual(["skills", "graphify", "outputs", "diagnostics"], events)
+            self.assertEqual(["skills", "graphify", "boost", "outputs", "diagnostics"], events)
             self.assertEqual((), outcome.skills)
             self.assertIs(graphify_status, outcome.graphify)
+            self.assertIs(boost_status, outcome.boost)
             self.assertIs(diagnostics_snapshot, outcome.diagnostics)
 
 

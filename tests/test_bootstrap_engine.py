@@ -46,14 +46,21 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         from src.render import render_global_outputs
 
         paths = self._paths()
-        with mock.patch.object(
-            type(paths),
-            "agents_skills_home",
-            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / "skills"),
-        ), mock.patch.object(
-            type(paths),
-            "global_skill_lock",
-            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / ".skill-lock.json"),
+        with (
+            mock.patch.object(
+                type(paths),
+                "agents_skills_home",
+                new_callable=lambda: property(
+                    lambda self: self.root / "home" / ".agents" / "skills"
+                ),
+            ),
+            mock.patch.object(
+                type(paths),
+                "global_skill_lock",
+                new_callable=lambda: property(
+                    lambda self: self.root / "home" / ".agents" / ".skill-lock.json"
+                ),
+            ),
         ):
             render_global_outputs(paths)
 
@@ -64,6 +71,22 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         codex_skills = paths.codex_home / "skills"
         self.assertTrue((codex_skills / "alpha-skill").is_symlink())
         self.assertTrue((codex_skills / "beta-skill").is_symlink())
+
+    def test_render_global_outputs_keeps_boost_import_only_while_boost_md_exists(self) -> None:
+        from src.render import render_global_outputs
+
+        paths = self._paths()
+        paths.codex_home.mkdir(parents=True, exist_ok=True)
+        boost_md = paths.codex_home / "BOOST.md"
+        boost_md.write_text("# Boost\n", encoding="utf-8")
+
+        render_global_outputs(paths)
+        agents = paths.codex_home / "AGENTS.md"
+        self.assertTrue(agents.read_text(encoding="utf-8").endswith("\n@BOOST.md\n"))
+
+        boost_md.unlink()
+        render_global_outputs(paths)
+        self.assertNotIn("@BOOST.md", agents.read_text(encoding="utf-8"))
 
     def test_render_global_outputs_syncs_claude_skill_links(self) -> None:
         from src.render import render_global_outputs
@@ -149,7 +172,9 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         ):
             render_global_outputs(paths)
             review = codex_agents.with_name("AGENTS_temp.md")
-            review.write_text(review.read_text(encoding="utf-8") + "\nMy notes.\n", encoding="utf-8")
+            review.write_text(
+                review.read_text(encoding="utf-8") + "\nMy notes.\n", encoding="utf-8"
+            )
             (self.root / "global" / "AGENTS.md").write_text(
                 "# Global Baseline\n\nNew global instructions.\n",
                 encoding="utf-8",
@@ -170,14 +195,21 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         (manual_source / "SKILL.md").write_text("# manual\n", encoding="utf-8")
         (codex_skills / "manual-skill").symlink_to(manual_source)
 
-        with mock.patch.object(
-            type(paths),
-            "agents_skills_home",
-            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / "skills"),
-        ), mock.patch.object(
-            type(paths),
-            "global_skill_lock",
-            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / ".skill-lock.json"),
+        with (
+            mock.patch.object(
+                type(paths),
+                "agents_skills_home",
+                new_callable=lambda: property(
+                    lambda self: self.root / "home" / ".agents" / "skills"
+                ),
+            ),
+            mock.patch.object(
+                type(paths),
+                "global_skill_lock",
+                new_callable=lambda: property(
+                    lambda self: self.root / "home" / ".agents" / ".skill-lock.json"
+                ),
+            ),
         ):
             render_global_outputs(paths)
 
@@ -196,14 +228,21 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         manual.mkdir()
         (manual / "SKILL.md").write_text("# manual\n", encoding="utf-8")
 
-        with mock.patch.object(
-            type(paths),
-            "agents_skills_home",
-            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / "skills"),
-        ), mock.patch.object(
-            type(paths),
-            "global_skill_lock",
-            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / ".skill-lock.json"),
+        with (
+            mock.patch.object(
+                type(paths),
+                "agents_skills_home",
+                new_callable=lambda: property(
+                    lambda self: self.root / "home" / ".agents" / "skills"
+                ),
+            ),
+            mock.patch.object(
+                type(paths),
+                "global_skill_lock",
+                new_callable=lambda: property(
+                    lambda self: self.root / "home" / ".agents" / ".skill-lock.json"
+                ),
+            ),
         ):
             render_global_outputs(paths)
 
@@ -222,14 +261,21 @@ class SlimBootstrapEngineTests(unittest.TestCase):
             with self.subTest(lock_root=lock_root):
                 (self.root / "skills-lock.json").write_text(lock_root, encoding="utf-8")
                 global_lock.write_text(lock_root, encoding="utf-8")
-                with mock.patch.object(
-                    type(paths),
-                    "agents_skills_home",
-                    new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / "skills"),
-                ), mock.patch.object(
-                    type(paths),
-                    "global_skill_lock",
-                    new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / ".skill-lock.json"),
+                with (
+                    mock.patch.object(
+                        type(paths),
+                        "agents_skills_home",
+                        new_callable=lambda: property(
+                            lambda self: self.root / "home" / ".agents" / "skills"
+                        ),
+                    ),
+                    mock.patch.object(
+                        type(paths),
+                        "global_skill_lock",
+                        new_callable=lambda: property(
+                            lambda self: self.root / "home" / ".agents" / ".skill-lock.json"
+                        ),
+                    ),
                 ):
                     render_global_outputs(paths)
                     service = Diagnostics(paths)
@@ -247,19 +293,33 @@ class SlimBootstrapEngineTests(unittest.TestCase):
         (manual / "SKILL.md").write_text("# manual\n", encoding="utf-8")
         service = Diagnostics(paths)
 
-        with mock.patch.object(
-            type(paths),
-            "agents_skills_home",
-            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / "skills"),
-        ), mock.patch.object(
-            type(paths),
-            "global_skill_lock",
-            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / ".skill-lock.json"),
+        with (
+            mock.patch.object(
+                type(paths),
+                "agents_skills_home",
+                new_callable=lambda: property(
+                    lambda self: self.root / "home" / ".agents" / "skills"
+                ),
+            ),
+            mock.patch.object(
+                type(paths),
+                "global_skill_lock",
+                new_callable=lambda: property(
+                    lambda self: self.root / "home" / ".agents" / ".skill-lock.json"
+                ),
+            ),
         ):
             messages = [issue.message for issue in service.doctor_issues()]
 
-        self.assertTrue(any("alpha-skill" in message and "missing" in message for message in messages))
-        self.assertTrue(any("manual-skill" in message and "outside managed sources" in message for message in messages))
+        self.assertTrue(
+            any("alpha-skill" in message and "missing" in message for message in messages)
+        )
+        self.assertTrue(
+            any(
+                "manual-skill" in message and "outside managed sources" in message
+                for message in messages
+            )
+        )
         self.assertFalse(any("outside the global lock" in message for message in messages))
 
     def test_doctor_does_not_reclassify_declared_skill_missing_from_lock_as_manual(self) -> None:
@@ -287,14 +347,21 @@ sources:
         global_lock.write_text(json.dumps({"version": 3, "skills": {}}), encoding="utf-8")
         service = Diagnostics(paths)
 
-        with mock.patch.object(
-            type(paths),
-            "agents_skills_home",
-            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / "skills"),
-        ), mock.patch.object(
-            type(paths),
-            "global_skill_lock",
-            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / ".skill-lock.json"),
+        with (
+            mock.patch.object(
+                type(paths),
+                "agents_skills_home",
+                new_callable=lambda: property(
+                    lambda self: self.root / "home" / ".agents" / "skills"
+                ),
+            ),
+            mock.patch.object(
+                type(paths),
+                "global_skill_lock",
+                new_callable=lambda: property(
+                    lambda self: self.root / "home" / ".agents" / ".skill-lock.json"
+                ),
+            ),
         ):
             messages = [issue.message for issue in service.doctor_issues()]
 
@@ -313,14 +380,21 @@ sources:
         )
         service = Diagnostics(paths)
 
-        with mock.patch.object(
-            type(paths),
-            "agents_skills_home",
-            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / "skills"),
-        ), mock.patch.object(
-            type(paths),
-            "global_skill_lock",
-            new_callable=lambda: property(lambda self: self.root / "home" / ".agents" / ".skill-lock.json"),
+        with (
+            mock.patch.object(
+                type(paths),
+                "agents_skills_home",
+                new_callable=lambda: property(
+                    lambda self: self.root / "home" / ".agents" / "skills"
+                ),
+            ),
+            mock.patch.object(
+                type(paths),
+                "global_skill_lock",
+                new_callable=lambda: property(
+                    lambda self: self.root / "home" / ".agents" / ".skill-lock.json"
+                ),
+            ),
         ):
             messages = [issue.message for issue in service.doctor_issues()]
 

@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from .boost import BoostIntegration
 from .commands import COMMANDS, CommandSpec, command_by_name
 from .diagnostics import Diagnostics
 from .graphify import GraphifyIntegration
@@ -15,6 +16,7 @@ from .lifecycle import Lifecycle
 from .paths import AgentbotPaths, default_paths
 from .skills_installer import SkillsInstallError, parse_update_output
 from .ui import (
+    print_boost_status,
     print_command_help,
     print_doctor_summary,
     print_graphify_status,
@@ -69,6 +71,7 @@ def main() -> int:
         paths,
         diagnostics=diagnostics,
         graphify=GraphifyIntegration(paths),
+        boost=BoostIntegration(paths),
     )
     context = CommandContext(args=args, paths=paths, diagnostics=diagnostics, lifecycle=lifecycle)
 
@@ -125,6 +128,18 @@ def _handle_graphify(context: CommandContext) -> int:
     if graphify_command == "status":
         return 1 if status.state == "broken" else 0
     return 0 if status.state in {"ready", "conflict", "stale"} else 1
+
+
+def _handle_boost(context: CommandContext) -> int:
+    command = getattr(context.args, "boost_command", None) or "status"
+    if command == "setup":
+        status = context.lifecycle.setup_boost()
+    elif command == "off":
+        status = context.lifecycle.disable_boost()
+    else:
+        status = context.lifecycle.boost_status()
+    print_boost_status(status)
+    return 1 if status.state in {"broken", "forbidden", "unsafe-config"} else 0
 
 
 def _handle_update(context: CommandContext) -> int:
@@ -220,6 +235,7 @@ COMMAND_HANDLERS: dict[str, Callable[[CommandContext], int]] = {
     "global": _handle_global,
     "doctor": _handle_doctor,
     "graphify": _handle_graphify,
+    "boost": _handle_boost,
     "update": _handle_update,
     "upgrade": _handle_update,
     "workspace": _handle_workspace,
@@ -265,6 +281,11 @@ def build_parser() -> argparse.ArgumentParser:
     graphify_sub = graphify.add_subparsers(dest="graphify_command")
     graphify_sub.add_parser("status", help="Show Graphify CLI and skill state")
     graphify_sub.add_parser("setup", help="Install or refresh the generic Agent Skills copy")
+    boost = subparsers.add_parser("boost", help="Inspect or manage Boost shell integration")
+    boost_sub = boost.add_subparsers(dest="boost_command")
+    boost_sub.add_parser("status", help="Show Boost CLI, safety, and integration state")
+    boost_sub.add_parser("setup", help="Preview and set up Claude and Codex integration")
+    boost_sub.add_parser("off", help="Preview and remove Claude and Codex integration")
     for command in ("update", "upgrade"):
         update = subparsers.add_parser(
             command,
@@ -315,7 +336,9 @@ def build_parser() -> argparse.ArgumentParser:
     resync_group = resync.add_mutually_exclusive_group()
     resync_group.add_argument("--yes", action="store_true", help="Apply Agentbot-managed changes")
     resync_group.add_argument("--dry-run", action="store_true", help="Preview without writing")
-    resync.add_argument("--all", action="store_true", help="Include all enabled registered workspaces")
+    resync.add_argument(
+        "--all", action="store_true", help="Include all enabled registered workspaces"
+    )
     resync.add_argument("paths", nargs="*", help="Explicit registered workspace paths")
 
     skills = subparsers.add_parser("skills", help="Install and manage curated skills")
@@ -387,9 +410,7 @@ def parse_workspace_targets(value: str | None) -> tuple[str, ...] | None:
     return ("agents", *(target for target in targets if target != "agents"))
 
 
-def handle_skills_prune(
-    lifecycle: Lifecycle, *, apply: bool, include_manual: bool
-) -> int:
+def handle_skills_prune(lifecycle: Lifecycle, *, apply: bool, include_manual: bool) -> int:
     from .skill_prune import apply_prune, plan_prune
     from .skills_sources import load_skills_sources
 
@@ -450,11 +471,15 @@ def run_bootstrap_command(lifecycle: Lifecycle, paths: AgentbotPaths) -> int:
     skills_rc = print_skills_report(list(outcome.skills), title="Skills install")
     if outcome.graphify.cli_path is not None or outcome.graphify.state == "broken":
         print_graphify_status(outcome.graphify)
+    if outcome.boost.cli_path is not None or outcome.boost.state == "broken":
+        print_boost_status(outcome.boost)
     doctor_rc = print_doctor_summary(list(outcome.diagnostics.issues))
     print(f"AGENTBOT_HOME={paths.root.resolve()}")
     if skills_rc != 0:
         return skills_rc
     if outcome.graphify.state == "broken":
+        return 1
+    if outcome.boost.state in {"broken", "forbidden", "unsafe-config"}:
         return 1
     return doctor_rc
 

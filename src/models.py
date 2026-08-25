@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from .boost import BoostStatus
     from .graphify import GraphifyStatus
     from .skill_catalog import SourceCatalog
     from .skill_reconcile import ReconcileResult, SkillReconcilePlan
@@ -57,6 +58,7 @@ class OutputRefreshOutcome:
 class InstallOutcome:
     skills: tuple[InstallResult, ...]
     graphify: GraphifyStatus
+    boost: BoostStatus
     outputs: OutputRefreshOutcome
     diagnostics: DiagnosticsSnapshot
 

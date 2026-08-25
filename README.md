@@ -13,6 +13,7 @@ after installation. Run `agentbot help` for the complete command index or
 - Bash, Git, Python 3, and PyYAML
 - Node.js/npm and `npx` for skill installation and updates
 - an optional `graphify` CLI for generic Graphify Agent Skills integration
+- an optional Dotfiles-installed `boost` CLI for Claude/Codex shell integration
 
 Install Python requirements in a repository-local environment when needed:
 
@@ -31,8 +32,9 @@ cd /any/path/agent_bootstrap
 ```
 
 Install checks the repository first, installs enabled skills, synchronizes the
-optional generic Graphify skill, refreshes managed global outputs, runs Doctor,
-and links `bin/agentbot` to `~/bin/agentbot`. Ensure `~/bin` is on `PATH`.
+optional generic Graphify skill, configures an installed Boost CLI for Claude
+and Codex, refreshes managed global outputs, runs Doctor, and links
+`bin/agentbot` to `~/bin/agentbot`. Ensure `~/bin` is on `PATH`.
 
 `AGENTBOT_HOME` is resolved from the executable location and exported for child
 commands. Private state lives under
@@ -105,6 +107,14 @@ Doctor report it as outside managed sources until the manifest owns it.
 Graphify is separate from the curated `npx skills` manifest. Dotfiles owns CLI
 installation. Agentbot runs only `graphify install --platform agents` when the
 optional CLI already exists; it never builds project graphs or installs hooks.
+
+Boost follows the same ownership split: Dotfiles owns the pinned CLI binary;
+Agentbot owns assistant setup and reporting. `agentbot install` skips Boost when
+the CLI is absent. When present, it disables tracing upload and Boost
+auto-update, previews Claude/Codex-only setup with BoostGraph disabled, and
+rejects graph, MCP, or indexing changes before running Boost interactively.
+Agentbot never passes `--accept-terms`; Boost presents its own agreement. Use
+`agentbot boost status|setup|off` for inspection, repair, or removal.
 
 ## Workspaces and policy ownership
 

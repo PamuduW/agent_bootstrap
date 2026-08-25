@@ -6,6 +6,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import cast
 
+from .boost import BoostIntegration, BoostStatus
 from .claude_bridge import BridgeResult, bridge_claude_skills
 from .command_runner import CommandRunner
 from .diagnostics import Diagnostics
@@ -45,6 +46,7 @@ class Lifecycle:
         *,
         diagnostics: Diagnostics | None = None,
         graphify: GraphifyIntegration | None = None,
+        boost: BoostIntegration | None = None,
         workspace_service: WorkspaceService | None = None,
         # Called two ways: with just paths for a plain install, and with a
         # `checkouts` mapping on the planned-update path (see
@@ -66,6 +68,7 @@ class Lifecycle:
         self.paths = paths
         self.diagnostics = diagnostics or Diagnostics(paths)
         self.graphify = graphify or GraphifyIntegration(paths)
+        self.boost = boost or BoostIntegration(paths)
         self.workspace_service = workspace_service or WorkspaceService(paths)
         self._install_skills = install_skills
         self._update_skills = update_skills
@@ -86,9 +89,10 @@ class Lifecycle:
     def install(self) -> InstallOutcome:
         skills = tuple(self._install_skills(self.paths))
         graphify = self.graphify.refresh_if_enabled()
+        boost = self.boost.setup_if_cli_available()
         outputs = self.refresh_outputs()
         diagnostics = self.diagnostics.collect()
-        return InstallOutcome(skills, graphify, outputs, diagnostics)
+        return InstallOutcome(skills, graphify, boost, outputs, diagnostics)
 
     def render_global(self) -> None:
         self._render_global(self.paths)
@@ -140,9 +144,7 @@ class Lifecycle:
     def _apply_planned_update(self, plan: UpdatePlan) -> UpdateOutcome:
         config = load_skills_sources(self.paths.skills_sources_file)
         try:
-            with self._checkout_provider(
-                config, plan.source_catalogs
-            ) as checkouts:
+            with self._checkout_provider(config, plan.source_catalogs) as checkouts:
                 stage: dict[str, object] = {}
 
                 def validate_transaction() -> None:
@@ -158,18 +160,13 @@ class Lifecycle:
                         result.status in {"conflict", "failed"}
                         for result in workspace_report.results
                     ) or any(
-                        action.kind == "conflict"
-                        for action in workspace_report.global_actions
+                        action.kind == "conflict" for action in workspace_report.global_actions
                     ):
-                        raise RuntimeError(
-                            "managed workspace or global output refresh failed"
-                        )
+                        raise RuntimeError("managed workspace or global output refresh failed")
                     stage["workspace_report"] = workspace_report
                     diagnostics = self.diagnostics.collect()
                     errors = [
-                        issue
-                        for issue in diagnostics.issues
-                        if issue.level.lower() == "error"
+                        issue for issue in diagnostics.issues if issue.level.lower() == "error"
                     ]
                     if errors:
                         raise RuntimeError(
@@ -205,12 +202,8 @@ class Lifecycle:
                     # are populated by the update applier with the matching
                     # dataclasses, which the dict type cannot express.
                     graphify=cast("GraphifyStatus | None", stage.get("graphify")),
-                    workspace_report=cast(
-                        "WorkspaceReport | None", stage.get("workspace_report")
-                    ),
-                    diagnostics=cast(
-                        "DiagnosticsSnapshot | None", stage.get("diagnostics")
-                    ),
+                    workspace_report=cast("WorkspaceReport | None", stage.get("workspace_report")),
+                    diagnostics=cast("DiagnosticsSnapshot | None", stage.get("diagnostics")),
                 )
         except StaleSourceCatalogError as error:
             return UpdateOutcome("stale-plan", str(error))
@@ -264,18 +257,14 @@ class Lifecycle:
             agents_home=self.paths.agents_skills_home,
             claude_home=self.paths.claude_skills_home,
         )
-        already = sum(
-            1 for action in bridge.actions if action.action == "already_linked"
-        )
+        already = sum(1 for action in bridge.actions if action.action == "already_linked")
         linked = sum(1 for action in bridge.actions if action.action == "linked")
         updated = sum(1 for action in bridge.actions if action.action == "updated")
         skipped = sum(1 for action in bridge.actions if action.action == "skip_existing")
         self._render_global(self.paths)
         return OutputRefreshOutcome(already + linked, updated, skipped)
 
-    def resync_workspaces(
-        self, *, apply: bool, paths: tuple[Path, ...] = ()
-    ) -> WorkspaceReport:
+    def resync_workspaces(self, *, apply: bool, paths: tuple[Path, ...] = ()) -> WorkspaceReport:
         report = self.workspace_service.resync(apply=apply, paths=paths)
         global_actions = resync_global_outputs(self.paths, apply=apply)
         return WorkspaceReport(results=report.results, global_actions=global_actions)
@@ -287,9 +276,7 @@ class Lifecycle:
         profile: str | None,
         targets: tuple[str, ...] | None,
     ):
-        return self.workspace_service.preview(
-            path, profile_name=profile, targets=targets
-        )
+        return self.workspace_service.preview(path, profile_name=profile, targets=targets)
 
     def apply_workspace(
         self,
@@ -317,18 +304,29 @@ class Lifecycle:
 
     def setup_graphify(self) -> GraphifyStatus:
         status = self.graphify.setup()
-        if (
-            status.cli_path is not None
-            and status.skill_path.is_file()
-            and status.state != "broken"
-        ):
+        if status.cli_path is not None and status.skill_path.is_file() and status.state != "broken":
             self.refresh_outputs()
             return self.graphify.status()
         return status
 
-    def sync_graphify_if_cli_available(
-        self, *, refresh_outputs: bool = True
-    ) -> GraphifyStatus:
+    def boost_status(self) -> BoostStatus:
+        return self.boost.status()
+
+    def setup_boost(self) -> BoostStatus:
+        status = self.boost.setup()
+        if status.cli_path is not None and status.state != "broken":
+            self.refresh_outputs()
+            return self.boost.status()
+        return status
+
+    def disable_boost(self) -> BoostStatus:
+        status = self.boost.off()
+        if status.cli_path is not None and status.state != "broken":
+            self.refresh_outputs()
+            return self.boost.status()
+        return status
+
+    def sync_graphify_if_cli_available(self, *, refresh_outputs: bool = True) -> GraphifyStatus:
         current = self.graphify.status()
         if current.cli_path is None:
             return current

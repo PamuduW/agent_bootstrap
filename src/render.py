@@ -39,7 +39,7 @@ def render_global_outputs(paths: AgentbotPaths) -> None:
     merged = merge_instruction_text(paths.global_agents, None)
 
     paths.codex_home.mkdir(parents=True, exist_ok=True)
-    _render_global_output(paths.codex_home / "AGENTS.md", merged)
+    _render_global_output(paths.codex_home / "AGENTS.md", _codex_instruction_text(paths, merged))
     _sync_codex_skills(paths)
 
     paths.claude_home.mkdir(parents=True, exist_ok=True)
@@ -62,11 +62,12 @@ def plan_global_resync_actions(paths: AgentbotPaths) -> tuple[RenderAction, ...]
         )
 
     desired = merge_instruction_text(paths.global_agents, None)
+    codex_desired = _codex_instruction_text(paths, desired)
     actions: list[RenderAction] = [
         _plan_global_instruction_action(
             _display_managed_path(paths, paths.codex_home / "AGENTS.md"),
             paths.codex_home / "AGENTS.md",
-            desired,
+            codex_desired,
         ),
         _plan_global_instruction_action(
             _display_managed_path(paths, paths.claude_home / "CLAUDE.md"),
@@ -78,12 +79,22 @@ def plan_global_resync_actions(paths: AgentbotPaths) -> tuple[RenderAction, ...]
     return tuple(actions)
 
 
+def _codex_instruction_text(paths: AgentbotPaths, base: str) -> str:
+    boost_awareness = paths.codex_home / "BOOST.md"
+    if not boost_awareness.is_file() or boost_awareness.is_symlink():
+        return base
+    return f"{base.rstrip()}\n\n@BOOST.md\n"
+
+
 def resync_global_outputs(paths: AgentbotPaths, *, apply: bool) -> tuple[RenderAction, ...]:
     """Preview or refresh managed global Codex/Claude outputs and statusline."""
     planned = plan_global_resync_actions(paths)
     if not apply:
         return planned
-    if any(action.kind == "conflict" and action.relative_path == "global/AGENTS.md" for action in planned):
+    if any(
+        action.kind == "conflict" and action.relative_path == "global/AGENTS.md"
+        for action in planned
+    ):
         return planned
     render_global_outputs(paths)
     applied: list[RenderAction] = []
@@ -157,7 +168,9 @@ def _plan_statusline_action(paths: AgentbotPaths) -> RenderAction:
     if state.managed and not state.in_sync:
         return RenderAction(label, "update", None, f"would refresh {STATUSLINE_SCRIPT_NAME}")
     if not state.managed:
-        return RenderAction(label, "unchanged", None, f"preserving user-owned {STATUSLINE_SCRIPT_NAME}")
+        return RenderAction(
+            label, "unchanged", None, f"preserving user-owned {STATUSLINE_SCRIPT_NAME}"
+        )
     if not state.settings_wired:
         return RenderAction(
             label,

@@ -736,3 +736,162 @@ class BoostArtifactVersionTests(BoostIntegrationTests):
         self._install(marker="v0.12.5")
         (self.codex / "hooks.json").write_text('{"server":"boostgraph"}\n', encoding="utf-8")
         self.assertEqual("forbidden", self._status().state)
+
+
+class BoostFeatureFlagTests(BoostIntegrationTests):
+    """Boost feature flags are a declared set that setup enforces.
+
+    Boost's report UI writes `user = <bool>` under `[feature_flags."name"]`, and
+    a user value beats the remote default. Four were toggled on this machine --
+    including BoostGraph -- while Doctor stayed silent, because the config check
+    only ever read `tracing.upload` and `update.auto_update`.
+
+    Agentbot now declares the intended value for each. A flag left unpinned
+    counts as diverged: its effective value falls back to a remote default that
+    JFrog can change under the machine.
+    """
+
+    def _config(self, body: str) -> None:
+        path = self.root / ".boost/config.toml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "[tracing]\nupload = false\n\n[update]\nauto_update = false\n\n" + body,
+            encoding="utf-8",
+        )
+
+    def _parsed(self):
+        import tomllib
+
+        return tomllib.loads((self.root / ".boost/config.toml").read_text(encoding="utf-8"))
+
+    def _status(self):
+        from src.command_runner import CommandResult
+
+        boost = self.root / "boost"
+        boost.write_text("binary", encoding="utf-8")
+        runner = mock.Mock()
+        runner.run.return_value = CommandResult(0, stdout="boost v0.12.6\n")
+        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+            return self._integration_type()(self._paths(), runner=runner).status()
+
+    def test_policy_declares_every_flag_agentbot_has_a_stake_in(self) -> None:
+        from src.boost import BOOST_FEATURE_POLICY
+
+        self.assertEqual(
+            {
+                "boost-agent-facing-redaction": True,
+                "boost-english-abbreviation": False,
+                "boost-graph-integration": False,
+                "boost-mcp-toon-format": True,
+            },
+            dict(BOOST_FEATURE_POLICY),
+        )
+
+    def test_safe_config_writes_the_declared_set(self) -> None:
+        self._config('[feature_flags."boost-graph-integration"]\nuser = true\nremote = false\n')
+        self._integration_type()(self._paths()).ensure_safe_config()
+
+        flags = self._parsed()["feature_flags"]
+        self.assertIs(False, flags["boost-graph-integration"]["user"])
+        self.assertIs(True, flags["boost-agent-facing-redaction"]["user"])
+        self.assertIs(False, flags["boost-english-abbreviation"]["user"])
+        self.assertIs(True, flags["boost-mcp-toon-format"]["user"])
+        # The remote value is JFrog's to set; only `user` is ours.
+        self.assertIs(False, flags["boost-graph-integration"]["remote"])
+
+    def test_safe_config_preserves_flags_outside_the_declared_set(self) -> None:
+        self._config(
+            '[feature_flags."boost-share-cli-outputs"]\nuser = true\nremote = false\n\n'
+            '[feature_flags._metadata]\nlast_updated_at = "2026-08-25T00:00:00Z"\n'
+        )
+        self._integration_type()(self._paths()).ensure_safe_config()
+
+        flags = self._parsed()["feature_flags"]
+        self.assertIs(True, flags["boost-share-cli-outputs"]["user"])
+        self.assertEqual("2026-08-25T00:00:00Z", flags["_metadata"]["last_updated_at"])
+        self.assertFalse(self._parsed()["tracing"]["upload"])
+
+    def test_user_overrides_are_collected_and_remote_only_flags_are_not(self) -> None:
+        self._config(
+            '[feature_flags."boost-english-abbreviation"]\nuser = true\nremote = false\n\n'
+            '[feature_flags."boost-cli-filtering"]\nremote = true\n'
+        )
+        status = self._status()
+        self.assertIn(("boost-english-abbreviation", True), status.user_flags)
+        self.assertNotIn(
+            "boost-cli-filtering", [name for name, _ in status.user_flags]
+        )
+
+    def test_flags_matching_policy_do_not_diverge(self) -> None:
+        from src.diagnostics import Diagnostics
+
+        self._integration_type()(self._paths()).ensure_safe_config()
+        status = self._status()
+        self.assertEqual((), status.diverged_flags)
+        self.assertEqual([], Diagnostics(self._paths())._boost_flag_issues(status))
+
+    def test_a_flag_flipped_against_policy_diverges(self) -> None:
+        from src.diagnostics import Diagnostics
+
+        self._integration_type()(self._paths()).ensure_safe_config()
+        self._config('[feature_flags."boost-graph-integration"]\nuser = true\nremote = false\n')
+        status = self._status()
+
+        self.assertIn("boost-graph-integration", status.diverged_flags)
+        issues = Diagnostics(self._paths())._boost_flag_issues(status)
+        self.assertEqual(1, len(issues))
+        self.assertEqual("warning", issues[0].level)
+        self.assertIn("boost-graph-integration", issues[0].message)
+        self.assertIn("agentbot boost setup", issues[0].message)
+
+    def test_an_unpinned_flag_counts_as_diverged(self) -> None:
+        # Unpinned means the effective value is a remote default JFrog can
+        # change without warning, which is the drift the policy exists to stop.
+        self._config('[feature_flags."boost-cli-filtering"]\nremote = true\n')
+        self.assertEqual(
+            ("boost-agent-facing-redaction", "boost-english-abbreviation",
+             "boost-graph-integration", "boost-mcp-toon-format"),
+            self._status().diverged_flags,
+        )
+
+
+class BoostRepositoryGraphIndexTests(BoostIntegrationTests):
+    """A repository `.boost/` index is a forbidden write the plan names but nothing checked."""
+
+    def _workspace(self) -> Path:
+        from src.workspace_state import WorkspaceRecord, WorkspaceStore
+
+        path = self.root / "work"
+        path.mkdir(parents=True, exist_ok=True)
+        state_file = self._paths().workspace_state_file
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        WorkspaceStore(state_file).upsert(
+            WorkspaceRecord(
+                path=str(path.resolve()),
+                kind="directory",
+                policy_mode="managed",
+                profile="default",
+                targets=("agents",),
+                enabled=True,
+                last_commit=None,
+                last_rendered_at=None,
+            )
+        )
+        return path
+
+    def test_a_repository_graph_index_is_forbidden(self) -> None:
+        workspace = self._workspace()
+        index = workspace / ".boost"
+        index.mkdir()
+        (index / "graph.db").write_text("index", encoding="utf-8")
+        integration = self._integration_type()(self._paths())
+        self.assertTrue(integration._forbidden_graph_evidence())
+
+    def test_a_repository_config_alone_is_not_a_graph_index(self) -> None:
+        workspace = self._workspace()
+        index = workspace / ".boost"
+        index.mkdir()
+        (index / "config.toml").write_text("[tracing]\nupload = false\n", encoding="utf-8")
+        (index / "config.toml.lock").write_text("", encoding="utf-8")
+        integration = self._integration_type()(self._paths())
+        self.assertFalse(integration._forbidden_graph_evidence())

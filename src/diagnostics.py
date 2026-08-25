@@ -115,6 +115,8 @@ class Diagnostics:
             issues.append(
                 DoctorIssue(level, "boost", self._boost_doctor_message(facts.boost_status))
             )
+        if facts.boost_status.cli_path is not None:
+            issues.extend(self._boost_flag_issues(facts.boost_status))
 
         for name in managed_names:
             source = self.paths.agents_skills_home / name
@@ -252,6 +254,37 @@ class Diagnostics:
             target_text = ", ".join(targets) or "an assistant"
             return f"{status.message} Preserved conflicting {target_text} target(s)."
         return status.message
+
+    @staticmethod
+    def _boost_flag_issues(status: BoostStatus) -> list[DoctorIssue]:
+        """Report Boost feature flags that no longer match the declared policy.
+
+        Setup writes the whole declared set, so divergence means something
+        changed it afterwards -- almost always a toggle in Boost's report UI,
+        which writes straight to config.toml. Reporting it rather than silently
+        rewriting on read keeps the fix an explicit command.
+        """
+        from .boost import BOOST_FEATURE_POLICY, GRAPH_FEATURE_FLAG
+
+        if not status.diverged_flags:
+            return []
+        detail = ", ".join(
+            f"{flag} should be {'on' if BOOST_FEATURE_POLICY[flag] else 'off'}"
+            for flag in status.diverged_flags
+        )
+        message = (
+            f"Boost feature flags diverge from the declared policy ({detail}). "
+            "Run `agentbot boost setup` to reapply it."
+        )
+        if GRAPH_FEATURE_FLAG in status.diverged_flags:
+            message += (
+                f" {GRAPH_FEATURE_FLAG} matters most: Agentbot passes "
+                "--no-boostgraph on every call, so BoostGraph never installs "
+                "while the flag claims otherwise. Adopting it would need "
+                "renderer support first, since it writes marker blocks into "
+                "managed CLAUDE.md/AGENTS.md."
+            )
+        return [DoctorIssue(level="warning", scope="boost", message=message)]
 
     @staticmethod
     def _boost_doctor_message(status: BoostStatus) -> str:

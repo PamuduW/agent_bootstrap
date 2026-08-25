@@ -36,6 +36,8 @@ class BoostStatus:
     message: str
     shadowing_configs: tuple[Path, ...] = ()
     stale_artifacts: tuple[Path, ...] = ()
+    user_flags: tuple[tuple[str, bool], ...] = ()
+    diverged_flags: tuple[str, ...] = ()
 
 
 DEFAULT_BOOST_TIMEOUT_SECONDS = 300
@@ -50,6 +52,43 @@ _ARTIFACT_VERSION_RE = re.compile(
     re.MULTILINE,
 )
 _RELEASE_TAG_RE = re.compile(r"v?([0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*)")
+# Declared Boost feature-flag policy. Boost's report UI writes `user = <bool>`
+# under `[feature_flags."name"]`, and a user value beats JFrog's remote default,
+# so this is where the intended behaviour of both agents is pinned.
+#
+# `agentbot boost setup` writes every entry, which means a toggle made in
+# Boost's UI is reverted on the next run. That is the point -- one command puts
+# the machine in a known state -- but it does mean the UI is not the place to
+# change these. Edit this map instead.
+#
+# Leaving a flag unpinned is not neutral: its effective value falls back to a
+# remote default JFrog can change without warning.
+BOOST_FEATURE_POLICY: dict[str, bool] = {
+    # Scrubs secrets and abbreviates paths in what the agent sees, not just in
+    # the local database. Enforces the global "never expose secrets in command
+    # output" rule mechanically rather than by trusting the agent.
+    "boost-agent-facing-redaction": True,
+    # Aimed at article and paper prose. This is a code workspace: negligible
+    # gain, and it makes what the agent reads a lossy abbreviation of what the
+    # tool printed.
+    "boost-english-abbreviation": False,
+    # BoostGraph. Excluded: it writes MCP config and BOOSTGRAPH marker blocks
+    # into CLAUDE.md and AGENTS.md, which Agentbot rewrites wholesale, so the
+    # two would overwrite each other silently. Agentbot passes --no-boostgraph
+    # on every call; pinning the flag stops the two contradicting each other.
+    "boost-graph-integration": False,
+    # Re-encodes MCP JSON responses as TOON with values copied across untouched
+    # -- a lossless reformat that costs nothing when no MCP tool is called.
+    "boost-mcp-toon-format": True,
+}
+GRAPH_FEATURE_FLAG = "boost-graph-integration"
+# Scanned in the dry-run plan as defence in depth. It is NOT the BoostGraph
+# guard and cannot be: v0.12.6 omits BoostGraph from the plan even when
+# `--boostgraph` is passed explicitly, so there is no text here to match. The
+# guards that work are the `--no-boostgraph` flag every invocation passes and
+# `_forbidden_graph_evidence`, which inspects what landed on disk. Kept because
+# a later version may start disclosing it, and because it still catches a
+# disclosed repository `.boost/` write.
 _FORBIDDEN_PLAN_RE = re.compile(
     r"boost[ -]?graph|\bmcp\b|background (?:index|watch)|(?:^|[\s/])\.boost(?:/|$)",
     re.IGNORECASE | re.MULTILINE,
@@ -87,6 +126,13 @@ class BoostIntegration:
         graph_state = "forbidden" if self._forbidden_graph_evidence() else "absent"
         shadowing = self._shadowing_configs()
         stale = self._stale_artifacts(cli_version)
+        user_flags = self._user_feature_flags()
+        pinned = dict(user_flags)
+        diverged = tuple(
+            flag
+            for flag, value in sorted(BOOST_FEATURE_POLICY.items())
+            if pinned.get(flag) is not value
+        )
 
         if cli_path is None:
             state = "not-installed"
@@ -145,6 +191,8 @@ class BoostIntegration:
             message,
             shadowing,
             stale,
+            user_flags,
+            diverged,
         )
 
     @contextmanager
@@ -193,11 +241,22 @@ class BoostIntegration:
 
         updated = self._set_section_bool(existing, "tracing", "upload", False)
         updated = self._set_section_bool(updated, "update", "auto_update", False)
+        for flag, value in sorted(BOOST_FEATURE_POLICY.items()):
+            # The quoted subtable name is the section, so the existing writer
+            # handles these without a second TOML path. Only `user` is written;
+            # `remote` stays JFrog's to set.
+            updated = self._set_section_bool(
+                updated, f'feature_flags."{flag}"', "user", value
+            )
         parsed = tomllib.loads(updated)
         if parsed.get("tracing", {}).get("upload") is not False:
             raise ValueError("Boost tracing.upload could not be disabled")
         if parsed.get("update", {}).get("auto_update") is not False:
             raise ValueError("Boost update.auto_update could not be disabled")
+        written = parsed.get("feature_flags", {})
+        for flag, value in BOOST_FEATURE_POLICY.items():
+            if written.get(flag, {}).get("user") is not value:
+                raise ValueError(f"Boost feature flag {flag} could not be set to {value}")
         if updated == existing:
             return
 
@@ -421,6 +480,27 @@ class BoostIntegration:
         walk(hooks)
         return frozenset(names)
 
+    def _user_feature_flags(self) -> tuple[tuple[str, bool], ...]:
+        """Feature flags this machine has pinned, whatever the remote default.
+
+        Only flags carrying an explicit `user` value are returned. A remote-only
+        entry is JFrog's default rather than local drift, and reporting those
+        would bury the handful that someone actually chose.
+        """
+        try:
+            parsed = tomllib.loads(self.config_path.read_text(encoding="utf-8"))
+        except (OSError, tomllib.TOMLDecodeError):
+            return ()
+        flags = parsed.get("feature_flags")
+        if not isinstance(flags, dict):
+            return ()
+        chosen = [
+            (name, entry["user"])
+            for name, entry in sorted(flags.items())
+            if isinstance(entry, dict) and isinstance(entry.get("user"), bool)
+        ]
+        return tuple(chosen)
+
     def _stale_artifacts(self, cli_version: str | None) -> tuple[Path, ...]:
         """Hook and awareness files left behind by a Boost binary upgrade.
 
@@ -525,7 +605,35 @@ class BoostIntegration:
                 continue
             if re.search(r"boost[ -]?graph|boostgraph_explore", content, re.IGNORECASE):
                 return True
-        return False
+        return any(self._repository_graph_indexes())
+
+    def _repository_graph_indexes(self) -> tuple[Path, ...]:
+        """Registered workspaces carrying a BoostGraph index.
+
+        `boostgraph init` builds its index into a repository `.boost/`, which
+        the plan forbids outright. A `.boost/` holding nothing but a config file
+        is a different problem -- see `_shadowing_configs` -- so only other
+        content counts as graph evidence.
+        """
+        from .workspace_state import WorkspaceStore
+
+        try:
+            records = WorkspaceStore(self.paths.workspace_state_file).load()
+        except (OSError, ValueError):
+            return ()
+        config_names = {"config.toml", "config.toml.lock"}
+        indexes: list[Path] = []
+        for record in records:
+            candidate = Path(record.path) / ".boost"
+            if not candidate.is_dir():
+                continue
+            try:
+                entries = {entry.name for entry in candidate.iterdir()}
+            except OSError:
+                continue
+            if entries - config_names:
+                indexes.append(candidate)
+        return tuple(indexes)
 
     @staticmethod
     def _set_section_bool(content: str, section: str, key: str, value: bool) -> str:

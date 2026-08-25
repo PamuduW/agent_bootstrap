@@ -266,6 +266,18 @@ def print_boost_status(status) -> None:
         ("Claude", status.claude_state, "ok" if status.claude_state == "ready" else "check"),
         ("Codex", status.codex_state, "ok" if status.codex_state == "ready" else "check"),
     ]
+    if status.user_flags:
+        rows.append(
+            (
+                "Feature flags",
+                ", ".join(
+                    f"{name}={'on' if value else 'off'}" for name, value in status.user_flags
+                ),
+                "ok" if not status.diverged_flags else "check",
+            )
+        )
+    if status.diverged_flags:
+        rows.append(("Flags off policy", ", ".join(status.diverged_flags), "check"))
     if status.stale_artifacts:
         rows.append(
             (

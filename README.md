@@ -130,6 +130,30 @@ and does not merge them, so a repository config silently drops the global
 workspaces and names any that leave upload enabled; `boost setup` cannot fix
 those, because it writes the global file that is being shadowed.
 
+Boost feature flags are a declared set, not a free-for-all. Boost's report UI
+writes `user = <bool>` under `[feature_flags]`, and a user value beats JFrog's
+remote default, so these change how both agents behave. `BOOST_FEATURE_POLICY`
+in `src/boost.py` declares the intended value for each, and `agentbot boost
+setup` writes the whole set:
+
+| Flag | Policy | Why |
+| --- | --- | --- |
+| `boost-agent-facing-redaction` | on | Scrubs secrets and abbreviates paths in what the agent sees, not just in the local database |
+| `boost-mcp-toon-format` | on | Lossless JSON→TOON reformat of MCP responses; costs nothing when no MCP tool is called |
+| `boost-english-abbreviation` | off | Aimed at article prose; in a code workspace it only makes tool output lossy |
+| `boost-graph-integration` | off | BoostGraph writes MCP config and marker blocks into managed `CLAUDE.md`/`AGENTS.md` |
+
+Two consequences worth knowing. **A toggle made in Boost's UI is reverted on the
+next setup** — that is the intended behaviour, since one command should put the
+machine in a known state, but it means the UI is not where these get changed.
+Edit the policy map instead. And **leaving a flag unpinned is not neutral**: its
+effective value falls back to a remote default JFrog can change without warning,
+so an unpinned flag counts as diverged.
+
+The `Feature flags` row lists what is pinned; `Flags off policy` appears with a
+Doctor warning when something has changed them since setup. Flags outside the
+declared set are left alone entirely.
+
 A `stale` row means the hook and awareness files predate the installed CLI.
 Boost stamps each one with the release that wrote it, and upgrading the binary
 does not rewrite them — Dotfiles owns the binary, Agentbot owns the

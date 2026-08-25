@@ -35,12 +35,21 @@ class BoostStatus:
     graph_state: str
     message: str
     shadowing_configs: tuple[Path, ...] = ()
+    stale_artifacts: tuple[Path, ...] = ()
 
 
 DEFAULT_BOOST_TIMEOUT_SECONDS = 300
 BOOST_TIMEOUT_ENV = "AGENTBOT_BOOST_TIMEOUT_SECONDS"
 CONFIG_LOCK_TIMEOUT_SECONDS = 5.0
 _CONFIG_LOCK_POLL_SECONDS = 0.05
+# Boost stamps the release that wrote each hook and awareness file into a
+# comment. Upstream owns the marker, so an unstamped file is treated as
+# unknown rather than stale.
+_ARTIFACT_VERSION_RE = re.compile(
+    r"^#\s*boost-(?:hook|skill)-version:\s*(v?[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*)\s*$",
+    re.MULTILINE,
+)
+_RELEASE_TAG_RE = re.compile(r"v?([0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*)")
 _FORBIDDEN_PLAN_RE = re.compile(
     r"boost[ -]?graph|\bmcp\b|background (?:index|watch)|(?:^|[\s/])\.boost(?:/|$)",
     re.IGNORECASE | re.MULTILINE,
@@ -77,6 +86,7 @@ class BoostIntegration:
         codex_state = self._codex_state()
         graph_state = "forbidden" if self._forbidden_graph_evidence() else "absent"
         shadowing = self._shadowing_configs()
+        stale = self._stale_artifacts(cli_version)
 
         if cli_path is None:
             state = "not-installed"
@@ -111,6 +121,13 @@ class BoostIntegration:
         elif claude_state != "ready" or codex_state != "ready":
             state = "partial"
             message = "Boost integration is incomplete for Claude or Codex."
+        elif stale:
+            state = "stale"
+            message = (
+                f"Boost hook and awareness files predate the installed CLI "
+                f"({cli_version}). Upgrading the binary does not rewrite them: "
+                f"{', '.join(str(path) for path in stale)}"
+            )
         else:
             state = "ready"
             message = "Boost shell-output integration is ready for Claude and Codex."
@@ -127,6 +144,7 @@ class BoostIntegration:
             graph_state,
             message,
             shadowing,
+            stale,
         )
 
     @contextmanager
@@ -402,6 +420,66 @@ class BoostIntegration:
 
         walk(hooks)
         return frozenset(names)
+
+    def _stale_artifacts(self, cli_version: str | None) -> tuple[Path, ...]:
+        """Hook and awareness files left behind by a Boost binary upgrade.
+
+        Dotfiles owns the binary and Agentbot owns the integration, and neither
+        triggers the other. `dotfiles full-update` closes the gap in passing --
+        it runs `agentbot install` after the upgrade, and setup re-runs `boost
+        init`, which rewrites these files -- but `dotfiles update` alone does
+        not, and neither does a setup that silently skipped. Nothing else
+        catches it: every file is present and registered, just stale.
+
+        Files carrying no version marker are ignored. Upstream owns that
+        comment and may drop it in any of its every-day-or-two releases, and a
+        standing false `stale` row would train the check to be ignored.
+        """
+        expected = self._release_tag(cli_version)
+        if expected is None:
+            return ()
+        stale: list[Path] = []
+        for path in self._installed_artifacts():
+            try:
+                content = path.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            found = {self._release_tag(value) for value in _ARTIFACT_VERSION_RE.findall(content)}
+            if found and expected not in found:
+                stale.append(path)
+        return tuple(stale)
+
+    def _installed_artifacts(self) -> tuple[Path, ...]:
+        """Every hook script a host registers, plus its awareness file."""
+        artifacts: list[Path] = []
+        for config, hook_dir, awareness in (
+            (
+                self.paths.claude_home / "settings.json",
+                self.paths.claude_home / "hooks",
+                self.paths.claude_home / "rules" / "boost-awareness.md",
+            ),
+            (
+                self.paths.codex_home / "hooks.json",
+                self.paths.codex_home / "hooks",
+                self.paths.codex_home / "BOOST.md",
+            ),
+        ):
+            artifacts.extend(
+                hook_dir / name
+                for name in sorted(self._registered_hook_names(config))
+                if (hook_dir / name).is_file()
+            )
+            if awareness.is_file():
+                artifacts.append(awareness)
+        return tuple(artifacts)
+
+    @staticmethod
+    def _release_tag(value: str | None) -> str | None:
+        """Normalize `boost v0.12.6` or `0.12.6` to a comparable `v0.12.6`."""
+        if not value:
+            return None
+        match = _RELEASE_TAG_RE.search(value)
+        return f"v{match.group(1)}" if match else None
 
     def _shadowing_configs(self) -> tuple[Path, ...]:
         """Repository configs that replace the safe global one.

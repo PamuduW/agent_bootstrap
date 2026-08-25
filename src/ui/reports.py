@@ -266,6 +266,14 @@ def print_boost_status(status) -> None:
         ("Claude", status.claude_state, "ok" if status.claude_state == "ready" else "check"),
         ("Codex", status.codex_state, "ok" if status.codex_state == "ready" else "check"),
     ]
+    if status.stale_artifacts:
+        rows.append(
+            (
+                "Artifact version",
+                f"{len(status.stale_artifacts)} file(s) predate {status.cli_version or 'the CLI'}",
+                "check",
+            )
+        )
     if status.shadowing_configs:
         rows.append(
             (

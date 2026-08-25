@@ -130,6 +130,15 @@ and does not merge them, so a repository config silently drops the global
 workspaces and names any that leave upload enabled; `boost setup` cannot fix
 those, because it writes the global file that is being shadowed.
 
+A `stale` row means the hook and awareness files predate the installed CLI.
+Boost stamps each one with the release that wrote it, and upgrading the binary
+does not rewrite them — Dotfiles owns the binary, Agentbot owns the
+integration, and neither triggers the other. `dotfiles full-update` closes this
+in passing, since it runs `agentbot install` after the upgrade and setup
+re-runs `boost init`; a bare `dotfiles update` does not. `agentbot boost setup`
+rewrites them. Files carrying no version marker are left alone, since upstream
+owns that comment.
+
 `agentbot boost off` removes one host per call and never passes `--dry-run`
 alongside `--uninstall`. In Boost v0.12.6 that combination is not a preview: it
 performs the removal and prints the plan as though it had not.

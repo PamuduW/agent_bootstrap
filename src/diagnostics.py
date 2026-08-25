@@ -263,6 +263,11 @@ class Diagnostics:
                 # that is winning here. Pointing at it would be a dead end.
                 return f"{status.message} Remove or correct each repository config."
             return f"{status.message} Run `agentbot boost setup` to restore safe flags."
+        if status.state == "stale":
+            # `dotfiles full-update` already does this by running agentbot
+            # install after the upgrade; name the command for the paths that
+            # do not, such as a bare `dotfiles update`.
+            return f"{status.message} Run `agentbot boost setup` to rewrite them."
         if status.state == "forbidden":
             return f"{status.message} Run `agentbot boost off` and inspect the reported files."
         return status.message

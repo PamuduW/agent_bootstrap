@@ -646,3 +646,93 @@ class BoostShadowingConfigTests(BoostIntegrationTests):
         integration = self._ready_integration()
         self._register_workspace(self.root / "work")
         self.assertEqual((), integration.status().shadowing_configs)
+
+
+class BoostArtifactVersionTests(BoostIntegrationTests):
+    """Hook and awareness files carry the version of the release that wrote them.
+
+    Dotfiles owns the binary and Agentbot owns the integration, so upgrading
+    Boost refreshes neither. `dotfiles full-update` happens to close this by
+    running `agentbot install` afterwards, which re-runs `boost init`;
+    `dotfiles update` alone does not, and a silently skipped setup would not
+    either. The gap is invisible without a check, because every file is
+    present and registered -- just stale.
+    """
+
+    def _install(self, *, marker: str | None, version: str = "v0.12.6") -> None:
+        (self.claude / "hooks").mkdir(parents=True, exist_ok=True)
+        stamp = f"# boost-hook-version: {marker}\n" if marker else ""
+        (self.claude / "hooks/boost-hook-claude.sh").write_text(
+            f"#!/bin/sh\n{stamp}", encoding="utf-8"
+        )
+        (self.claude / "rules").mkdir(parents=True, exist_ok=True)
+        (self.claude / "rules/boost-awareness.md").write_text(
+            f"# boost-skill-version: {marker}\n" if marker else "# boost\n",
+            encoding="utf-8",
+        )
+        (self.claude / "settings.json").write_text(_BOOST_CLAUDE_SETTINGS, encoding="utf-8")
+        (self.codex / "hooks").mkdir(parents=True, exist_ok=True)
+        for name in ("boost-hook-codex.sh", "boost-sync.sh"):
+            (self.codex / "hooks" / name).write_text(f"#!/bin/sh\n{stamp}", encoding="utf-8")
+        (self.codex / "hooks.json").write_text(_BOOST_CODEX_HOOKS, encoding="utf-8")
+        (self.codex / "BOOST.md").write_text(
+            f"# boost-skill-version: {marker}\n" if marker else "# Boost\n",
+            encoding="utf-8",
+        )
+
+    def _status(self, version: str = "boost v0.12.6"):
+        from src.command_runner import CommandResult
+
+        boost = self.root / "boost"
+        boost.write_text("binary", encoding="utf-8")
+        runner = mock.Mock()
+        runner.run.return_value = CommandResult(0, stdout=f"{version}\n")
+        integration = self._integration_type()(self._paths(), runner=runner)
+        integration.ensure_safe_config()
+        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+            return integration.status()
+
+    def test_artifacts_from_an_older_release_are_stale(self) -> None:
+        self._install(marker="v0.12.5")
+        status = self._status("boost v0.12.6")
+        self.assertEqual("stale", status.state)
+        self.assertTrue(status.stale_artifacts)
+        self.assertIn("v0.12.6", status.message)
+        # Every stamped surface is named, not just the first one found.
+        names = {path.name for path in status.stale_artifacts}
+        self.assertIn("boost-hook-claude.sh", names)
+        self.assertIn("boost-hook-codex.sh", names)
+        self.assertIn("boost-awareness.md", names)
+
+    def test_artifacts_matching_the_cli_are_ready(self) -> None:
+        self._install(marker="v0.12.6")
+        status = self._status("boost v0.12.6")
+        self.assertEqual("ready", status.state)
+        self.assertEqual((), status.stale_artifacts)
+
+    def test_unstamped_artifacts_are_not_reported_stale(self) -> None:
+        # Upstream owns that comment and may drop it. A daily false "stale"
+        # would train the row to be ignored, which is worse than not checking.
+        self._install(marker=None)
+        status = self._status("boost v0.12.6")
+        self.assertEqual("ready", status.state)
+        self.assertEqual((), status.stale_artifacts)
+
+    def test_an_unreadable_cli_version_disables_the_check(self) -> None:
+        from src.command_runner import CommandResult
+
+        self._install(marker="v0.12.5")
+        boost = self.root / "boost"
+        boost.write_text("binary", encoding="utf-8")
+        runner = mock.Mock()
+        runner.run.return_value = CommandResult(1, stderr="boom")
+        integration = self._integration_type()(self._paths(), runner=runner)
+        integration.ensure_safe_config()
+        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+            status = integration.status()
+        self.assertEqual((), status.stale_artifacts)
+
+    def test_a_forbidden_graph_write_outranks_staleness(self) -> None:
+        self._install(marker="v0.12.5")
+        (self.codex / "hooks.json").write_text('{"server":"boostgraph"}\n', encoding="utf-8")
+        self.assertEqual("forbidden", self._status().state)

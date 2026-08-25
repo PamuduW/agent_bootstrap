@@ -25,6 +25,35 @@ _BOOST_CLAUDE_SETTINGS = json.dumps(
 )
 
 
+_BOOST_CODEX_HOOKS = json.dumps(
+    {
+        "hooks": {
+            "PreToolUse": [
+                {
+                    "matcher": "Bash",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "~/.codex/hooks/boost-hook-codex.sh",
+                        }
+                    ],
+                }
+            ],
+            "Stop": [
+                {
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "~/.codex/hooks/boost-sync.sh",
+                        }
+                    ]
+                }
+            ],
+        }
+    }
+)
+
+
 class BoostIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -115,9 +144,7 @@ class BoostIntegrationTests(unittest.TestCase):
                 (paths.codex_home / "hooks/boost-hook-codex.sh").write_text("hook\n")
                 (paths.codex_home / "hooks/boost-sync.sh").write_text("hook\n")
                 (paths.codex_home / "BOOST.md").write_text("# Boost\n")
-                (paths.codex_home / "hooks.json").write_text(
-                    json.dumps({"hooks": {"PreToolUse": ["boost-hook-codex.sh"]}})
-                )
+                (paths.codex_home / "hooks.json").write_text(_BOOST_CODEX_HOOKS)
                 return CommandResult(0)
 
         runner = Runner()
@@ -158,10 +185,14 @@ class BoostIntegrationTests(unittest.TestCase):
         self.assertIn("forbidden", status.message.lower())
         runner.run_interactive.assert_not_called()
 
-    def test_off_uninstalls_one_target_per_call(self) -> None:
+    def test_off_uninstalls_one_target_per_call_and_never_previews(self) -> None:
         # `boost init --uninstall` rejects more than one target ("specify only
         # one target to uninstall"), unlike setup which accepts several. The
         # first version of this passed both at once and never worked.
+        #
+        # It must also never pass --dry-run: v0.12.6 honours that flag for
+        # install but performs the removal anyway for uninstall, so a "preview"
+        # call would tear the integration down before the real one ran.
         from src.command_runner import CommandResult
 
         BoostIntegration = self._integration_type()
@@ -196,43 +227,32 @@ class BoostIntegrationTests(unittest.TestCase):
                 sum(argv.count(flag) for flag in ("--claude", "--codex", "--cursor")),
             )
 
-        uninstall_dry_runs = [
+        previews = [
             call.args[0]
-            for call in runner.run.call_args_list
-            if "--dry-run" in call.args[0]
+            for call in runner.run.call_args_list + runner.run_interactive.call_args_list
+            if "--dry-run" in call.args[0] and "--uninstall" in call.args[0]
         ]
-        self.assertEqual(
-            [
-                [str(boost), "init", "--dry-run", "--uninstall", "--no-boostgraph", "--claude"],
-                [str(boost), "init", "--dry-run", "--uninstall", "--no-boostgraph", "--codex"],
-            ],
-            uninstall_dry_runs,
-        )
+        self.assertEqual([], previews)
 
-    def test_off_stops_at_the_first_target_whose_dry_run_fails(self) -> None:
+    def test_off_stops_at_the_first_target_that_fails(self) -> None:
         from src.command_runner import CommandResult
 
         BoostIntegration = self._integration_type()
         boost = self.root / "boost"
         boost.write_text("binary", encoding="utf-8")
         runner = mock.Mock()
-
-        def run(argv, **_kwargs):
-            if argv[-1] == "version":
-                return CommandResult(0, stdout="boost v0.12.6\n")
-            if "--dry-run" in argv:
-                return CommandResult(1, stderr="specify only one target to uninstall")
-            return CommandResult(0)
-
-        runner.run.side_effect = run
-        runner.run_interactive.return_value = CommandResult(0)
+        runner.run.return_value = CommandResult(0, stdout="boost v0.12.6\n")
+        runner.run_interactive.return_value = CommandResult(
+            1, stderr="specify only one target to uninstall"
+        )
 
         with mock.patch("src.boost.shutil.which", return_value=str(boost)):
             status = BoostIntegration(self._paths(), runner=runner).off()
 
         self.assertEqual("broken", status.state)
         self.assertIn("--claude", status.message)
-        runner.run_interactive.assert_not_called()
+        # Codex is never attempted once Claude fails.
+        self.assertEqual(1, runner.run_interactive.call_count)
 
     def test_setup_rejects_a_plan_missing_a_requested_target(self) -> None:
         from src.command_runner import CommandResult
@@ -279,6 +299,11 @@ class BoostIntegrationTests(unittest.TestCase):
                 (self.codex / "hooks" / name).write_text("hook\n")
             (self.codex / "hooks.json").write_text("{}\n")
             (self.codex / "BOOST.md").write_text("# Boost\n")
+            # An empty hooks.json is a file, but Codex is not running anything
+            # through it. File existence alone must not read as "ready".
+            self.assertEqual("partial", integration.status().state)
+            self.assertEqual("unregistered", integration._codex_state())
+            (self.codex / "hooks.json").write_text(_BOOST_CODEX_HOOKS)
             self.assertEqual("ready", integration.status().state)
             (self.codex / "hooks.json").write_text('{"server":"boostgraph"}\n')
             self.assertEqual("forbidden", integration.status().state)
@@ -433,13 +458,13 @@ class BoostOffCwdTests(BoostIntegrationTests):
             BoostIntegration(self._paths(), runner=runner).off()
 
         home = self.codex.parent
-        uninstall_dry_runs = [
-            call for call in runner.run.call_args_list if "--uninstall" in call.args[0]
+        uninstalls = [
+            call
+            for call in runner.run_interactive.call_args_list
+            if "--uninstall" in call.args[0]
         ]
-        self.assertTrue(uninstall_dry_runs)
-        for call in uninstall_dry_runs:
-            self.assertEqual(home, call.kwargs.get("cwd"))
-        for call in runner.run_interactive.call_args_list:
+        self.assertEqual(2, len(uninstalls))
+        for call in uninstalls:
             self.assertEqual(home, call.kwargs.get("cwd"))
 
     def test_setup_is_not_pinned_to_home(self) -> None:
@@ -464,3 +489,160 @@ class BoostOffCwdTests(BoostIntegrationTests):
 
         for call in runner.run_interactive.call_args_list:
             self.assertIsNone(call.kwargs.get("cwd"))
+
+
+class BoostCodexRegistrationTests(BoostIntegrationTests):
+    """Codex must earn "ready" the same way Claude does.
+
+    `_codex_state` used to return "ready" as soon as hooks.json existed, while
+    a comment in `_claude_state` claimed it already checked registration. It
+    did not, so an inert Codex install reported ready.
+    """
+
+    def _install_codex_files(self) -> None:
+        (self.codex / "hooks").mkdir(parents=True, exist_ok=True)
+        for name in ("boost-hook-codex.sh", "boost-sync.sh"):
+            (self.codex / "hooks" / name).write_text("hook\n", encoding="utf-8")
+        (self.codex / "BOOST.md").write_text("# Boost\n", encoding="utf-8")
+
+    def test_hooks_json_without_a_boost_entry_is_unregistered(self) -> None:
+        integration = self._integration_type()(self._paths())
+        self._install_codex_files()
+        (self.codex / "hooks.json").write_text(
+            json.dumps({"hooks": {"PreToolUse": [{"hooks": [{"command": "other.sh"}]}]}}),
+            encoding="utf-8",
+        )
+        self.assertEqual("unregistered", integration._codex_state())
+
+    def test_registered_codex_hooks_read_ready(self) -> None:
+        integration = self._integration_type()(self._paths())
+        self._install_codex_files()
+        (self.codex / "hooks.json").write_text(_BOOST_CODEX_HOOKS, encoding="utf-8")
+        self.assertEqual("ready", integration._codex_state())
+
+    def test_absent_codex_integration_is_missing(self) -> None:
+        integration = self._integration_type()(self._paths())
+        self.assertEqual("missing", integration._codex_state())
+
+
+class BoostRegisteredHookFileTests(BoostIntegrationTests):
+    """A half-removed install must not read "ready".
+
+    Boost installs more hook scripts than the two files the state check used to
+    require, and registers all of them. Whatever is registered has to be on
+    disk, so the check follows the registration rather than a hardcoded list
+    that upstream can change under it.
+    """
+
+    def _install_claude(self, *, hook_names: tuple[str, ...]) -> None:
+        (self.claude / "hooks").mkdir(parents=True, exist_ok=True)
+        for name in hook_names:
+            (self.claude / "hooks" / name).write_text("hook\n", encoding="utf-8")
+        (self.claude / "rules").mkdir(parents=True, exist_ok=True)
+        (self.claude / "rules/boost-awareness.md").write_text("rule\n", encoding="utf-8")
+        (self.claude / "settings.json").write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        "PreToolUse": [
+                            {
+                                "hooks": [
+                                    {
+                                        "type": "command",
+                                        "command": "~/.claude/hooks/boost-hook-claude.sh",
+                                    }
+                                ]
+                            }
+                        ],
+                        "Stop": [
+                            {
+                                "hooks": [
+                                    {
+                                        "type": "command",
+                                        "command": "~/.claude/hooks/boost-sync.sh",
+                                    }
+                                ]
+                            }
+                        ],
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def test_a_registered_hook_missing_from_disk_is_partial(self) -> None:
+        integration = self._integration_type()(self._paths())
+        self._install_claude(hook_names=("boost-hook-claude.sh",))
+        self.assertEqual("partial", integration._claude_state())
+
+    def test_every_registered_hook_present_is_ready(self) -> None:
+        integration = self._integration_type()(self._paths())
+        self._install_claude(hook_names=("boost-hook-claude.sh", "boost-sync.sh"))
+        self.assertEqual("ready", integration._claude_state())
+
+    def test_a_missing_awareness_file_is_partial(self) -> None:
+        integration = self._integration_type()(self._paths())
+        self._install_claude(hook_names=("boost-hook-claude.sh", "boost-sync.sh"))
+        (self.claude / "rules/boost-awareness.md").unlink()
+        self.assertEqual("partial", integration._claude_state())
+
+
+class BoostShadowingConfigTests(BoostIntegrationTests):
+    """Boost reads the FIRST config it finds, and does not merge.
+
+    A repository `.boost/config.toml` replaces `~/.boost/config.toml` outright,
+    so the global `tracing.upload = false` stops applying there while Doctor
+    still reads the global file and reports it disabled.
+    """
+
+    def _register_workspace(self, path: Path) -> None:
+        from src.workspace_state import WorkspaceRecord, WorkspaceStore
+
+        path.mkdir(parents=True, exist_ok=True)
+        state_file = self._paths().workspace_state_file
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        WorkspaceStore(state_file).upsert(
+            WorkspaceRecord(
+                path=str(path.resolve()),
+                kind="directory",
+                policy_mode="managed",
+                profile="default",
+                targets=("agents",),
+                enabled=True,
+                last_commit=None,
+                last_rendered_at=None,
+            )
+        )
+
+    def _ready_integration(self):
+        integration = self._integration_type()(self._paths())
+        integration.ensure_safe_config()
+        return integration
+
+    def test_a_repository_config_that_leaves_upload_on_is_unsafe(self) -> None:
+        integration = self._ready_integration()
+        workspace = self.root / "work"
+        self._register_workspace(workspace)
+        shadow = workspace / ".boost/config.toml"
+        shadow.parent.mkdir(parents=True)
+        shadow.write_text("[tracing]\nupload = true\n", encoding="utf-8")
+
+        status = integration.status()
+        self.assertEqual((shadow,), status.shadowing_configs)
+        self.assertEqual("unsafe-config", status.state)
+        self.assertIn(str(shadow), status.message)
+
+    def test_a_repository_config_that_disables_upload_is_accepted(self) -> None:
+        integration = self._ready_integration()
+        workspace = self.root / "work"
+        self._register_workspace(workspace)
+        shadow = workspace / ".boost/config.toml"
+        shadow.parent.mkdir(parents=True)
+        shadow.write_text("[tracing]\nupload = false\n", encoding="utf-8")
+
+        self.assertEqual((), integration.status().shadowing_configs)
+
+    def test_no_repository_config_reports_nothing(self) -> None:
+        integration = self._ready_integration()
+        self._register_workspace(self.root / "work")
+        self.assertEqual((), integration.status().shadowing_configs)

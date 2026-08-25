@@ -258,6 +258,10 @@ class Diagnostics:
         if status.state in {"cli-only", "partial"}:
             return f"{status.message} Run `agentbot boost setup`."
         if status.state == "unsafe-config":
+            if status.shadowing_configs:
+                # `boost setup` writes the global config, which is not the file
+                # that is winning here. Pointing at it would be a dead end.
+                return f"{status.message} Remove or correct each repository config."
             return f"{status.message} Run `agentbot boost setup` to restore safe flags."
         if status.state == "forbidden":
             return f"{status.message} Run `agentbot boost off` and inspect the reported files."

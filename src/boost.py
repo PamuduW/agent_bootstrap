@@ -11,7 +11,7 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 try:
     import tomllib  # type: ignore[import-not-found]
@@ -34,6 +34,7 @@ class BoostStatus:
     codex_state: str
     graph_state: str
     message: str
+    shadowing_configs: tuple[Path, ...] = ()
 
 
 DEFAULT_BOOST_TIMEOUT_SECONDS = 300
@@ -75,6 +76,7 @@ class BoostIntegration:
         claude_state = self._claude_state()
         codex_state = self._codex_state()
         graph_state = "forbidden" if self._forbidden_graph_evidence() else "absent"
+        shadowing = self._shadowing_configs()
 
         if cli_path is None:
             state = "not-installed"
@@ -85,14 +87,26 @@ class BoostIntegration:
         elif not upload_disabled or not auto_update_disabled:
             state = "unsafe-config"
             message = "Boost privacy or update pinning is not safely configured."
+        elif shadowing:
+            state = "unsafe-config"
+            message = (
+                "Boost reads the first config it finds and does not merge, so these "
+                "repository configs replace the safe global one and leave tracing "
+                f"upload enabled inside them: {', '.join(str(path) for path in shadowing)}"
+            )
         elif claude_state == "missing" and codex_state == "missing":
             state = "cli-only"
             message = "Boost CLI is installed; Claude and Codex are not integrated."
-        elif claude_state == "unregistered":
+        elif "unregistered" in (claude_state, codex_state):
+            hosts = " and ".join(
+                name
+                for name, host_state in (("Claude", claude_state), ("Codex", codex_state))
+                if host_state == "unregistered"
+            )
             state = "partial"
             message = (
-                "Boost hook files are installed for Claude but not registered in "
-                "settings.json, so nothing is filtered. Rerun 'agentbot boost setup'."
+                f"Boost hook files are installed for {hosts} but no hook is registered, "
+                "so nothing is filtered. Rerun 'agentbot boost setup'."
             )
         elif claude_state != "ready" or codex_state != "ready":
             state = "partial"
@@ -112,6 +126,7 @@ class BoostIntegration:
             codex_state,
             graph_state,
             message,
+            shadowing,
         )
 
     @contextmanager
@@ -250,38 +265,31 @@ class BoostIntegration:
             return current
         # Asymmetric with setup: `init` accepts several targets at once, but
         # `init --uninstall` rejects more than one ("specify only one target to
-        # uninstall"). Remove them one at a time, each behind its own dry run.
+        # uninstall"). Remove them one at a time.
         #
-        # Boost v0.12.6 resolves `--uninstall --claude` paths relative to the
-        # working directory even though install is always global, so running it
-        # from a repository deletes `<repo>/.claude/...` and leaves the real
+        # There is deliberately no dry run here, unlike setup. In v0.12.6
+        # `--dry-run` is honoured for install but NOT for uninstall: running
+        # `init --dry-run --uninstall --claude` deletes the hooks, empties the
+        # `hooks` object in settings.json, and prints the plan as though it had
+        # changed nothing. A gate that performs the removal it claims to
+        # preview is worse than no gate, and the real invocation returns the
+        # same exit code the gate was reading. Recheck on each version bump.
+        #
+        # Boost v0.12.6 also resolves `--uninstall --claude` paths relative to
+        # the working directory even though install is always global, so running
+        # it from a repository deletes `<repo>/.claude/...` and leaves the real
         # `~/.claude` integration in place. `--codex` is unaffected. Pin cwd to
         # the home directory so the rollback hits what setup actually wrote.
         home = self.paths.codex_home.parent
         for target in ("--claude", "--codex"):
-            base = [
-                str(current.cli_path),
-                "init",
-                "--uninstall",
-                "--no-boostgraph",
-                target,
-            ]
-            dry_run = self._runner.run(
-                [*base[:2], "--dry-run", *base[2:]],
-                timeout_seconds=self._timeout_seconds(),
-                cwd=home,
-            )
-            if dry_run.returncode != 0:
-                return replace(
-                    self.status(),
-                    state="broken",
-                    message=(
-                        f"Boost integration removal dry run failed for {target}: "
-                        f"{dry_run.detail()}"
-                    ),
-                )
             result = self._runner.run_interactive(
-                base,
+                [
+                    str(current.cli_path),
+                    "init",
+                    "--uninstall",
+                    "--no-boostgraph",
+                    target,
+                ],
                 timeout_seconds=self._timeout_seconds(),
                 cwd=home,
             )
@@ -325,40 +333,105 @@ class BoostIntegration:
         )
 
     def _claude_state(self) -> str:
-        required = (
-            self.paths.claude_home / "hooks" / "boost-hook-claude.sh",
-            self.paths.claude_home / "rules" / "boost-awareness.md",
+        return self._integration_state(
+            config=self.paths.claude_home / "settings.json",
+            hook_dir=self.paths.claude_home / "hooks",
+            awareness=self.paths.claude_home / "rules" / "boost-awareness.md",
         )
-        if not all(path.is_file() for path in required):
-            return "missing"
-        # The hook scripts existing is not the same as Claude running them.
-        # Boost's rewrite filter only takes effect once the hook is registered
-        # under `hooks` in settings.json, so check the registration too --
-        # otherwise an inert install reports "ready". This mirrors the
-        # hooks.json check `_codex_state` already does.
-        return "ready" if self._claude_hook_registered() else "unregistered"
-
-    def _claude_hook_registered(self) -> bool:
-        try:
-            raw = (self.paths.claude_home / "settings.json").read_text(encoding="utf-8")
-            hooks = json.loads(raw).get("hooks")
-        except (OSError, json.JSONDecodeError, AttributeError):
-            return False
-        if not isinstance(hooks, dict) or not hooks:
-            return False
-        # Claude nests hooks as event -> matchers -> hooks -> command, and the
-        # shape has changed before. Scan the serialized subtree for the hook
-        # name rather than hard-coding a traversal that a schema change breaks.
-        return "boost-hook-claude" in json.dumps(hooks)
 
     def _codex_state(self) -> str:
-        required = (
-            self.paths.codex_home / "hooks" / "boost-hook-codex.sh",
-            self.paths.codex_home / "hooks" / "boost-sync.sh",
-            self.paths.codex_home / "hooks.json",
-            self.paths.codex_home / "BOOST.md",
+        return self._integration_state(
+            config=self.paths.codex_home / "hooks.json",
+            hook_dir=self.paths.codex_home / "hooks",
+            awareness=self.paths.codex_home / "BOOST.md",
         )
-        return "ready" if all(path.is_file() for path in required) else "missing"
+
+    def _integration_state(self, *, config: Path, hook_dir: Path, awareness: Path) -> str:
+        """Judge a host by what its config actually registers.
+
+        Hook files existing is not the same as the host running them: Boost's
+        rewrite filter only takes effect once a hook is registered. Going the
+        other way, whatever is registered has to be on disk, or the filter is
+        registered against nothing. Both hosts are checked the same way -- the
+        Codex half used to pass on file existence alone, so an inert install
+        reported "ready".
+
+        Registered commands are compared by file name rather than by path.
+        Boost writes absolute paths under the real home, which no test or
+        relocated home would resolve, and the name is what identifies the
+        script either way.
+        """
+        registered = self._registered_hook_names(config)
+        if not registered:
+            installed = any(hook_dir.glob("boost-*")) if hook_dir.is_dir() else False
+            return "unregistered" if installed or awareness.is_file() else "missing"
+        if not awareness.is_file():
+            return "partial"
+        if any(not (hook_dir / name).is_file() for name in registered):
+            return "partial"
+        return "ready"
+
+    @staticmethod
+    def _registered_hook_names(config: Path) -> frozenset[str]:
+        """Names of the Boost hook scripts a host config registers.
+
+        Both hosts nest hooks as event -> matchers -> hooks -> command, and the
+        shape has changed before, so walk the subtree for command strings
+        instead of hard-coding a traversal a schema change would break.
+        """
+        try:
+            hooks = json.loads(config.read_text(encoding="utf-8")).get("hooks")
+        except (OSError, json.JSONDecodeError, AttributeError):
+            return frozenset()
+        if not isinstance(hooks, dict) or not hooks:
+            return frozenset()
+        names: set[str] = set()
+
+        def walk(node: object) -> None:
+            if isinstance(node, dict):
+                for key, value in node.items():
+                    if key == "command" and isinstance(value, str):
+                        name = PurePosixPath(value.strip()).name
+                        if name.startswith("boost-"):
+                            names.add(name)
+                    else:
+                        walk(value)
+            elif isinstance(node, list):
+                for item in node:
+                    walk(item)
+
+        walk(hooks)
+        return frozenset(names)
+
+    def _shadowing_configs(self) -> tuple[Path, ...]:
+        """Repository configs that replace the safe global one.
+
+        Boost resolves `.boost/config.toml` from the working directory, then
+        the git root, then the home directory, and reads only the first match.
+        A repository config therefore drops the global `tracing.upload = false`
+        for every command run inside it. Only registered workspaces can be
+        checked -- Agentbot cannot enumerate every directory an agent might run
+        in -- and a repository config that disables upload itself is fine.
+        """
+        from .workspace_state import WorkspaceStore
+
+        try:
+            records = WorkspaceStore(self.paths.workspace_state_file).load()
+        except (OSError, ValueError):
+            return ()
+        shadowing: list[Path] = []
+        for record in records:
+            candidate = Path(record.path) / ".boost" / "config.toml"
+            if not candidate.is_file():
+                continue
+            try:
+                parsed = tomllib.loads(candidate.read_text(encoding="utf-8"))
+            except (OSError, tomllib.TOMLDecodeError):
+                shadowing.append(candidate)
+                continue
+            if parsed.get("tracing", {}).get("upload") is not False:
+                shadowing.append(candidate)
+        return tuple(shadowing)
 
     def _forbidden_graph_evidence(self) -> bool:
         candidates = (

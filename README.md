@@ -108,7 +108,7 @@ Graphify is separate from the curated `npx skills` manifest. Dotfiles owns CLI
 installation. Agentbot runs only `graphify install --platform agents` when the
 optional CLI already exists; it never builds project graphs or installs hooks.
 
-Boost follows the same ownership split: Dotfiles owns the pinned CLI binary;
+Boost follows the same ownership split: Dotfiles owns the verified CLI binary;
 Agentbot owns assistant setup and reporting. `agentbot install` skips Boost when
 the CLI is absent. When present, it disables tracing upload and Boost
 auto-update, previews Claude/Codex-only setup with BoostGraph disabled, and

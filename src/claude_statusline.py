@@ -20,7 +20,11 @@ MANAGED_MARKER = "# Managed by Agentbot."
 # Boost's work -- and `boost setup` refreshes outputs immediately after
 # `boost init`, so the revert would land in the same command. Boost has no
 # --no-status-line flag to opt out of, so detect it here instead.
-BOOST_STATUSLINE_MARKERS = ("boost-status-line-prev-command", "boost status-line")
+#
+# Match only comment markers Boost authors itself. The managed script invokes
+# `boost status-line` on purpose to render the savings segment, so anything
+# matching that invocation would flag our own file as wrapped.
+BOOST_STATUSLINE_MARKERS = ("boost-status-line-prev-command", "boost-hook-version")
 STATUSLINE_SCRIPT_NAME = "statusline-command.sh"
 STATUSLINE_SETTINGS_COMMAND = f"~/.claude/{STATUSLINE_SCRIPT_NAME}"
 _STATUSLINE_SHELL_WRAPPERS = {

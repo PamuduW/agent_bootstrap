@@ -373,3 +373,141 @@ class BoostWrappedStatuslineTests(ClaudeStatuslineTests):
             self.source.read_text(encoding="utf-8"),
             destination.read_text(encoding="utf-8"),
         )
+
+
+class BoostStatuslineSegmentTests(unittest.TestCase):
+    """The managed script calls `boost status-line` itself.
+
+    Agentbot owns this file, so it must never be wrapped by Boost's own
+    status-line component -- we render the segment instead.
+    """
+
+    SCRIPT = Path(__file__).resolve().parents[1] / "global/claude/statusline-command.sh"
+    PAYLOAD = json.dumps(
+        {
+            "workspace": {"current_dir": "/tmp"},
+            "model": {"display_name": "Opus 5"},
+            "context_window": {"used_percentage": 42},
+        }
+    )
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.stub_dir = Path(self.temp_dir.name)
+
+    def tearDown(self) -> None:
+        self.temp_dir.cleanup()
+
+    def _stub_boost(self, body: str) -> None:
+        stub = self.stub_dir / "boost"
+        stub.write_text(f"#!/bin/bash\n{body}\n", encoding="utf-8")
+        stub.chmod(0o755)
+
+    def _run(self, **env_overrides) -> str:
+        env = {
+            **os.environ,
+            "TZ": "UTC",
+            "PATH": f"{self.stub_dir}:{os.environ['PATH']}",
+            **env_overrides,
+        }
+        result = subprocess.run(
+            ["bash", str(self.SCRIPT)],
+            input=self.PAYLOAD,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        return re.sub(r"\033\[[0-9;]*m", "", result.stdout).strip()
+
+    def test_savings_are_rendered_as_a_segment(self):
+        self._stub_boost("cat >/dev/null; printf 'Boost saved 12.4k tokens\\n'")
+        self.assertIn("Boost saved 12.4k tokens", self._run())
+
+    def test_boost_colors_are_stripped_and_padding_trimmed(self):
+        self._stub_boost(
+            "cat >/dev/null; printf '\\033[32m   Boost saved 3 tokens   \\033[0m\\n'"
+        )
+        output = self._run()
+        self.assertIn("· Boost saved 3 tokens", output)
+        self.assertNotIn("   Boost", output)
+
+    def test_no_savings_means_no_segment(self):
+        # The common case: Boost prints nothing until something is filtered.
+        self._stub_boost("cat >/dev/null")
+        output = self._run()
+        self.assertIn("Context 42% used", output)
+        self.assertNotIn("Boost", output)
+
+    def test_a_failing_boost_never_breaks_the_statusline(self):
+        self._stub_boost("exit 3")
+        output = self._run()
+        self.assertIn("Opus 5", output)
+        self.assertIn("Context 42% used", output)
+        self.assertNotIn("Boost", output)
+
+    def test_the_segment_can_be_switched_off(self):
+        self._stub_boost("cat >/dev/null; printf 'Boost saved 12.4k tokens\\n'")
+        output = self._run(AGENTBOT_STATUSLINE_BOOST="0")
+        self.assertNotIn("Boost", output)
+        self.assertIn("Context 42% used", output)
+
+    def test_only_the_first_line_is_used(self):
+        self._stub_boost("cat >/dev/null; printf 'line one\\nline two\\n'")
+        output = self._run()
+        self.assertIn("line one", output)
+        self.assertNotIn("line two", output)
+
+
+class BoostDetectionPrecisionTests(ClaudeStatuslineTests):
+    """The managed script invokes `boost status-line` itself.
+
+    Detection must key on markers Boost authors, not on that invocation, or
+    Agentbot flags its own file as wrapped.
+    """
+
+    def test_the_managed_script_is_not_mistaken_for_a_boost_wrap(self):
+        from src.claude_statusline import inspect_claude_statusline
+
+        real = (
+            Path(__file__).resolve().parents[1] / "global/claude/statusline-command.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("boost status-line", real, "expected the savings segment")
+
+        self.source.write_text(real, encoding="utf-8")
+        destination = self.claude_home / "statusline-command.sh"
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(real, encoding="utf-8")
+
+        self.assertFalse(inspect_claude_statusline(self._paths()).boost_wrapped)
+
+    def test_a_stale_managed_script_is_not_mistaken_either(self):
+        from src.claude_statusline import inspect_claude_statusline
+
+        destination = self.claude_home / "statusline-command.sh"
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(
+            "#!/bin/bash\n# Managed by Agentbot. older\n"
+            '"$BOOST_CMD" status-line 2>/dev/null || true\n',
+            encoding="utf-8",
+        )
+
+        state = inspect_claude_statusline(self._paths())
+        self.assertFalse(state.boost_wrapped)
+        self.assertEqual("stale", state.status_label)
+
+    def test_boost_authored_markers_are_still_detected(self):
+        from src.claude_statusline import inspect_claude_statusline
+
+        destination = self.claude_home / "statusline-command.sh"
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        for marker in ("# boost-status-line-prev-command: old", "# boost-hook-version: 1"):
+            destination.write_text(
+                f"#!/bin/bash\n# Managed by Agentbot.\n{marker}\necho hi\n",
+                encoding="utf-8",
+            )
+            self.assertTrue(
+                inspect_claude_statusline(self._paths()).boost_wrapped,
+                f"{marker} should read as wrapped",
+            )

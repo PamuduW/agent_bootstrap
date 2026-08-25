@@ -46,7 +46,11 @@ class DoctorSeverityTests(unittest.TestCase):
             (root / "global").mkdir()
             (root / "global/AGENTS.md").write_text("# baseline\n", encoding="utf-8")
             paths = AgentbotPaths(root, root / "codex", root / "claude", root / "cursor")
-            issues = Diagnostics(paths).doctor_issues()
+            # `_find_cli` falls back to PATH, which is the developer's real PATH
+            # here -- without this the result depends on whether the machine
+            # running the suite happens to have Boost installed.
+            with patch("src.boost.shutil.which", return_value=None):
+                issues = Diagnostics(paths).doctor_issues()
             self.assertFalse(any(issue.scope == "boost" for issue in issues))
 
     def test_unsafe_saved_token_is_actionable_warning_without_value_leak(self) -> None:

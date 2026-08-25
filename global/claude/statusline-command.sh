@@ -20,6 +20,22 @@ if command -v timeout >/dev/null 2>&1; then
 	GIT_TIMEOUT=(timeout 1)
 fi
 
+# Optional Boost savings segment. Boost ships its own status-line component,
+# but it rewrites this script in place; Agentbot owns this file, so we call
+# `boost status-line` ourselves instead and keep ownership. It reads the same
+# payload Claude gives us on stdin and prints nothing when there is nothing to
+# report, which is the common case until a noisy command actually gets
+# filtered. Costs a process spawn per render -- set AGENTBOT_STATUSLINE_BOOST=0
+# to skip it.
+BOOST_CMD=""
+if [[ "${AGENTBOT_STATUSLINE_BOOST:-1}" != "0" ]]; then
+	if command -v boost >/dev/null 2>&1; then
+		BOOST_CMD="$(command -v boost)"
+	elif [[ -x "$HOME/.local/bin/boost" ]]; then
+		BOOST_CMD="$HOME/.local/bin/boost"
+	fi
+fi
+
 # ---- colors: Claude brand orange accent theme (truecolor 24-bit) ----
 # NOTE: these must contain a REAL ESC byte (not the literal 4-char string
 # "\033"), because the assembled segments are emitted via `printf '%s' "$var"`
@@ -36,6 +52,7 @@ FG_MODEL=$'\033[38;2;217;119;87m'      # Claude orange
 FG_DIRECTORY=$'\033[38;2;255;250;247m' # near-white
 FG_CONTEXT=$'\033[38;2;230;205;190m'   # warm light tan
 FG_LIMIT=$'\033[38;2;230;205;190m'     # warm light tan
+FG_BOOST=$'\033[38;2;143;176;122m'     # muted sage green, savings
 FG_SEPARATOR=$'\033[38;2;120;104;96m'  # dim warm gray
 
 # ---- gather Claude Code session data ----
@@ -180,6 +197,21 @@ else
 	context_display=""
 fi
 
+boost_segment() {
+	local raw
+
+	[[ -n "$BOOST_CMD" ]] || return 0
+	# Fail open: a missing, slow, or unhappy Boost must never break or stall the
+	# statusline. Its own colors are stripped so the segment matches this palette.
+	raw="$(printf '%s' "$input" | "${GIT_TIMEOUT[@]}" "$BOOST_CMD" status-line 2>/dev/null || true)"
+	raw="${raw%%$'\n'*}"
+	raw="$(printf '%s' "$raw" | sed $'s/\033\\[[0-9;]*m//g')"
+	# Trim surrounding whitespace without a subshell.
+	raw="${raw#"${raw%%[![:space:]]*}"}"
+	raw="${raw%"${raw##*[![:space:]]}"}"
+	printf '%s' "$raw"
+}
+
 append_segment() {
 	local value="$1"
 	local color="$2"
@@ -196,6 +228,7 @@ append_segment "$model_display" "$FG_MODEL"
 append_segment "$dir_display" "$FG_DIRECTORY"
 append_segment "$git_segment" "$FG_GIT"
 append_segment "$context_display" "$FG_CONTEXT"
+append_segment "$(boost_segment)" "$FG_BOOST"
 append_segment "$(rate_limit_segment '5h' "$five_hour_used" "$five_hour_reset")" "$FG_LIMIT"
 append_segment "$(rate_limit_segment '7d' "$seven_day_used" "$seven_day_reset")" "$FG_LIMIT"
 

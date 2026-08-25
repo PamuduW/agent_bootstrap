@@ -158,7 +158,10 @@ class BoostIntegrationTests(unittest.TestCase):
         self.assertIn("forbidden", status.message.lower())
         runner.run_interactive.assert_not_called()
 
-    def test_off_uninstalls_only_claude_and_codex_integrations(self) -> None:
+    def test_off_uninstalls_one_target_per_call(self) -> None:
+        # `boost init --uninstall` rejects more than one target ("specify only
+        # one target to uninstall"), unlike setup which accepts several. The
+        # first version of this passed both at once and never worked.
         from src.command_runner import CommandResult
 
         BoostIntegration = self._integration_type()
@@ -177,31 +180,59 @@ class BoostIntegrationTests(unittest.TestCase):
         with mock.patch("src.boost.shutil.which", return_value=str(boost)):
             BoostIntegration(self._paths(), runner=runner).off()
 
-        argv = runner.run_interactive.call_args.args[0]
+        interactive = [call.args[0] for call in runner.run_interactive.call_args_list]
         self.assertEqual(
             [
-                str(boost),
-                "init",
-                "--uninstall",
-                "--no-boostgraph",
-                "--claude",
-                "--codex",
+                [str(boost), "init", "--uninstall", "--no-boostgraph", "--claude"],
+                [str(boost), "init", "--uninstall", "--no-boostgraph", "--codex"],
             ],
-            argv,
+            interactive,
         )
-        self.assertNotIn("--yes", argv)
-        self.assertIn(
+        for argv in interactive:
+            self.assertNotIn("--yes", argv)
+            # Exactly one target per invocation.
+            self.assertEqual(
+                1,
+                sum(argv.count(flag) for flag in ("--claude", "--codex", "--cursor")),
+            )
+
+        uninstall_dry_runs = [
+            call.args[0]
+            for call in runner.run.call_args_list
+            if "--dry-run" in call.args[0]
+        ]
+        self.assertEqual(
             [
-                str(boost),
-                "init",
-                "--dry-run",
-                "--uninstall",
-                "--no-boostgraph",
-                "--claude",
-                "--codex",
+                [str(boost), "init", "--dry-run", "--uninstall", "--no-boostgraph", "--claude"],
+                [str(boost), "init", "--dry-run", "--uninstall", "--no-boostgraph", "--codex"],
             ],
-            [call.args[0] for call in runner.run.call_args_list],
+            uninstall_dry_runs,
         )
+
+    def test_off_stops_at_the_first_target_whose_dry_run_fails(self) -> None:
+        from src.command_runner import CommandResult
+
+        BoostIntegration = self._integration_type()
+        boost = self.root / "boost"
+        boost.write_text("binary", encoding="utf-8")
+        runner = mock.Mock()
+
+        def run(argv, **_kwargs):
+            if argv[-1] == "version":
+                return CommandResult(0, stdout="boost v0.12.6\n")
+            if "--dry-run" in argv:
+                return CommandResult(1, stderr="specify only one target to uninstall")
+            return CommandResult(0)
+
+        runner.run.side_effect = run
+        runner.run_interactive.return_value = CommandResult(0)
+
+        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+            status = BoostIntegration(self._paths(), runner=runner).off()
+
+        self.assertEqual("broken", status.state)
+        self.assertIn("--claude", status.message)
+        runner.run_interactive.assert_not_called()
 
     def test_setup_rejects_a_plan_missing_a_requested_target(self) -> None:
         from src.command_runner import CommandResult
@@ -373,3 +404,63 @@ class BoostConfigLockTests(BoostIntegrationTests):
             fcntl.flock(holder.fileno(), fcntl.LOCK_UN)
 
         self.assertIn("lock", str(caught.exception).lower())
+
+
+class BoostOffCwdTests(BoostIntegrationTests):
+    """Boost v0.12.6 resolves `--uninstall --claude` relative to cwd.
+
+    Install is always global, so running the rollback from a repository
+    deletes `<repo>/.claude/...` and leaves `~/.claude` boosted.
+    """
+
+    def test_uninstall_runs_from_the_home_directory(self) -> None:
+        from src.command_runner import CommandResult
+
+        BoostIntegration = self._integration_type()
+        boost = self.root / "boost"
+        boost.write_text("binary", encoding="utf-8")
+        runner = mock.Mock()
+
+        def run(argv, **_kwargs):
+            if argv[-1] == "version":
+                return CommandResult(0, stdout="boost v0.12.6\n")
+            return CommandResult(0, stdout="Claude Code\nCodex CLI\n")
+
+        runner.run.side_effect = run
+        runner.run_interactive.return_value = CommandResult(0)
+
+        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+            BoostIntegration(self._paths(), runner=runner).off()
+
+        home = self.codex.parent
+        uninstall_dry_runs = [
+            call for call in runner.run.call_args_list if "--uninstall" in call.args[0]
+        ]
+        self.assertTrue(uninstall_dry_runs)
+        for call in uninstall_dry_runs:
+            self.assertEqual(home, call.kwargs.get("cwd"))
+        for call in runner.run_interactive.call_args_list:
+            self.assertEqual(home, call.kwargs.get("cwd"))
+
+    def test_setup_is_not_pinned_to_home(self) -> None:
+        # Only uninstall has the cwd bug; leave setup's behaviour alone.
+        from src.command_runner import CommandResult
+
+        BoostIntegration = self._integration_type()
+        boost = self.root / "boost"
+        boost.write_text("binary", encoding="utf-8")
+        runner = mock.Mock()
+
+        def run(argv, **_kwargs):
+            if argv[-1] == "version":
+                return CommandResult(0, stdout="boost v0.12.6\n")
+            return CommandResult(0, stdout="Claude Code\nCodex CLI\n")
+
+        runner.run.side_effect = run
+        runner.run_interactive.return_value = CommandResult(0)
+
+        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+            BoostIntegration(self._paths(), runner=runner).setup()
+
+        for call in runner.run_interactive.call_args_list:
+            self.assertIsNone(call.kwargs.get("cwd"))

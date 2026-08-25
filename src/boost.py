@@ -248,34 +248,51 @@ class BoostIntegration:
         current = self.status()
         if current.cli_path is None:
             return current
-        base = [
-            str(current.cli_path),
-            "init",
-            "--uninstall",
-            "--no-boostgraph",
-            "--claude",
-            "--codex",
-        ]
-        dry_run = self._runner.run(
-            [*base[:2], "--dry-run", *base[2:]],
-            timeout_seconds=self._timeout_seconds(),
-        )
-        if dry_run.returncode != 0:
-            return replace(
-                self.status(),
-                state="broken",
-                message=f"Boost integration removal dry run failed: {dry_run.detail()}",
+        # Asymmetric with setup: `init` accepts several targets at once, but
+        # `init --uninstall` rejects more than one ("specify only one target to
+        # uninstall"). Remove them one at a time, each behind its own dry run.
+        #
+        # Boost v0.12.6 resolves `--uninstall --claude` paths relative to the
+        # working directory even though install is always global, so running it
+        # from a repository deletes `<repo>/.claude/...` and leaves the real
+        # `~/.claude` integration in place. `--codex` is unaffected. Pin cwd to
+        # the home directory so the rollback hits what setup actually wrote.
+        home = self.paths.codex_home.parent
+        for target in ("--claude", "--codex"):
+            base = [
+                str(current.cli_path),
+                "init",
+                "--uninstall",
+                "--no-boostgraph",
+                target,
+            ]
+            dry_run = self._runner.run(
+                [*base[:2], "--dry-run", *base[2:]],
+                timeout_seconds=self._timeout_seconds(),
+                cwd=home,
             )
-        result = self._runner.run_interactive(
-            base,
-            timeout_seconds=self._timeout_seconds(),
-        )
-        if result.returncode != 0:
-            return replace(
-                self.status(),
-                state="broken",
-                message=f"Boost integration removal failed: {result.detail()}",
+            if dry_run.returncode != 0:
+                return replace(
+                    self.status(),
+                    state="broken",
+                    message=(
+                        f"Boost integration removal dry run failed for {target}: "
+                        f"{dry_run.detail()}"
+                    ),
+                )
+            result = self._runner.run_interactive(
+                base,
+                timeout_seconds=self._timeout_seconds(),
+                cwd=home,
             )
+            if result.returncode != 0:
+                return replace(
+                    self.status(),
+                    state="broken",
+                    message=(
+                        f"Boost integration removal failed for {target}: {result.detail()}"
+                    ),
+                )
         return self.status()
 
     def _find_cli(self) -> Path | None:

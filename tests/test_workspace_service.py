@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from src.paths import AgentbotPaths
 from src.workspace_service import WorkspaceService
@@ -52,6 +53,22 @@ class WorkspaceServiceTests(unittest.TestCase):
         self.assertEqual([str(repo.resolve())], [item.path for item in records])
         self.assertEqual("git", records[0].kind)
         self.assertEqual(("agents", "claude"), records[0].targets)
+
+    def test_workspace_service_uses_its_injected_runner_for_git_identity(self) -> None:
+        """Break caught: workspace probes bypass the lifecycle runner through a module global."""
+        from src.command_runner import CommandResult
+
+        workspace = self.root / "runner-workspace"
+        workspace.mkdir()
+        runner = mock.Mock()
+        runner.run.return_value = CommandResult(1)
+        service = WorkspaceService(self.paths, command_runner=runner)
+
+        result = service.preview(workspace, profile_name=None, targets=("agents",))
+
+        self.assertEqual("preview", result.status)
+        runner.run.assert_called()
+        self.assertEqual("rev-parse", runner.run.call_args.args[0][3])
 
     def test_custom_agents_are_preserved_and_recorded(self) -> None:
         custom = self.root / "custom-folder"

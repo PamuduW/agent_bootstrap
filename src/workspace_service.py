@@ -23,8 +23,6 @@ from .workspace_render import (
 )
 from .workspace_state import WorkspaceRecord, WorkspaceStore
 
-_COMMAND_RUNNER = CommandRunner()
-
 
 @dataclass(frozen=True)
 class WorkspaceIdentity:
@@ -53,12 +51,16 @@ class WorkspaceConflict(ValueError):
         self.relative_path = relative_path
 
 
-def resolve_workspace_identity(path: Path) -> WorkspaceIdentity:
+def resolve_workspace_identity(
+    path: Path,
+    *,
+    runner: CommandRunner | None = None,
+) -> WorkspaceIdentity:
     target = Path(path).expanduser().resolve(strict=False)
     if not target.is_dir():
         raise ValueError(f"workspace target is not a directory: {path}")
 
-    completed = _COMMAND_RUNNER.run(
+    completed = (runner or CommandRunner()).run(
         ["git", "-C", str(target), "rev-parse", "--show-toplevel"],
         timeout_seconds=30,
     )
@@ -68,10 +70,14 @@ def resolve_workspace_identity(path: Path) -> WorkspaceIdentity:
     return WorkspaceIdentity(path=target, kind="directory", git_root=None)
 
 
-def current_commit(identity: WorkspaceIdentity) -> str | None:
+def current_commit(
+    identity: WorkspaceIdentity,
+    *,
+    runner: CommandRunner | None = None,
+) -> str | None:
     if identity.kind != "git":
         return None
-    completed = _COMMAND_RUNNER.run(
+    completed = (runner or CommandRunner()).run(
         ["git", "-C", str(identity.path), "rev-parse", "--short", "HEAD"],
         timeout_seconds=30,
     )
@@ -81,9 +87,15 @@ def current_commit(identity: WorkspaceIdentity) -> str | None:
 
 
 class WorkspaceService:
-    def __init__(self, paths: AgentbotPaths) -> None:
+    def __init__(
+        self,
+        paths: AgentbotPaths,
+        *,
+        command_runner: CommandRunner | None = None,
+    ) -> None:
         self.paths = paths
         self.store = WorkspaceStore(paths.workspace_state_file)
+        self._command_runner = command_runner or CommandRunner()
 
     def remove(self, path: Path) -> WorkspaceRecord:
         removed = self.store.remove(path)
@@ -99,7 +111,7 @@ class WorkspaceService:
         profile_name: str | None,
         targets: tuple[str, ...] | None,
     ) -> WorkspaceResult:
-        identity = resolve_workspace_identity(path)
+        identity = resolve_workspace_identity(path, runner=self._command_runner)
         try:
             plan, profile, dirty = self._build_plan(identity, profile_name, targets)
         except WorkspaceConflict as error:
@@ -114,7 +126,7 @@ class WorkspaceService:
         targets: tuple[str, ...] | None,
         register: bool,
     ) -> WorkspaceResult:
-        identity = resolve_workspace_identity(path)
+        identity = resolve_workspace_identity(path, runner=self._command_runner)
         try:
             plan, profile, dirty = self._build_plan(identity, profile_name, targets)
         except WorkspaceConflict as error:
@@ -272,7 +284,7 @@ class WorkspaceService:
             return WorkspaceResult(path, "failed", (), "recorded workspace path is missing")
 
         if record.kind == "git":
-            identity = resolve_workspace_identity(path)
+            identity = resolve_workspace_identity(path, runner=self._command_runner)
             if identity.kind != "git" or identity.path != path:
                 return WorkspaceResult(
                     path,
@@ -299,7 +311,7 @@ class WorkspaceService:
                         profile=record.profile,
                         targets=record.targets,
                         enabled=record.enabled,
-                        last_commit=current_commit(identity),
+                        last_commit=current_commit(identity, runner=self._command_runner),
                         last_rendered_at=_utc_now(),
                     )
                 )
@@ -391,7 +403,7 @@ class WorkspaceService:
     def _dirty_before_render(self, identity: WorkspaceIdentity) -> bool:
         if identity.kind != "git":
             return False
-        completed = _COMMAND_RUNNER.run(
+        completed = self._command_runner.run(
             ["git", "-C", str(identity.path), "status", "--porcelain"],
             timeout_seconds=30,
         )
@@ -416,7 +428,7 @@ class WorkspaceService:
                 if relative_path in plan.paths()
             ),
             enabled=True,
-            last_commit=current_commit(identity),
+            last_commit=current_commit(identity, runner=self._command_runner),
             last_rendered_at=rendered_at,
         )
 

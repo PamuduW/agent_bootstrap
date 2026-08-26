@@ -152,6 +152,66 @@ class CliTests(unittest.TestCase):
             workspace_report=result.workspace_report,
         )
 
+    @patch("src.cli.default_paths")
+    @patch("src.cli.Lifecycle")
+    def test_boot_delegates_selector_defaults_to_the_workspace_lifecycle(
+        self, lifecycle_type, _default_paths
+    ) -> None:
+        """Break caught: shell-owned boot parsing drifts from the Python workspace contract."""
+        from src.workspace_service import WorkspaceResult
+
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            lifecycle = MagicMock()
+            lifecycle.apply_workspace.return_value = WorkspaceResult(
+                target,
+                "applied",
+                (),
+                "rendered",
+            )
+            lifecycle_type.return_value = lifecycle
+
+            rc, _stdout, stderr = self._run_main(["agentbot", "boot", str(target)])
+
+        self.assertEqual(0, rc, stderr)
+        lifecycle.apply_workspace.assert_called_once_with(
+            target,
+            profile=None,
+            targets=("agents", "claude", "cursor"),
+            register=True,
+        )
+
+    @patch("src.cli.default_paths")
+    @patch("src.cli.Lifecycle")
+    def test_boot_explicit_selectors_replace_optional_defaults(
+        self, lifecycle_type, _default_paths
+    ) -> None:
+        """Break caught: selecting Cursor accidentally retains the default Claude output."""
+        from src.workspace_service import WorkspaceResult
+
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary)
+            lifecycle = MagicMock()
+            lifecycle.apply_workspace.return_value = WorkspaceResult(
+                target,
+                "applied",
+                (),
+                "rendered",
+            )
+            lifecycle_type.return_value = lifecycle
+
+            rc, _stdout, stderr = self._run_main(
+                ["agentbot", "boot", "--agents", "--cursor", str(target)]
+            )
+
+        self.assertEqual(0, rc, stderr)
+        lifecycle.apply_workspace.assert_called_once_with(
+            target,
+            profile=None,
+            targets=("agents", "cursor"),
+            register=True,
+        )
+
     def test_command_specs_cover_parser_and_public_dispatcher(self) -> None:
         import argparse
 

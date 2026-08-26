@@ -15,8 +15,6 @@ from .command_runner import CommandRunner
 from .skill_catalog import discover_checkout_skills, skill_name_from_file
 from .skills_sources import SkillsSourcesConfig
 
-_COMMAND_RUNNER = CommandRunner()
-
 
 @dataclass(frozen=True)
 class ManifestChange:
@@ -273,12 +271,12 @@ def _restore(snapshot: Path) -> None:
             shutil.copy2(saved, path)
 
 
-def _tracked(path: Path, root: Path) -> bool:
+def _tracked(path: Path, root: Path, runner: CommandRunner) -> bool:
     try:
         relative = path.relative_to(root)
     except ValueError:
         return False
-    result = _COMMAND_RUNNER.run(
+    result = runner.run(
         ["git", "-C", str(root), "ls-files", "--error-unmatch", str(relative)],
         timeout_seconds=30,
     )
@@ -295,8 +293,10 @@ def apply_reconcile_plan(
     dry_run: bool = False,
     validate: Callable[[], None] | None = None,
     extra_affected: Iterable[Path] = (),
+    runner: CommandRunner | None = None,
 ) -> ReconcileResult:
     """Apply source-owned skill deltas with a recoverable staged transaction."""
+    command_runner = runner or CommandRunner()
     needs_confirmation = bool(
         plan.wildcard_additions
         or plan.wildcard_removals
@@ -419,7 +419,11 @@ def apply_reconcile_plan(
             validate()
         shutil.rmtree(backup)
         changed_paths = tuple(dict.fromkeys(changed))
-        status = "applied-with-local-changes" if any(_tracked(path, paths.root) for path in changed_paths) else "applied"
+        status = (
+            "applied-with-local-changes"
+            if any(_tracked(path, paths.root, command_runner) for path in changed_paths)
+            else "applied"
+        )
         return ReconcileResult(status, changed_paths, tuple(sorted(removed)), tuple(sorted(added)))
     except Exception as error:
         _restore(backup)

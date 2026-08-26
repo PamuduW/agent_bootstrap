@@ -1,9 +1,83 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 class LifecycleTests(unittest.TestCase):
+    def test_one_injected_runner_reaches_lifecycle_installer_and_workspace(self) -> None:
+        """Break caught: a nested module silently creates or patches its own command runner."""
+        from src.command_runner import CommandResult
+        from src.graphify import GraphifyStatus
+        from src.lifecycle import Lifecycle
+        from src.paths import AgentbotPaths
+        from src.workspace_service import WorkspaceReport
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workspace = root / "workspace"
+            workspace.mkdir()
+            (root / "skills.sources.yaml").write_text(
+                "version: 1\nagents: [codex]\nscope: global\nsources: []\n",
+                encoding="utf-8",
+            )
+            (root / "agentos.yaml").write_text(
+                "version: 1\nactive_profile: safe\nprofiles:\n"
+                "  safe:\n    description: test\n"
+                "    default_targets: [agents]\n"
+                "    allowed_targets: [agents]\n"
+                "    allow_community_skill_scripts: false\n",
+                encoding="utf-8",
+            )
+            (root / "global").mkdir()
+            (root / "global" / "AGENTS.md").write_text("# baseline\n", encoding="utf-8")
+            (root / "base").mkdir()
+            (root / "base" / "AGENTS.md").write_text(
+                (Path(__file__).parents[1] / "base" / "AGENTS.md").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            paths = AgentbotPaths(root, root / "codex", root / "claude", root / "cursor")
+            runner = mock.Mock()
+
+            def run(argv, **_kwargs):
+                if argv[:4] == ["git", "-C", str(workspace), "rev-parse"]:
+                    return CommandResult(1)
+                if argv[:3] == ["git", "-C", str(root)]:
+                    return CommandResult(0, stdout="head123\n")
+                return CommandResult(0, stdout="updated\n")
+
+            runner.run.side_effect = run
+            graphify = mock.Mock()
+            graphify.status.return_value = GraphifyStatus(
+                "not-installed",
+                None,
+                None,
+                root / "agents/skills/graphify/SKILL.md",
+                None,
+                "missing",
+                "missing",
+                "not installed",
+            )
+            lifecycle = Lifecycle(
+                paths,
+                graphify=graphify,
+                command_runner=runner,
+                workspace_preview=lambda: WorkspaceReport(()),
+            )
+
+            lifecycle.update_skills()
+            lifecycle.workspace_service.preview(
+                workspace,
+                profile_name=None,
+                targets=("agents",),
+            )
+            plan = lifecycle.plan_update()
+
+            commands = [call.args[0] for call in runner.run.call_args_list]
+            self.assertTrue(any(command[:4] == ["npx", "--yes", "skills", "update"] for command in commands))
+            self.assertTrue(any(command[:3] == ["git", "-C", str(workspace)] for command in commands))
+            self.assertEqual("head123", plan.snapshot.repository_head)
+
     def test_install_orders_each_stage_once_and_returns_typed_outcome(self) -> None:
         from src.boost import BoostStatus
         from src.graphify import GraphifyStatus

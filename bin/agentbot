@@ -45,75 +45,6 @@ agentbot_run_token() {
 }
 agentbot_run_backend() { "$AGENTBOT_HOME/install.sh" "$@"; }
 
-# Positional pair: DEFAULTS[i] is the default for OPTIONAL_FLAGS[i]. Keep them
-# the same length -- removing a flag without removing its default silently
-# shifts every default after it.
-AGENTBOT_BOOT_OPTIONAL_FLAGS=(--claude --cursor)
-AGENTBOT_BOOT_DEFAULTS=(true true)
-
-agentbot_boot() {
-	local target='' profile='' selectors_seen=false arg i flag
-	local -a selected=()
-	for i in "${!AGENTBOT_BOOT_OPTIONAL_FLAGS[@]}"; do selected+=("${AGENTBOT_BOOT_DEFAULTS[$i]}"); done
-
-	while (($#)); do
-		arg="$1"
-		shift
-		case "$arg" in
-		--profile)
-			[[ $# -gt 0 ]] || {
-				agentbot_die '--profile requires a name'
-				return 1
-			}
-			profile="$1"
-			shift
-			;;
-		--agents | --codex | --claude | --cursor)
-			if [[ "$selectors_seen" == false ]]; then
-				for i in "${!selected[@]}"; do selected[i]=false; done
-				selectors_seen=true
-			fi
-			if [[ "$arg" != --agents && "$arg" != --codex ]]; then
-				for i in "${!AGENTBOT_BOOT_OPTIONAL_FLAGS[@]}"; do
-					flag="${AGENTBOT_BOOT_OPTIONAL_FLAGS[$i]}"
-					if [[ "$arg" == "$flag" ]]; then
-						selected[i]=true
-						break
-					fi
-				done
-			fi
-			;;
-		--*)
-			agentbot_die "unknown boot selector: $arg"
-			return 1
-			;;
-		*)
-			[[ -z "$target" ]] || {
-				agentbot_die 'boot accepts only one TARGET directory'
-				return 1
-			}
-			target="$arg"
-			;;
-		esac
-	done
-	target="${target:-$PWD}"
-	[[ -d "$target" && -w "$target" ]] || {
-		agentbot_die "boot target must be a writable directory: $target"
-		return 1
-	}
-
-	local targets_csv=agents
-	for i in "${!selected[@]}"; do
-		[[ "${selected[$i]}" == true ]] || continue
-		targets_csv+=",${AGENTBOT_BOOT_OPTIONAL_FLAGS[$i]#--}"
-	done
-
-	local -a backend_args=(workspace --yes)
-	[[ -n "$profile" ]] && backend_args+=(--profile "$profile")
-	backend_args+=(--targets "$targets_csv" "$target")
-	agentbot_run_backend "${backend_args[@]}"
-}
-
 agentbot_usage() {
 	(cd "$AGENTBOT_HOME" && python3 -m src.cli --root "$AGENTBOT_HOME" help "$@")
 }
@@ -128,7 +59,7 @@ agentbot_main() {
 		else agentbot_die 'No usable controlling TTY. Use agentbot help or an explicit command such as agentbot install.'; fi
 		;;
 	status | install | full | doctor) agentbot_run_backend "$command" "$@" ;;
-	boot) agentbot_boot "$@" ;;
+	boot) agentbot_run_backend "$command" "$@" ;;
 	workspace | workspaces | resync) agentbot_run_backend "$command" "$@" ;;
 	graphify | boost) agentbot_run_backend "$command" "$@" ;;
 	token) agentbot_run_token "$@" ;;

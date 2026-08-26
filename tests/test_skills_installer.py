@@ -4,7 +4,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from tests.support import agentbot_paths
 
@@ -110,8 +110,7 @@ sources:
         self.assertEqual("superpowers", results[0].source_id)
         mock_clone.assert_called_once()
 
-    @patch("src.skills_installer._COMMAND_RUNNER.run")
-    def test_install_source_clones_github_sources_before_invoking_npx(self, mock_run) -> None:
+    def test_install_source_clones_github_sources_before_invoking_npx(self) -> None:
         from src.command_runner import CommandResult
         from src.skills_installer import InstallResult, install_source
         from src.skills_sources import SkillSourceEntry
@@ -121,18 +120,24 @@ sources:
             repo="obra/superpowers",
             skills=["brainstorming"],
         )
-        mock_run.side_effect = [
+        runner = MagicMock()
+        runner.run.side_effect = [
             CommandResult(0),
             CommandResult(0, stdout="ok"),
         ]
         lock_file = self.root / "home" / ".agents" / ".skill-lock.json"
 
-        result = install_source(source, agents=["codex"], global_lock_file=lock_file)
+        result = install_source(
+            source,
+            agents=["codex"],
+            global_lock_file=lock_file,
+            runner=runner,
+        )
 
         self.assertIsInstance(result, InstallResult)
-        self.assertEqual(2, mock_run.call_count)
-        clone_command = mock_run.call_args_list[0].args[0]
-        install_command = mock_run.call_args_list[1].args[0]
+        self.assertEqual(2, runner.run.call_count)
+        clone_command = runner.run.call_args_list[0].args[0]
+        install_command = runner.run.call_args_list[1].args[0]
         self.assertEqual(
             ["git", "clone", "--depth=1", "https://github.com/obra/superpowers.git"],
             clone_command[:4],
@@ -189,7 +194,7 @@ sources:
         installed_skill.mkdir(parents=True)
         (installed_skill / "SKILL.md").write_text("# brainstorming\n", encoding="utf-8")
 
-        def clone_with_skill(_repo: str, destination: Path) -> None:
+        def clone_with_skill(_repo: str, destination: Path, **_kwargs) -> None:
             skill_dir = destination / "skills" / "brainstorming"
             skill_dir.mkdir(parents=True)
             (skill_dir / "SKILL.md").write_text("---\nname: brainstorming\n---\n", encoding="utf-8")
@@ -222,7 +227,7 @@ sources:
         installed_skill.mkdir(parents=True)
         (installed_skill / "SKILL.md").write_text("# real skill\n", encoding="utf-8")
 
-        def clone_with_skill_and_fixture(_repo: str, destination: Path) -> None:
+        def clone_with_skill_and_fixture(_repo: str, destination: Path, **_kwargs) -> None:
             real_skill = destination / "skills" / "real-skill"
             real_skill.mkdir(parents=True)
             (real_skill / "SKILL.md").write_text("---\nname: real-skill\n---\n", encoding="utf-8")
@@ -331,26 +336,35 @@ sources:
         from src.skills_installer import run_install_command
 
         completed = CommandResult(0, stdout="ok")
-        with patch("src.skills_installer._COMMAND_RUNNER.run", return_value=completed) as mock_run:
-            result = run_install_command(["npx", "skills", "update"], source_id="update")
+        runner = MagicMock()
+        runner.run.return_value = completed
+        result = run_install_command(
+            ["npx", "skills", "update"],
+            source_id="update",
+            runner=runner,
+        )
 
-        mock_run.assert_called_once()
+        runner.run.assert_called_once()
         self.assertEqual(0, result.returncode)
         self.assertEqual("ok", result.stdout)
         self.assertEqual("update", result.source_id)
 
-    @patch("src.skills_installer._COMMAND_RUNNER.run")
-    def test_tui_install_command_keeps_child_output_hidden(self, mock_run) -> None:
+    def test_tui_install_command_keeps_child_output_hidden(self) -> None:
         from src.command_runner import CommandResult
         from src.skills_installer import run_install_command
 
-        mock_run.return_value = CommandResult(0, stdout="ok", stderr="full child log")
+        runner = MagicMock()
+        runner.run.return_value = CommandResult(0, stdout="ok", stderr="full child log")
         with patch.dict(os.environ, {"AGENTBOT_TUI": "1"}, clear=False), patch(
             "sys.stdout", new_callable=io.StringIO
         ) as output:
-            result = run_install_command(["npx", "skills", "add", "owner/repo"], source_id="repo")
+            result = run_install_command(
+                ["npx", "skills", "add", "owner/repo"],
+                source_id="repo",
+                runner=runner,
+            )
 
-        mock_run.assert_called_once()
+        runner.run.assert_called_once()
         self.assertEqual(0, result.returncode)
         self.assertEqual("ok", result.stdout)
         self.assertEqual("", output.getvalue())
@@ -461,45 +475,56 @@ sources:
         from src.skills_installer import run_install_command
 
         completed = CommandResult(0, stdout="ok")
-        with patch("src.skills_installer._COMMAND_RUNNER.run", return_value=completed) as mock_run:
-            run_install_command(["npx", "skills", "update"], source_id="update")
+        runner = MagicMock()
+        runner.run.return_value = completed
+        run_install_command(
+            ["npx", "skills", "update"],
+            source_id="update",
+            runner=runner,
+        )
 
-        self.assertIn("timeout_seconds", mock_run.call_args.kwargs)
+        self.assertIn("timeout_seconds", runner.run.call_args.kwargs)
 
     def test_run_install_command_allows_a_longer_timeout_for_fresh_machine_installs(self) -> None:
         from src.command_runner import CommandResult
         from src.skills_installer import run_install_command
 
         completed = CommandResult(0, stdout="ok")
-        with patch.dict(os.environ, {"AGENTBOT_NPX_TIMEOUT_SECONDS": "1200"}), patch(
-            "src.skills_installer._COMMAND_RUNNER.run", return_value=completed
-        ) as mock_run:
-            run_install_command(["npx", "skills", "add"], source_id="superpowers")
+        runner = MagicMock()
+        runner.run.return_value = completed
+        with patch.dict(os.environ, {"AGENTBOT_NPX_TIMEOUT_SECONDS": "1200"}):
+            run_install_command(
+                ["npx", "skills", "add"],
+                source_id="superpowers",
+                runner=runner,
+            )
 
-        self.assertEqual(1200, mock_run.call_args.kwargs["timeout_seconds"])
+        self.assertEqual(1200, runner.run.call_args.kwargs["timeout_seconds"])
 
     @patch("src.skills_installer.shutil.which", return_value="/usr/bin/git")
-    @patch("src.skills_installer._COMMAND_RUNNER.run")
-    def test_github_clone_timeout_can_be_overridden(self, mock_run, _mock_which) -> None:
+    def test_github_clone_timeout_can_be_overridden(self, _mock_which) -> None:
         from src.command_runner import CommandResult
         from src.skills_installer import _clone_github_source
 
-        mock_run.return_value = CommandResult(0)
+        runner = MagicMock()
+        runner.run.return_value = CommandResult(0)
         with patch.dict(os.environ, {"AGENTBOT_GITHUB_CLONE_TIMEOUT_SECONDS": "600"}):
-            _clone_github_source("owner/repo", self.root / "checkout")
+            _clone_github_source("owner/repo", self.root / "checkout", runner=runner)
 
-        self.assertEqual(600, mock_run.call_args.kwargs["timeout_seconds"])
+        self.assertEqual(600, runner.run.call_args.kwargs["timeout_seconds"])
 
     def test_run_install_command_reports_timeouts_with_source_context(self) -> None:
         from src.command_runner import CommandResult
         from src.skills_installer import SkillsInstallError, run_install_command
 
-        with patch(
-            "src.skills_installer._COMMAND_RUNNER.run",
-            return_value=CommandResult(124, timed_out=True),
-        ):
-            with self.assertRaisesRegex(SkillsInstallError, "superpowers.*timed out"):
-                run_install_command(["npx", "skills", "add"], source_id="superpowers")
+        runner = MagicMock()
+        runner.run.return_value = CommandResult(124, timed_out=True)
+        with self.assertRaisesRegex(SkillsInstallError, "superpowers.*timed out"):
+            run_install_command(
+                ["npx", "skills", "add"],
+                source_id="superpowers",
+                runner=runner,
+            )
 
     def test_install_command_failure_keeps_only_a_short_diagnostic(self) -> None:
         from src.command_runner import CommandResult
@@ -511,8 +536,13 @@ sources:
             stdout=child_output,
             stderr="npm notice run npx\nnpm notice run 'skills' update -g -y",
         )
-        with patch("src.skills_installer._COMMAND_RUNNER.run", return_value=completed):
-            result = run_install_command(["npx", "skills", "add"], source_id="superpowers")
+        runner = MagicMock()
+        runner.run.return_value = completed
+        result = run_install_command(
+            ["npx", "skills", "add"],
+            source_id="superpowers",
+            runner=runner,
+        )
 
         self.assertEqual(child_output, result.stdout)
 

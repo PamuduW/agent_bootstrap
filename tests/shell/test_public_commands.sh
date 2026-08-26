@@ -75,6 +75,8 @@ test_dispatch_matrix() (
 	[[ $? -eq 14 ]] || exit 1
 	agentbot_main update
 	[[ $? -eq 14 ]] || exit 1
+	agentbot_main boot --cursor /tmp/project
+	[[ $? -eq 14 ]] || exit 1
 	agentbot_main workspace /tmp/project
 	[[ $? -eq 14 ]] || exit 1
 	agentbot_main workspaces
@@ -82,7 +84,7 @@ test_dispatch_matrix() (
 	agentbot_main resync --all
 	[[ $? -eq 14 ]] || exit 1
 	set -e
-	[[ "$(<"$calls")" == $'menu\nbackend:status\nbackend:install\nbackend:doctor\ntoken\nbackend:graphify status\nbackend:update\nbackend:workspace /tmp/project\nbackend:workspaces\nbackend:resync --all' ]]
+	[[ "$(<"$calls")" == $'menu\nbackend:status\nbackend:install\nbackend:doctor\ntoken\nbackend:graphify status\nbackend:update\nbackend:boot --cursor /tmp/project\nbackend:workspace /tmp/project\nbackend:workspaces\nbackend:resync --all' ]]
 )
 
 test_token_route_loads_existing_menu() (

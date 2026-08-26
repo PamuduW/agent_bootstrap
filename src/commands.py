@@ -62,8 +62,8 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Run install, then update, in one command.",
         (),
         "Runs both stages with one exit contract and restarts once if the checkout moves forward.",
-        # No parser_commands: `full` is sequenced by install.sh, like `boot`,
-        # rather than being a Python subcommand.
+        # No parser_commands: `full` is sequenced by install.sh rather than
+        # being a Python subcommand.
         ("agentbot full",),
         ("install", "update"),
         "public",
@@ -113,6 +113,7 @@ COMMANDS: tuple[CommandSpec, ...] = (
         ("agentbot boot", "agentbot boot --cursor /path/to/repo"),
         ("workspace", "workspaces"),
         "public",
+        ("boot",),
     ),
     CommandSpec(
         "workspace",

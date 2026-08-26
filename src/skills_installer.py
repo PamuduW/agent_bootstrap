@@ -77,7 +77,6 @@ NPX_TIMEOUT_ENV = "AGENTBOT_NPX_TIMEOUT_SECONDS"
 DEFAULT_GITHUB_CLONE_TIMEOUT_SECONDS = 300
 GITHUB_CLONE_TIMEOUT_ENV = "AGENTBOT_GITHUB_CLONE_TIMEOUT_SECONDS"
 MAX_COMMAND_ERROR_DETAIL_LENGTH = 240
-_COMMAND_RUNNER = CommandRunner()
 _ANSI_ESCAPE_RE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 _UPDATE_LINE_RE = re.compile(r"^✓\s+Updated\s+(.+?)$")
 _DELETED_HEADER_RE = re.compile(
@@ -175,7 +174,12 @@ def _github_clone_url(repo: str) -> str | None:
     return f"https://github.com/{repo}.git"
 
 
-def _clone_github_source(repo: str, destination: Path) -> None:
+def _clone_github_source(
+    repo: str,
+    destination: Path,
+    *,
+    runner: CommandRunner | None = None,
+) -> None:
     clone_url = _github_clone_url(repo)
     if clone_url is None:
         raise ValueError(f"not a GitHub owner/repository source: {repo!r}")
@@ -184,7 +188,7 @@ def _clone_github_source(repo: str, destination: Path) -> None:
 
     timeout_seconds = _github_clone_timeout_seconds()
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
-    completed = _COMMAND_RUNNER.run(
+    completed = (runner or CommandRunner()).run(
         ["git", "clone", "--depth=1", clone_url, str(destination)],
         timeout_seconds=timeout_seconds,
         env=env,
@@ -336,6 +340,7 @@ def run_install_command(
     dry_run: bool = False,
     cwd: Path | None = None,
     timeout_seconds: int | None = None,
+    runner: CommandRunner | None = None,
 ) -> InstallResult:
     if dry_run:
         return InstallResult(
@@ -349,7 +354,7 @@ def run_install_command(
     if timeout_seconds is None:
         timeout_seconds = _npx_timeout_seconds()
 
-    completed = _COMMAND_RUNNER.run(
+    completed = (runner or CommandRunner()).run(
         argv,
         cwd=cwd,
         timeout_seconds=timeout_seconds,
@@ -379,6 +384,7 @@ def install_source(
     global_lock_file: Path | None = None,
     progress: InstallProgress | None = None,
     checkout: Path | None = None,
+    runner: CommandRunner | None = None,
 ) -> InstallResult:
     if not source.enabled or not source.repo or not source.skills:
         return InstallResult(
@@ -396,10 +402,16 @@ def install_source(
     clone_url = _github_clone_url(source.repo)
     try:
         if dry_run or clone_url is None:
-            result = run_install_command(argv, source_id=source.id, dry_run=dry_run, cwd=cwd)
+            result = run_install_command(
+                argv,
+                source_id=source.id,
+                dry_run=dry_run,
+                cwd=cwd,
+                runner=runner,
+            )
         elif checkout is not None:
             argv[4] = str(checkout)
-            result = run_install_command(argv, source_id=source.id, cwd=cwd)
+            result = run_install_command(argv, source_id=source.id, cwd=cwd, runner=runner)
             if result.returncode == 0 and global_scope:
                 _record_github_checkout_lock(
                     source, checkout, _require_global_lock(global_lock_file)
@@ -420,9 +432,9 @@ def install_source(
         else:
             with tempfile.TemporaryDirectory(prefix="agentbot-skill-") as temp_dir:
                 checkout = Path(temp_dir) / source.id
-                _clone_github_source(source.repo, checkout)
+                _clone_github_source(source.repo, checkout, runner=runner)
                 argv[4] = str(checkout)
-                result = run_install_command(argv, source_id=source.id, cwd=cwd)
+                result = run_install_command(argv, source_id=source.id, cwd=cwd, runner=runner)
                 if result.returncode == 0 and global_scope:
                     _record_github_checkout_lock(
                         source, checkout, _require_global_lock(global_lock_file)
@@ -458,6 +470,7 @@ def install_all(
     global_lock_file: Path | None = None,
     progress: InstallProgress | None = None,
     checkouts: Mapping[str, Path] | None = None,
+    runner: CommandRunner | None = None,
 ) -> list[InstallResult]:
     global_scope = config.scope == "global"
     return [
@@ -471,6 +484,7 @@ def install_all(
             global_lock_file=global_lock_file,
             progress=progress,
             checkout=(checkouts or {}).get(source.id),
+            runner=runner,
         )
         for source in config.active_sources()
     ]
@@ -482,9 +496,16 @@ def update_all(
     dry_run: bool = False,
     npx: str = DEFAULT_NPX,
     cwd: Path | None = None,
+    runner: CommandRunner | None = None,
 ) -> InstallResult:
     argv = build_update_argv(npx=npx, global_scope=config.scope == "global")
-    result = run_install_command(argv, source_id="update", dry_run=dry_run, cwd=cwd)
+    result = run_install_command(
+        argv,
+        source_id="update",
+        dry_run=dry_run,
+        cwd=cwd,
+        runner=runner,
+    )
     if not dry_run and result.returncode != 0:
         detail = _command_error_detail(result.stdout, result.stderr)
         if detail == "no diagnostic output":
@@ -498,6 +519,7 @@ def install_skills(
     *,
     dry_run: bool = False,
     checkouts: Mapping[str, Path] | None = None,
+    runner: CommandRunner | None = None,
 ) -> list[InstallResult]:
     from .skill_prune import enforce_exclusions
 
@@ -510,6 +532,7 @@ def install_skills(
         global_lock_file=paths.global_skill_lock,
         progress=progress,
         checkouts=checkouts,
+        runner=runner,
     )
     if not dry_run:
         # `skills add` has no exclusion flag, so apply the manifest's exclusions
@@ -523,9 +546,14 @@ def _print_install_progress(message: str) -> None:
     print(f"  {message}", flush=True)
 
 
-def update_skills(paths: AgentbotPaths, *, dry_run: bool = False) -> InstallResult:
+def update_skills(
+    paths: AgentbotPaths,
+    *,
+    dry_run: bool = False,
+    runner: CommandRunner | None = None,
+) -> InstallResult:
     config = load_skills_sources(paths.skills_sources_file)
-    return update_all(config, dry_run=dry_run, cwd=paths.root)
+    return update_all(config, dry_run=dry_run, cwd=paths.root, runner=runner)
 
 
 def list_installed_skills(paths: AgentbotPaths) -> list[str]:

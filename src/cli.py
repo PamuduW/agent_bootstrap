@@ -190,6 +190,27 @@ def _handle_workspace(context: CommandContext) -> int:
     return 1 if result.status in {"conflict", "failed"} else 0
 
 
+def _handle_boot(context: CommandContext) -> int:
+    args = context.args
+    target = Path(args.path)
+    if not target.is_dir() or not os.access(target, os.W_OK):
+        raise ValueError(f"boot target must be a writable directory: {target}")
+    selectors_seen = args.agents or args.claude or args.cursor
+    targets = ["agents"]
+    if not selectors_seen or args.claude:
+        targets.append("claude")
+    if not selectors_seen or args.cursor:
+        targets.append("cursor")
+    result = context.lifecycle.apply_workspace(
+        target,
+        profile=args.profile,
+        targets=tuple(targets),
+        register=True,
+    )
+    print_workspace_report(result)
+    return 1 if result.status in {"conflict", "failed"} else 0
+
+
 def _handle_workspaces(context: CommandContext) -> int:
     args = context.args
     if args.remove:
@@ -241,6 +262,7 @@ COMMAND_HANDLERS: dict[str, Callable[[CommandContext], int]] = {
     "update": _handle_update,
     "upgrade": _handle_update,
     "workspace": _handle_workspace,
+    "boot": _handle_boot,
     "workspaces": _handle_workspaces,
     "resync": _handle_resync,
     "bootstrap": _handle_bootstrap,
@@ -318,6 +340,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     workspace.add_argument("--yes", action="store_true", help="Apply and register the render")
     workspace.add_argument("path", help="Workspace directory")
+
+    boot = subparsers.add_parser("boot", help="Render and register one workspace")
+    boot.add_argument("--profile", help="Workspace profile name")
+    boot.add_argument(
+        "--agents",
+        "--codex",
+        action="store_true",
+        dest="agents",
+        help="Select only canonical AGENTS.md unless combined with another selector",
+    )
+    boot.add_argument("--claude", action="store_true", help="Include generated Claude output")
+    boot.add_argument("--cursor", action="store_true", help="Include generated Cursor rules")
+    boot.add_argument("path", nargs="?", default=".", help="Workspace directory")
 
     workspaces = subparsers.add_parser(
         "workspaces", help="List or forget locally registered workspaces"

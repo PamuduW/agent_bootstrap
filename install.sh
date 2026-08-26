@@ -456,6 +456,10 @@ main() {
 		check_python_deps
 		run_cli "$cmd" "${@:2}"
 		;;
+	boot)
+		check_python_deps
+		run_cli boot "${@:2}"
+		;;
 	graphify | boost)
 		check_python_deps
 		run_cli "$cmd" "${@:2}"

@@ -28,13 +28,10 @@ from .skill_catalog import (
     verified_source_checkouts,
 )
 from .skill_reconcile import apply_reconcile_plan, build_reconcile_plan
-from .skills_installer import (
-    InstallResult,
-    install_skills,
-    list_installed_skills,
-    update_skills,
-)
-from .skills_sources import load_skills_sources
+from .skills_installer import InstallResult, list_installed_skills
+from .skills_installer import install_skills as install_skills_default
+from .skills_installer import update_skills as update_skills_default
+from .skills_sources import SkillsSourcesConfig, load_skills_sources
 from .workspace_service import WorkspaceReport, WorkspaceService
 from .workspace_state import WorkspaceRecord
 
@@ -51,39 +48,68 @@ class Lifecycle:
         # Called two ways: with just paths for a plain install, and with a
         # `checkouts` mapping on the planned-update path (see
         # _planned_installer below), so the signature stays open.
-        install_skills: Callable[..., list[InstallResult]] = install_skills,
-        update_skills: Callable[[AgentbotPaths], InstallResult] = update_skills,
+        install_skills: Callable[..., list[InstallResult]] | None = None,
+        update_skills: Callable[[AgentbotPaths], InstallResult] | None = None,
         refresh_outputs: Callable[[], OutputRefreshOutcome] | None = None,
         bridge_skills: Callable[..., BridgeResult] = bridge_claude_skills,
         render_global: Callable[[AgentbotPaths], None] = render_global_outputs,
-        catalog_discoverer: Callable[[object], tuple[SourceCatalog, ...]] | None = None,
+        catalog_discoverer: Callable[[SkillsSourcesConfig], tuple[SourceCatalog, ...]] | None = None,
         repository_head: Callable[[Path], str] | None = None,
         workspace_preview: Callable[[], WorkspaceReport] | None = None,
         update_applier: Callable[[UpdatePlan], UpdateOutcome] | None = None,
         checkout_provider: Callable | None = None,
-        reconcile_applier: Callable = apply_reconcile_plan,
+        reconcile_applier: Callable | None = None,
         planned_installer: Callable | None = None,
         command_runner: CommandRunner | None = None,
     ) -> None:
         self.paths = paths
+        self._command_runner = command_runner or CommandRunner()
         self.diagnostics = diagnostics or Diagnostics(paths)
-        self.graphify = graphify or GraphifyIntegration(paths)
-        self.boost = boost or BoostIntegration(paths)
-        self.workspace_service = workspace_service or WorkspaceService(paths)
-        self._install_skills = install_skills
-        self._update_skills = update_skills
+        self.graphify = graphify or GraphifyIntegration(paths, runner=self._command_runner)
+        self.boost = boost or BoostIntegration(paths, runner=self._command_runner)
+        self.workspace_service = workspace_service or WorkspaceService(
+            paths,
+            command_runner=self._command_runner,
+        )
+        self._install_skills = install_skills or (
+            lambda paths, **kwargs: install_skills_default(
+                paths,
+                runner=self._command_runner,
+                **kwargs,
+            )
+        )
+        self._update_skills = update_skills or (
+            lambda paths: update_skills_default(paths, runner=self._command_runner)
+        )
         self._refresh_outputs = refresh_outputs
         self._bridge_skills = bridge_skills
         self._render_global = render_global
-        self._catalog_discoverer = catalog_discoverer or discover_remote_catalogs
-        self._command_runner = command_runner or CommandRunner()
+        self._catalog_discoverer = catalog_discoverer or (
+            lambda config: discover_remote_catalogs(config, runner=self._command_runner)
+        )
         self._repository_head = repository_head or self._read_repository_head
         self._workspace_preview = workspace_preview
         self._update_applier = update_applier
-        self._checkout_provider = checkout_provider or verified_source_checkouts
-        self._reconcile_applier = reconcile_applier
+        self._checkout_provider = checkout_provider or (
+            lambda config, expected: verified_source_checkouts(
+                config,
+                expected,
+                runner=self._command_runner,
+            )
+        )
+        self._reconcile_applier = reconcile_applier or (
+            lambda *args, **kwargs: apply_reconcile_plan(
+                *args,
+                runner=self._command_runner,
+                **kwargs,
+            )
+        )
         self._planned_installer = planned_installer or (
-            lambda paths, checkouts: install_skills(paths, checkouts=checkouts)
+            lambda paths, checkouts: install_skills_default(
+                paths,
+                checkouts=checkouts,
+                runner=self._command_runner,
+            )
         )
 
     def install(self) -> InstallOutcome:

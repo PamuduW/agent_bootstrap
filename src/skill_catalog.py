@@ -11,8 +11,6 @@ from pathlib import Path
 from .command_runner import CommandRunner
 from .skills_sources import SkillsSourcesConfig
 
-_COMMAND_RUNNER = CommandRunner()
-
 
 @dataclass(frozen=True)
 class SourceCatalog:
@@ -35,9 +33,11 @@ def discover_remote_catalogs(
     *,
     clone_source: CloneSource | None = None,
     revision_reader: RevisionReader | None = None,
+    runner: CommandRunner | None = None,
 ) -> tuple[SourceCatalog, ...]:
-    clone = clone_source or _clone_source
-    revision = revision_reader or _revision
+    command_runner = runner or CommandRunner()
+    clone = clone_source or (lambda repo, path: _clone_source(repo, path, runner=command_runner))
+    revision = revision_reader or (lambda path: _revision(path, runner=command_runner))
     catalogs: list[SourceCatalog] = []
     with tempfile.TemporaryDirectory(prefix="agentbot-update-plan-") as temporary:
         root = Path(temporary)
@@ -64,9 +64,11 @@ def verified_source_checkouts(
     *,
     clone_source: CloneSource | None = None,
     revision_reader: RevisionReader | None = None,
+    runner: CommandRunner | None = None,
 ):
-    clone = clone_source or _clone_source
-    revision = revision_reader or _revision
+    command_runner = runner or CommandRunner()
+    clone = clone_source or (lambda repo, path: _clone_source(repo, path, runner=command_runner))
+    revision = revision_reader or (lambda path: _revision(path, runner=command_runner))
     expected_by_id = {catalog.source_id: catalog for catalog in expected}
     with tempfile.TemporaryDirectory(prefix="agentbot-update-apply-") as temporary:
         root = Path(temporary)
@@ -93,11 +95,11 @@ def verified_source_checkouts(
         yield checkouts
 
 
-def _clone_source(repo: str, destination: Path) -> None:
+def _clone_source(repo: str, destination: Path, *, runner: CommandRunner | None = None) -> None:
     if repo.count("/") != 1 or any(char.isspace() for char in repo):
         raise ValueError(f"not a GitHub owner/repository source: {repo!r}")
     timeout = int(os.environ.get("AGENTBOT_GITHUB_CLONE_TIMEOUT_SECONDS", "300"))
-    completed = _COMMAND_RUNNER.run(
+    completed = (runner or CommandRunner()).run(
         ["git", "clone", "--depth=1", f"https://github.com/{repo}.git", str(destination)],
         timeout_seconds=timeout,
         env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
@@ -108,8 +110,8 @@ def _clone_source(repo: str, destination: Path) -> None:
         )
 
 
-def _revision(checkout: Path) -> str:
-    completed = _COMMAND_RUNNER.run(
+def _revision(checkout: Path, *, runner: CommandRunner | None = None) -> str:
+    completed = (runner or CommandRunner()).run(
         ["git", "-C", str(checkout), "rev-parse", "HEAD"],
         timeout_seconds=30,
     )

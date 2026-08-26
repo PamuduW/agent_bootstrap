@@ -36,6 +36,16 @@ optional generic Graphify skill, configures an installed Boost CLI for Claude
 and Codex, refreshes managed global outputs, runs Doctor, and links
 `bin/agentbot` to `~/bin/agentbot`. Ensure `~/bin` is on `PATH`.
 
+Installation does not copy the repository. The active launcher remains linked
+to the checkout that installed it, which may differ from another development
+clone or from Dotfiles' expected sibling checkout. Verify what will run before
+maintenance with:
+
+```bash
+command -v agentbot
+readlink -f "$(command -v agentbot)"
+```
+
 `AGENTBOT_HOME` is resolved from the executable location and exported for child
 commands. Private state lives under
 `${XDG_CONFIG_HOME:-$HOME/.config}/agentbot`; it is never stored in the clone.
@@ -220,7 +230,7 @@ and `git stash show --stat <stash-object-id>`.
 ```text
 agent_bootstrap/
 ├── install.sh             # repository gate, prerequisites, token scope, CLI adapter
-├── bin/agentbot           # public dispatcher and TTY launcher
+├── bin/agentbot           # repository gate and TTY launcher
 ├── src/
 │   ├── commands.py        # canonical command metadata
 │   ├── cli.py             # parser, composition root, exit policy

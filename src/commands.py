@@ -106,7 +106,7 @@ COMMANDS: tuple[CommandSpec, ...] = (
             option("--agents | --codex", "Include canonical AGENTS.md.", "always"),
             option("--claude", "Include generated Claude output.", "selected"),
             option("--cursor", "Include generated Cursor rules.", "selected"),
-            option("--profile NAME", "Select a workspace profile.", "safe"),
+            option("--profile NAME", "Select a workspace profile.", "active profile"),
             option("TARGET", "Target directory.", "current directory"),
         ),
         "May write selected Agentbot-managed policy outputs and update the private workspace registry.",
@@ -121,7 +121,7 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "mutating",
         "Preview or apply one workspace render.",
         (
-            option("--profile NAME", "Select a workspace profile.", "safe"),
+            option("--profile NAME", "Select a workspace profile.", "active profile"),
             option(
                 "--targets LIST", "Select agents, claude, or cursor outputs.", "profile defaults"
             ),

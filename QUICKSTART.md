@@ -27,10 +27,11 @@ the canonical folder or Git root in private local state.
 Useful explicit selections:
 
 ```bash
-agentbot boot --claude
-agentbot boot --cursor
-agentbot boot --cursor
-agentbot boot --codex
+agentbot boot --agents
+agentbot boot --agents --claude
+agentbot boot --agents --cursor
+agentbot boot --agents --claude --cursor
+agentbot boot --profile safe-default
 ```
 
 Preview or refresh a registered workspace:

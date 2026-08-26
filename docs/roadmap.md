@@ -146,10 +146,11 @@ atomic, and credential-free. It is never written into a project or Git-tracked.
 
 ```
 agentbot boot
-agentbot boot --claude
-agentbot boot --cursor
-agentbot boot --cursor
-agentbot boot --codex
+agentbot boot --agents
+agentbot boot --agents --claude
+agentbot boot --agents --cursor
+agentbot boot --agents --claude --cursor
+agentbot boot --profile safe-default
 
 agentbot workspace PATH
 agentbot workspace --yes PATH

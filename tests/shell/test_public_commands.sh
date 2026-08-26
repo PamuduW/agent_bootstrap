@@ -13,11 +13,25 @@ test_launcher_and_headless_guidance() {
 	local output rc
 	[[ -x "$AGENTBOT" ]] || return 1
 	set +e
-	output="$(AGENTBOT_TTY=0 "$AGENTBOT" 2>&1)"
+	output="$(env -u AGENTBOT_TTY "$AGENTBOT" 2>&1)"
 	rc=$?
 	set -e
-	[[ "$rc" -ne 0 && "$output" == *'agentbot help'* && "$output" == *'agentbot install'* ]]
+	[[ "$rc" -ne 0 && "$output" == '[err] No usable controlling TTY. Use agentbot help or an explicit command such as agentbot install.' ]]
 }
+
+test_menu_repository_change_propagates_to_launcher() (
+	AGENTBOT_SOURCE_ONLY=1 source "$AGENTBOT"
+	agentbot_has_tty() { return 0; }
+	agentbot_run_menu() { return 2; }
+	local rc=0
+	agentbot_main || rc=$?
+	[[ "$rc" -eq 2 ]]
+)
+
+test_shell_tty_access_stays_in_the_adapter() (
+	! rg -n '/dev/tty' "$ROOT/bin" "$ROOT/scripts" "$ROOT/install.sh" \
+		--glob '!tests/**' --glob '!**/lib/shared/tui/tty.sh' --glob '!**/lib/tui.sh'
+)
 
 test_symlink_resolves_repository_root() {
 	local link="$TEST_ROOT/agentbot-link" output rc
@@ -270,6 +284,8 @@ test_one_backend_and_complete_help() {
 }
 
 check 'launcher exists and headless invocation gives guidance' test_launcher_and_headless_guidance
+check 'menu repository changes propagate to the public launcher' test_menu_repository_change_propagates_to_launcher
+check 'shell TTY access stays in the adapter' test_shell_tty_access_stays_in_the_adapter
 check 'symlink invocation resolves the owning repository' test_symlink_resolves_repository_root
 check 'public dispatcher preserves commands and exit statuses' test_dispatch_matrix
 check 'token command opens the existing token menu' test_token_route_loads_existing_menu

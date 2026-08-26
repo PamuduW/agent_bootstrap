@@ -2,10 +2,28 @@
 # shellcheck shell=bash
 
 _agentbot_token_menu_open_fds() {
-	local in_path="${AGENTBOT_TOKEN_TTY_INPUT:-/dev/tty}"
-	local out_path="${AGENTBOT_TOKEN_TTY_OUTPUT:-/dev/tty}"
-	exec {AGENTBOT_TOKEN_MENU_IN_FD}<"$in_path"
-	exec {AGENTBOT_TOKEN_MENU_OUT_FD}>"$out_path"
+	local in_path out_path
+	if [[ -n "${AGENTBOT_TOKEN_TTY_INPUT:-}" ]]; then
+		in_path="$AGENTBOT_TOKEN_TTY_INPUT"
+		exec {AGENTBOT_TOKEN_MENU_IN_FD}<"$in_path"
+	else
+		tui_refresh_tty_seam
+		if tty_use_input_fd; then
+			exec {AGENTBOT_TOKEN_MENU_IN_FD}<&"$DOTFILES_TTY_IN_FD"
+		else
+			in_path="$(tty_input_path)"
+			exec {AGENTBOT_TOKEN_MENU_IN_FD}<"$in_path"
+		fi
+	fi
+	if [[ -n "${AGENTBOT_TOKEN_TTY_OUTPUT:-}" ]]; then
+		out_path="$AGENTBOT_TOKEN_TTY_OUTPUT"
+		exec {AGENTBOT_TOKEN_MENU_OUT_FD}>"$out_path"
+	elif tty_use_output_fd; then
+		exec {AGENTBOT_TOKEN_MENU_OUT_FD}>&"$DOTFILES_TTY_OUT_FD"
+	else
+		out_path="$(tty_output_path)"
+		exec {AGENTBOT_TOKEN_MENU_OUT_FD}>"$out_path"
+	fi
 }
 
 _agentbot_token_menu_close_fds() {

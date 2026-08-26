@@ -226,6 +226,39 @@ test_repo_prompt_supports_recover_and_replace() (
 	grep -Fq 'Back up local work and replace it with origin/main? [y/N]:' "$tty_output"
 )
 
+test_current_interactive_update_plan_uses_descriptor_backed_tty() (
+	# Break caught: the Python update-plan confirmation reopens /dev/tty instead
+	# of consuming the current TUI descriptor seam after the repository gate.
+	AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+	local input="$TEST_ROOT/current-plan.input" output="$TEST_ROOT/current-plan.output" errors="$TEST_ROOT/current-plan.errors" rc=0
+	printf 'n\n' >"$input"
+	: >"$output"
+	repo_update_run() {
+		printf -v "$3" '%s' current
+		printf -v "$4" '%s' current
+	}
+	run_cli() {
+		[[ "$1" == update ]] || return 1
+		python3 -c '
+from src.cli import confirm_update_plan
+if not confirm_update_plan():
+    print("Update cancelled.")
+'
+	}
+	exec {AGENTBOT_UPDATE_TTY_IN_FD}<"$input"
+	exec {AGENTBOT_UPDATE_TTY_OUT_FD}>>"$output"
+	export AGENTBOT_UPDATE_TTY_IN_FD AGENTBOT_UPDATE_TTY_OUT_FD
+	set +e
+	run_update_backend_as update --interactive >"$TEST_ROOT/current-plan.stdout" 2>"$errors"
+	rc=$?
+	set -e
+	exec {AGENTBOT_UPDATE_TTY_IN_FD}<&-
+	exec {AGENTBOT_UPDATE_TTY_OUT_FD}>&-
+	[[ "$rc" -eq 0 && ! -s "$errors" ]] || return 1
+	[[ "$(<"$output")" == *'Apply this Agentbot update plan? [y/N] '* ]]
+	[[ "$(<"$TEST_ROOT/current-plan.stdout")" == *'Update cancelled.'* ]]
+)
+
 test_repo_update_table_honors_tui_color_mode() (
 	NO_COLOR=''
 	AGENTBOT_TUI=1
@@ -316,6 +349,7 @@ check 'dirty change report caps paths and prints a copyable full-status command'
 check 'interactive update decisions use the TTY prompt seam' test_interactive_repo_decision_uses_tty_prompt_contract
 check 'repository pull prompt renders below its table on the TTY stream' test_repo_prompt_renders_after_table_on_the_tty_stream
 check 'repository prompt supports recover and replace decisions' test_repo_prompt_supports_recover_and_replace
+check 'current interactive update plan uses the descriptor-backed TTY' test_current_interactive_update_plan_uses_descriptor_backed_tty
 check 'repository update table honors the Agentbot TUI color mode' test_repo_update_table_honors_tui_color_mode
 check 'ahead repository table describes recoverable replacement' test_ahead_repo_table_describes_recoverable_replacement
 check 'direct update shows the status table before reconciliation' test_direct_update_shows_status_before_reconciliation

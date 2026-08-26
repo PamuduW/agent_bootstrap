@@ -12,6 +12,9 @@ else
 fi
 export AGENTBOT_HOME
 
+# shellcheck source=/dev/null
+source "$AGENTBOT_HOME/scripts/lib/shared/tui/tty.sh"
+
 agentbot_die() {
 	printf '[err] %s\n' "$*" >&2
 	return 1
@@ -20,9 +23,7 @@ agentbot_info() { printf '[info] %s\n' "$*"; }
 
 agentbot_has_tty() {
 	case "${AGENTBOT_TTY:-}" in 1 | true) return 0 ;; 0 | false) return 1 ;; esac
-	local tty_fd
-	exec {tty_fd}<>/dev/tty 2>/dev/null || return 1
-	[[ -t "$tty_fd" ]]
+	tty_available
 }
 
 agentbot_load_menu() {

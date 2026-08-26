@@ -12,13 +12,18 @@
 
 _AGENTBOT_TUI_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/shared/tui" && pwd)"
 
-# One TTY adapter, two addressing forms. Paths are the default; descriptors are
-# used where a caller must share one read position across several prompts (the
-# token menu reads a choice, then a secret, then a confirmation from the same
-# stream). Both Agentbot spellings map onto the shared adapter's names.
-DOTFILES_TTY_INPUT="${AGENTBOT_TUI_INPUT:-${DOTFILES_TTY_INPUT:-/dev/tty}}"
-DOTFILES_TTY_OUTPUT="${AGENTBOT_TUI_OUTPUT:-${DOTFILES_TTY_OUTPUT:-/dev/tty}}"
-export DOTFILES_TTY_INPUT DOTFILES_TTY_OUTPUT
+# One TTY adapter, two addressing forms. Preserve the caller's Dotfiles seam
+# before resolving Agentbot overrides: refresh must restore that stable base
+# after a scoped token/menu override ends.
+_AGENTBOT_TUI_BASE_INPUT="${DOTFILES_TTY_INPUT:-/dev/tty}"
+_AGENTBOT_TUI_BASE_OUTPUT="${DOTFILES_TTY_OUTPUT:-/dev/tty}"
+_AGENTBOT_TUI_BASE_IN_FD="${DOTFILES_TTY_IN_FD:-}"
+_AGENTBOT_TUI_BASE_OUT_FD="${DOTFILES_TTY_OUT_FD:-}"
+DOTFILES_TTY_INPUT="${AGENTBOT_TUI_INPUT:-$_AGENTBOT_TUI_BASE_INPUT}"
+DOTFILES_TTY_OUTPUT="${AGENTBOT_TUI_OUTPUT:-$_AGENTBOT_TUI_BASE_OUTPUT}"
+DOTFILES_TTY_IN_FD="${AGENTBOT_TUI_IN_FD:-$_AGENTBOT_TUI_BASE_IN_FD}"
+DOTFILES_TTY_OUT_FD="${AGENTBOT_TUI_OUT_FD:-$_AGENTBOT_TUI_BASE_OUT_FD}"
+export DOTFILES_TTY_INPUT DOTFILES_TTY_OUTPUT DOTFILES_TTY_IN_FD DOTFILES_TTY_OUT_FD
 
 source "$_AGENTBOT_TUI_DIR/colors.sh"
 source "$_AGENTBOT_TUI_DIR/tty.sh"
@@ -35,11 +40,11 @@ source "$_AGENTBOT_TUI_DIR/menu_runner.sh"
 # Re-resolve the TTY seam after a caller changes AGENTBOT_TUI_INPUT/OUTPUT
 # mid-process (the token and workspace menus do this to capture output).
 tui_refresh_tty_seam() {
-	DOTFILES_TTY_INPUT="${AGENTBOT_TUI_INPUT:-/dev/tty}"
-	DOTFILES_TTY_OUTPUT="${AGENTBOT_TUI_OUTPUT:-/dev/tty}"
-	DOTFILES_TTY_IN_FD="${AGENTBOT_TUI_IN_FD:-}"
-	DOTFILES_TTY_OUT_FD="${AGENTBOT_TUI_OUT_FD:-}"
-	export DOTFILES_TTY_INPUT DOTFILES_TTY_OUTPUT
+	DOTFILES_TTY_INPUT="${AGENTBOT_TUI_INPUT:-$_AGENTBOT_TUI_BASE_INPUT}"
+	DOTFILES_TTY_OUTPUT="${AGENTBOT_TUI_OUTPUT:-$_AGENTBOT_TUI_BASE_OUTPUT}"
+	DOTFILES_TTY_IN_FD="${AGENTBOT_TUI_IN_FD:-$_AGENTBOT_TUI_BASE_IN_FD}"
+	DOTFILES_TTY_OUT_FD="${AGENTBOT_TUI_OUT_FD:-$_AGENTBOT_TUI_BASE_OUT_FD}"
+	export DOTFILES_TTY_INPUT DOTFILES_TTY_OUTPUT DOTFILES_TTY_IN_FD DOTFILES_TTY_OUT_FD
 	menu_tty_invalidate_size
 }
 
@@ -61,6 +66,21 @@ tui_header() { ui_print_header "$1" "${2:-}" "${3:-$(tui_cols)}"; }
 tui_section() { ui_print_section "$1" "${2:-$(tui_cols)}"; }
 tui_shortcuts() { ui_format_shortcuts "$@"; }
 tui_color_input_hint() { ui_color_input_hint "$1"; }
+tui_print() {
+	tui_refresh_tty_seam
+	tty_printf "$@"
+}
+tui_run_to_output() {
+	tui_refresh_tty_seam
+	if tty_use_output_fd; then
+		"$@" >&"$DOTFILES_TTY_OUT_FD" 2>&1
+		return
+	fi
+	local output_path
+	tty_output_available || return 1
+	output_path="$(tty_output_path)"
+	"$@" >>"$output_path" 2>&1
+}
 tui_pause() {
 	tui_refresh_tty_seam
 	ui_pause

@@ -83,6 +83,109 @@ test_pause_uses_one_blank_line_and_shared_prompt() (
 	[[ "$(<"$output")" == $'\nPress Enter to continue: ' ]]
 )
 
+test_refresh_preserves_agentbot_and_dotfiles_tty_overrides_for_pause_and_confirm() (
+	# Break caught: tui_refresh_tty_seam discards DOTFILES_* after the initial
+	# load, sending a later prompt to /dev/tty instead of the caller's stream.
+	local agent_pause_in="$TEST_ROOT/agent-pause.input" agent_pause_out="$TEST_ROOT/agent-pause.output"
+	local agent_confirm_in="$TEST_ROOT/agent-confirm.input" agent_confirm_out="$TEST_ROOT/agent-confirm.output"
+	local dot_pause_in="$TEST_ROOT/dot-pause.input" dot_pause_out="$TEST_ROOT/dot-pause.output"
+	local dot_confirm_in="$TEST_ROOT/dot-confirm.input" dot_confirm_out="$TEST_ROOT/dot-confirm.output"
+	printf '\n' >"$agent_pause_in"
+	printf 'y\n' >"$agent_confirm_in"
+	printf '\n' >"$dot_pause_in"
+	printf 'y\n' >"$dot_confirm_in"
+	NO_COLOR=1
+	tui_init_colors
+	AGENTBOT_TUI_INPUT="$agent_pause_in" AGENTBOT_TUI_OUTPUT="$agent_pause_out" tui_pause
+	AGENTBOT_TUI_INPUT="$agent_confirm_in" AGENTBOT_TUI_OUTPUT="$agent_confirm_out" tui_confirm 'Apply changes'
+	[[ "$(<"$agent_pause_out")" == $'\nPress Enter to continue: ' ]] || {
+		printf 'agent pause output: %q\n' "$(<"$agent_pause_out")" >&2
+		return 1
+	}
+	[[ "$(<"$agent_confirm_out")" == 'Apply changes [y/N]: ' ]] || {
+		printf 'agent confirm output: %q\n' "$(<"$agent_confirm_out")" >&2
+		return 1
+	}
+	NO_COLOR=1 DOTFILES_TTY_INPUT="$dot_pause_in" DOTFILES_TTY_OUTPUT="$dot_pause_out" bash -c '
+		set -euo pipefail
+		source "$1/scripts/lib/tui.sh"
+		tui_pause
+	' _ "$ROOT"
+	NO_COLOR=1 DOTFILES_TTY_INPUT="$dot_confirm_in" DOTFILES_TTY_OUTPUT="$dot_confirm_out" bash -c '
+		set -euo pipefail
+		source "$1/scripts/lib/tui.sh"
+		tui_confirm "Apply changes"
+	' _ "$ROOT"
+	[[ "$(<"$dot_pause_out")" == $'\nPress Enter to continue: ' ]] || {
+		printf 'dotfiles pause output: %q\n' "$(<"$dot_pause_out")" >&2
+		return 1
+	}
+	[[ "$(<"$dot_confirm_out")" == 'Apply changes [y/N]: ' ]] || {
+		printf 'dotfiles confirm output: %q\n' "$(<"$dot_confirm_out")" >&2
+		return 1
+	}
+)
+
+test_refresh_restores_immutable_dotfiles_paths_and_descriptors_after_agentbot_overrides() (
+	# Break caught: refresh reads its prior effective values as fallbacks, making
+	# the last Agentbot override survive after that override is unset.
+	local base_in="$TEST_ROOT/base.input" base_out="$TEST_ROOT/base.output"
+	local override_a_in="$TEST_ROOT/override-a.input" override_a_out="$TEST_ROOT/override-a.output"
+	local override_b_in="$TEST_ROOT/override-b.input" override_b_out="$TEST_ROOT/override-b.output"
+	local output
+	: >"$base_in"
+	: >"$base_out"
+	: >"$override_a_in"
+	: >"$override_a_out"
+	: >"$override_b_in"
+	: >"$override_b_out"
+	output="$(DOTFILES_TTY_INPUT="$base_in" DOTFILES_TTY_OUTPUT="$base_out" bash -c '
+		set -euo pipefail
+		exec {base_in}<"$1"; exec {base_out}>>"$2"
+		exec {a_in}<"$3"; exec {a_out}>>"$4"
+		exec {b_in}<"$5"; exec {b_out}>>"$6"
+		DOTFILES_TTY_IN_FD="$base_in" DOTFILES_TTY_OUT_FD="$base_out"
+		source "$7/scripts/lib/tui.sh"
+		AGENTBOT_TUI_INPUT="$3" AGENTBOT_TUI_OUTPUT="$4" AGENTBOT_TUI_IN_FD="$a_in" AGENTBOT_TUI_OUT_FD="$a_out" tui_refresh_tty_seam
+		[[ "$DOTFILES_TTY_IN_FD" == "$a_in" && "$DOTFILES_TTY_OUT_FD" == "$a_out" ]]
+		printf "A:%s:%s:%s:%s\\n" "$DOTFILES_TTY_INPUT" "$DOTFILES_TTY_OUTPUT" "$DOTFILES_TTY_IN_FD" "$DOTFILES_TTY_OUT_FD"
+		AGENTBOT_TUI_INPUT="$5" AGENTBOT_TUI_OUTPUT="$6" AGENTBOT_TUI_IN_FD="$b_in" AGENTBOT_TUI_OUT_FD="$b_out" tui_refresh_tty_seam
+		[[ "$DOTFILES_TTY_IN_FD" == "$b_in" && "$DOTFILES_TTY_OUT_FD" == "$b_out" ]]
+		printf "B:%s:%s:%s:%s\\n" "$DOTFILES_TTY_INPUT" "$DOTFILES_TTY_OUTPUT" "$DOTFILES_TTY_IN_FD" "$DOTFILES_TTY_OUT_FD"
+		unset AGENTBOT_TUI_INPUT AGENTBOT_TUI_OUTPUT AGENTBOT_TUI_IN_FD AGENTBOT_TUI_OUT_FD
+		tui_refresh_tty_seam
+		[[ "$DOTFILES_TTY_IN_FD" == "$base_in" && "$DOTFILES_TTY_OUT_FD" == "$base_out" ]]
+		printf "BASE:%s:%s:%s:%s\\n" "$DOTFILES_TTY_INPUT" "$DOTFILES_TTY_OUTPUT" "$DOTFILES_TTY_IN_FD" "$DOTFILES_TTY_OUT_FD"
+	' _ "$base_in" "$base_out" "$override_a_in" "$override_a_out" "$override_b_in" "$override_b_out" "$ROOT")"
+	[[ "$output" == *"A:$override_a_in:$override_a_out:"* && "$output" == *"B:$override_b_in:$override_b_out:"* ]] || return 1
+	[[ "$output" == *"BASE:$base_in:$base_out:"* ]]
+)
+
+test_token_confirm_returns_to_the_parent_tty_after_its_descriptors_close() (
+	# Break caught: a token confirmation leaves its closed scoped descriptor in
+	# DOTFILES_TTY_* and the parent menu cannot read its next pause.
+	local parent_input="$TEST_ROOT/token-parent.input" parent_output="$TEST_ROOT/token-parent.output"
+	local token_input="$TEST_ROOT/token-confirm.input" token_output="$TEST_ROOT/token-confirm.output" output
+	printf '\n' >"$parent_input"
+	printf 'y\n' >"$token_input"
+	output="$(NO_COLOR=1 DOTFILES_TTY_INPUT="$parent_input" DOTFILES_TTY_OUTPUT="$parent_output" bash -c '
+		set -euo pipefail
+		exec {parent_in}<"$1"; exec {parent_out}>>"$2"
+		exec {token_in}<"$3"; exec {token_out}>>"$4"
+		DOTFILES_TTY_IN_FD="$parent_in" DOTFILES_TTY_OUT_FD="$parent_out"
+		source "$5/scripts/menu.sh"
+		AGENTBOT_TOKEN_MENU_IN_FD="$token_in" AGENTBOT_TOKEN_MENU_OUT_FD="$token_out"
+		_agentbot_token_menu_confirm "Confirm token" || exit 1
+		exec {token_in}<&-; exec {token_out}>&-
+		tui_pause
+		printf "parent=%s token=%s\\n" "$(<"$2")" "$(<"$4")"
+	' _ "$parent_input" "$parent_output" "$token_input" "$token_output" "$ROOT")"
+	[[ "$output" == *'parent='$'\nPress Enter to continue: '* && "$output" == *'token=Confirm token [y/N]: '* ]] || {
+		printf 'token return output: %q\n' "$output" >&2
+		return 1
+	}
+)
+
 test_command_details_fit_narrow_terminals() (
 	local output line
 	output="$(NO_COLOR=1 AGENTBOT_MENU_COLS=48 "$ROOT/bin/agentbot" help)" || return 1
@@ -94,6 +197,9 @@ check 'TUI frames fit 48, 80, and 120 columns with the shared palette' test_widt
 check 'menu redraw frames clear stale tails and preserve height' test_draw_clears_line_tails_and_matches_frame_height
 check 'shortcut tokens use the shared cyan treatment' test_shortcuts_use_cyan_tokens
 check 'pause uses one blank line and one shared prompt' test_pause_uses_one_blank_line_and_shared_prompt
+check 'TTY refresh preserves Agentbot and Dotfiles overrides for pause and confirm' test_refresh_preserves_agentbot_and_dotfiles_tty_overrides_for_pause_and_confirm
+check 'TTY refresh restores immutable Dotfiles paths and descriptors after Agentbot overrides' test_refresh_restores_immutable_dotfiles_paths_and_descriptors_after_agentbot_overrides
+check 'token confirmation returns to the parent TTY after scoped descriptors close' test_token_confirm_returns_to_the_parent_tty_after_its_descriptors_close
 check 'command details fit a 48-column terminal' test_command_details_fit_narrow_terminals
 
 test_harness_verify_safety || failed=$((failed + 1))

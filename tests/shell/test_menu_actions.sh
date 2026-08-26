@@ -51,7 +51,7 @@ test_main_dispatch_and_pause_ownership() (
 	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\nworkspaces\nlibraries' ]]
 )
 
-test_repository_change_exits_without_pause() (
+test_repository_change_reaches_the_outer_menu_without_pause() (
 	local calls="$TEST_ROOT/repository-change.calls"
 	: >"$calls"
 	local index=0
@@ -61,9 +61,70 @@ test_repository_change_exits_without_pause() (
 	}
 	tui_clear() { :; }
 	tui_pause() { printf 'pause\n' >>"$calls"; }
-	agentbot_menu_dispatch() { AGENTBOT_MENU_QUIT=true; }
-	agentbot_menu_loop
-	[[ ! -s "$calls" ]]
+	agentbot_menu_dispatch() { return 2; }
+	local rc=0
+	agentbot_menu_loop || rc=$?
+	[[ "$rc" -eq 2 && ! -s "$calls" ]]
+)
+
+test_tui_install_and_update_preserve_repository_change_exit() (
+	# Break caught: an install/update repository change becomes a successful menu
+	# return, so the outer agentbot launcher cannot stop the stale process.
+	local output="$TEST_ROOT/repository-change.output" update_home="$TEST_ROOT/repository-change-home" rc=0
+	mkdir -p "$update_home"
+	cat >"$update_home/install.sh" <<'EOF'
+#!/usr/bin/env bash
+printf 'Repository fast-forward succeeded\n\nRun setup again when ready.\n'
+exit 2
+EOF
+	chmod 700 "$update_home/install.sh"
+	agentbot_run_backend() {
+		printf 'Repository fast-forward succeeded\n\nRun setup again when ready.\n'
+		return 2
+	}
+	AGENTBOT_TUI=1 AGENTBOT_TUI_OUTPUT="$output" agentbot_menu_install || rc=$?
+	[[ "$rc" -eq 2 ]] || return 1
+	rc=0
+	AGENTBOT_TUI=1 AGENTBOT_TUI_OUTPUT="$output" AGENTBOT_HOME="$update_home" agentbot_menu_update || rc=$?
+	[[ "$rc" -eq 2 ]] || return 1
+	[[ "$(<"$output")" == $'Repository fast-forward succeeded\n\nRun setup again when ready.\nRepository fast-forward succeeded\n\nRun setup again when ready.' ]]
+)
+
+test_tui_update_carries_effective_descriptors_into_python_confirmation() (
+	# Break caught: the TUI redirects the update child output but leaves the
+	# Python confirmation to reopen unrelated AGENTBOT_UPDATE_TTY_* paths.
+	local input="$TEST_ROOT/tui-update-plan.input" output="$TEST_ROOT/tui-update-plan.output"
+	local update_home="$TEST_ROOT/tui-update-plan-home" rc=0
+	printf 'n\n' >"$input"
+	mkdir -p "$update_home"
+	cat >"$update_home/install.sh" <<'EOF'
+#!/usr/bin/env bash
+python3 -c '
+from src.cli import confirm_update_plan
+if not confirm_update_plan():
+    print("Update cancelled.")
+'
+EOF
+	chmod 700 "$update_home/install.sh"
+	exec {AGENTBOT_TUI_IN_FD}<"$input"
+	exec {AGENTBOT_TUI_OUT_FD}>>"$output"
+	AGENTBOT_TUI=1 AGENTBOT_HOME="$update_home" PYTHONPATH="$ROOT" agentbot_menu_update || rc=$?
+	exec {AGENTBOT_TUI_IN_FD}<&-
+	exec {AGENTBOT_TUI_OUT_FD}>&-
+	[[ "$rc" -eq 0 ]] || return 1
+	[[ "$(<"$output")" == *'Apply this Agentbot update plan? [y/N] '* && "$(<"$output")" == *'Update cancelled.'* ]]
+)
+
+test_workspace_removal_prompt_uses_the_shared_tty_adapter() (
+	# Break caught: workspace removal writes directly to /dev/tty, bypassing the
+	# injected output path used by a caller or automated terminal session.
+	local input="$TEST_ROOT/workspace-remove.input" output="$TEST_ROOT/workspace-remove.output"
+	printf 'y\n' >"$input"
+	NO_COLOR=1
+	tui_init_colors
+	AGENTBOT_TUI_INPUT="$input" AGENTBOT_TUI_OUTPUT="$output" \
+		agentbot_menu_workspaces_remove_confirm '/tmp/recorded-workspace'
+	[[ "$(<"$output")" == $'Stop managing this workspace?\n/tmp/recorded-workspace\nNo workspace files will be changed. [y/N]: ' ]]
 )
 
 test_command_lib_selects_one_detail() (
@@ -182,12 +243,15 @@ test_undeclared_submenu_still_gets_a_parent_pause() (
 check 'Status uses one diagnostics snapshot' test_status_uses_one_diagnostics_snapshot
 check 'main dispatch gives direct actions exactly one pause' test_main_dispatch_and_pause_ownership
 check 'a submenu that does not declare pause ownership still gets one' test_undeclared_submenu_still_gets_a_parent_pause
-check 'repository changes exit without a stale pause' test_repository_change_exits_without_pause
+check 'repository changes reach the outer menu without a stale pause' test_repository_change_reaches_the_outer_menu_without_pause
+check 'TUI install and update preserve the repository-change exit contract' test_tui_install_and_update_preserve_repository_change_exit
+check 'TUI update carries effective descriptors into Python confirmation' test_tui_update_carries_effective_descriptors_into_python_confirmation
 check 'Command Lib selects and renders one detail page' test_command_lib_selects_one_detail
 check 'Graphify Lib rows match supported command families' test_graphify_library_is_data_driven_and_supported
 check 'token entry is hidden and reveal is confirmed' test_token_entry_is_hidden_and_reveal_requires_confirmation
 check 'Workspaces routes list preview and confirmed apply' test_workspaces_routes_read_preview_and_apply
 check 'declined workspace apply performs no backend write' test_declined_workspace_apply_is_non_destructive
+check 'workspace removal prompts use the shared TTY adapter' test_workspace_removal_prompt_uses_the_shared_tty_adapter
 check 'failed menu actions use the shared red treatment' test_failed_actions_are_red
 
 test_harness_verify_safety || failed=$((failed + 1))

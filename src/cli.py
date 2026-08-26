@@ -5,6 +5,7 @@ import json
 import os
 import sys
 from collections.abc import Callable
+from contextlib import ExitStack
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -382,15 +383,39 @@ def _archived_command_error(command: str) -> int:
     return 1
 
 
+def _update_tty_default_path() -> str:
+    """Return the one fallback terminal path for interactive update prompts."""
+    return "/dev/tty"
+
+
+def _open_update_tty_stream(*, descriptor_name: str, path_name: str, mode: str):
+    descriptor = os.environ.get(descriptor_name)
+    if descriptor:
+        return os.fdopen(os.dup(int(descriptor)), mode, encoding="utf-8")
+    path = os.environ.get(path_name, _update_tty_default_path())
+    return open(path, mode, encoding="utf-8")
+
+
 def confirm_update_plan() -> bool:
-    input_path = os.environ.get("AGENTBOT_UPDATE_TTY_INPUT", "/dev/tty")
-    output_path = os.environ.get("AGENTBOT_UPDATE_TTY_OUTPUT", "/dev/tty")
-    with open(output_path, "a", encoding="utf-8") as output_stream:
+    with ExitStack() as streams:
+        output_stream = streams.enter_context(
+            _open_update_tty_stream(
+                descriptor_name="AGENTBOT_UPDATE_TTY_OUT_FD",
+                path_name="AGENTBOT_UPDATE_TTY_OUTPUT",
+                mode="a",
+            )
+        )
         output_stream.write("\nApply this Agentbot update plan? [y/N] ")
         output_stream.flush()
-    with open(input_path, encoding="utf-8") as input_stream:
+        input_stream = streams.enter_context(
+            _open_update_tty_stream(
+                descriptor_name="AGENTBOT_UPDATE_TTY_IN_FD",
+                path_name="AGENTBOT_UPDATE_TTY_INPUT",
+                mode="r",
+            )
+        )
         answer = input_stream.readline().strip()
-    return answer.lower() in {"y", "yes"}
+        return answer.lower() in {"y", "yes"}
 
 
 def parse_workspace_targets(value: str | None) -> tuple[str, ...] | None:

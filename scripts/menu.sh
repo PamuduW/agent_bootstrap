@@ -62,7 +62,7 @@ agentbot_menu_dispatch() {
 		rc=2
 		;;
 	esac
-	if ((rc != 0)); then
+	if ((rc != 0 && rc != 2)); then
 		printf '%sAction failed (exit %d).%s\n' "$C_RED" "$rc" "$C_RESET" >&2
 	fi
 	return "$rc"
@@ -86,6 +86,7 @@ agentbot_menu_loop() {
 		# child still pauses, so its error stays visible before the redraw.
 		MENU_OWNS_PAUSE=false
 		agentbot_menu_dispatch "$choice" || rc=$?
+		((rc == 2)) && return 2
 		[[ "${AGENTBOT_MENU_QUIT:-false}" == true ]] && return 0
 		if ((rc != 0)) || [[ "${MENU_OWNS_PAUSE:-false}" != true ]]; then
 			tui_pause

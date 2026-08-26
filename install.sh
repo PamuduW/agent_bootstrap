@@ -20,6 +20,8 @@ fi
 
 # shellcheck source=scripts/lib/repo_update.sh
 source "${REPO_ROOT}/scripts/lib/repo_update.sh"
+# shellcheck source=scripts/lib/shared/tui/tty.sh
+source "${REPO_ROOT}/scripts/lib/shared/tui/tty.sh"
 
 github_token_child() (
 	github_token_export_if_valid
@@ -207,22 +209,43 @@ print_repo_update_table() {
 }
 
 run_repo_update_prompt() {
-	local action="$1" prompt answer=''
-	local tty_input="${AGENTBOT_UPDATE_TTY_INPUT:-/dev/tty}"
-	local tty_output="${AGENTBOT_UPDATE_TTY_OUTPUT:-/dev/tty}"
+	local action="$1" prompt answer='' tty_input tty_output
 	case "$action" in
 	pull-behind) prompt="Pull ${REPO_UPDATE_BEHIND:-0} commit(s) with --ff-only?" ;;
 	continue-ahead) prompt='The repository is ahead. Continue with the Agentbot update?' ;;
 	replace-local) prompt="Back up local work and replace it with ${REPO_UPDATE_UPSTREAM:-upstream}?" ;;
 	*) return 1 ;;
 	esac
-	print_repo_update_table >"$tty_output"
-	printf '%s [y/N]: ' "$prompt" >>"$tty_output"
-	IFS= read -r answer <"$tty_input" || true
+	if [[ -n "${AGENTBOT_UPDATE_TTY_INPUT:-}" ]]; then
+		DOTFILES_TTY_INPUT="$AGENTBOT_UPDATE_TTY_INPUT"
+	fi
+	if [[ -n "${AGENTBOT_UPDATE_TTY_OUTPUT:-}" ]]; then
+		DOTFILES_TTY_OUTPUT="$AGENTBOT_UPDATE_TTY_OUTPUT"
+	fi
+	if tty_use_output_fd; then
+		print_repo_update_table >&"$DOTFILES_TTY_OUT_FD"
+		printf '%s [y/N]: ' "$prompt" >&"$DOTFILES_TTY_OUT_FD"
+	else
+		tty_output_available || return 1
+		tty_output="$(tty_output_path)"
+		print_repo_update_table >>"$tty_output"
+		printf '%s [y/N]: ' "$prompt" >>"$tty_output"
+	fi
+	if tty_use_input_fd; then
+		IFS= read -r answer <&"$DOTFILES_TTY_IN_FD" || true
+	else
+		tty_input_available || return 1
+		tty_input="$(tty_input_path)"
+		IFS= read -r answer <"$tty_input" || true
+	fi
 	case "$answer" in
 	y | Y | yes | YES) return 0 ;;
 	*)
-		repo_update_print_declined "$action" >>"$tty_output"
+		if tty_use_output_fd; then
+			repo_update_print_declined "$action" >&"$DOTFILES_TTY_OUT_FD"
+		else
+			repo_update_print_declined "$action" >>"$tty_output"
+		fi
 		AGENTBOT_REPOSITORY_UPDATE_DECLINE_REPORTED=true
 		return 1
 		;;

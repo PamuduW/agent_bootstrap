@@ -62,17 +62,17 @@ def terminal_columns() -> int:
 def _fit_line(text: str, width: int) -> str:
     if len(text) <= width:
         return text
-    if width <= 3:
+    if width <= 1:
         return text[:width]
-    return f"{text[: width - 3]}..."
+    return f"{text[: width - 1]}…"
 
 
 def _table_widths() -> tuple[int, int, int]:
     if not os.environ.get("AGENTBOT_TUI") and not os.environ.get("AGENTBOT_MENU_COLS"):
         return LABEL_W, DETAIL_W, RESULT_W
-    available = max(12, min(terminal_columns(), 80) - 8)
-    label_width = max(6, available * 29 // 100)
-    result_width = max(5, available * 14 // 100)
+    available = max(24, terminal_columns() - 8)
+    label_width = max(10, available * 30 // 100)
+    result_width = max(7, available * 14 // 100)
     detail_width = max(1, available - label_width - result_width)
     return label_width, detail_width, result_width
 
@@ -84,11 +84,11 @@ def shorten_detail(text: str, *, max_len: int = DETAIL_W) -> str:
         if not line or line == "skills" or "████" in line:
             continue
         if len(line) > max_len:
-            return f"{line[: max_len - 3]}..."
+            return f"{line[: max_len - 1]}…"
         return line
     compact = " ".join(part for part in cleaned.split() if part)
     if len(compact) > max_len:
-        return f"{compact[: max_len - 3]}..."
+        return f"{compact[: max_len - 1]}…"
     return compact
 
 

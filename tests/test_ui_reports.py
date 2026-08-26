@@ -10,6 +10,7 @@ import io
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 from src.graphify import GraphifyStatus
 from src.models import DoctorIssue
@@ -27,6 +28,7 @@ from src.ui import (
     print_workspace_report,
     print_workspace_resync_report,
 )
+from src.ui.table import print_table, strip_ansi
 from src.workspace_service import WorkspaceReport, WorkspaceResult
 from src.workspace_state import WorkspaceRecord
 
@@ -48,6 +50,33 @@ def _capture(fn, *args, **kwargs) -> tuple[str, object]:
     with redirect_stdout(buffer):
         result = fn(*args, **kwargs)
     return buffer.getvalue(), result
+
+
+class ResponsiveTableTests(unittest.TestCase):
+    def test_long_cells_fit_supported_widths_with_unicode_ellipsis(self):
+        row = (
+            "Git config (credentials + submodules)",
+            "/home/pamudu/a/very/long/path/with/Boost action text and an em dash —",
+            "refresh-required",
+        )
+        for columns in (48, 80, 120):
+            with self.subTest(columns=columns), mock.patch.dict(
+                "os.environ",
+                {"AGENTBOT_MENU_COLS": str(columns), "NO_COLOR": "1"},
+                clear=False,
+            ):
+                text, _ = _capture(print_table, [row])
+                for line in text.splitlines():
+                    self.assertLessEqual(len(strip_ansi(line)), columns)
+                self.assertIn("…", text)
+                self.assertNotIn("...", text)
+
+    def test_no_color_wins_over_forced_color(self):
+        with mock.patch.dict(
+            "os.environ", {"NO_COLOR": "1", "FORCE_COLOR": "1"}, clear=False
+        ):
+            text, _ = _capture(print_table, [("component", "detail", "warning")])
+        self.assertNotIn("\033[", text)
 
 
 class DoctorSummaryTests(unittest.TestCase):

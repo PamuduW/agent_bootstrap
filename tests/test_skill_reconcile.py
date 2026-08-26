@@ -80,5 +80,36 @@ class SkillReconcileTests(unittest.TestCase):
         self.assertEqual((), plan.explicit_discovered)
         self.assertEqual((), plan.manifest_changes)
 
+    def test_wildcard_exclusions_are_filtered_before_additions_are_planned(self) -> None:
+        """Break caught: a source re-adds skills that install-time pruning just removed."""
+        from src.skill_reconcile import build_reconcile_plan
+        from src.skills_sources import validate_skills_sources
+
+        config = validate_skills_sources(
+            {
+                "version": 1,
+                "agents": ["codex"],
+                "scope": "global",
+                "sources": [
+                    {
+                        "id": "wildcard",
+                        "repo": "owner/wildcard",
+                        "skills": "all",
+                        "exclude": ["alpha", "beta"],
+                    }
+                ],
+            }
+        )
+
+        plan = build_reconcile_plan(
+            config,
+            discovered={"wildcard": ("alpha", "beta", "kept")},
+            lock={"skills": {"kept": {"source": "owner/wildcard"}}},
+        )
+
+        self.assertEqual((), plan.updates)
+        self.assertEqual((), plan.wildcard_additions)
+        self.assertEqual((), plan.wildcard_removals)
+
 if __name__ == "__main__":
     unittest.main()

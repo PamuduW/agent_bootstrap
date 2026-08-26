@@ -5,6 +5,7 @@ import re
 import stat
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from .boost import BoostIntegration, BoostStatus
 from .claude_statusline import (
@@ -324,13 +325,15 @@ class Diagnostics:
         if not cursor_lock.is_file():
             return issues
 
-        try:
-            global_mtime = global_lock.stat().st_mtime
-            cursor_mtime = cursor_lock.stat().st_mtime
-        except OSError:
+        global_skills = self._lock_skill_receipts(global_lock)
+        cursor_skills = self._lock_skill_receipts(cursor_lock)
+        if global_skills is None or cursor_skills is None:
             return issues
 
-        if cursor_mtime >= global_mtime:
+        if all(
+            self._cursor_receipt_is_current(cursor_skills.get(name), receipt)
+            for name, receipt in global_skills.items()
+        ):
             return issues
 
         issues.append(
@@ -338,13 +341,43 @@ class Diagnostics:
                 level="warning",
                 scope="skills-cursor",
                 message=(
-                    f"Cursor skill lock {cursor_lock} is older than the global lock; "
+                    f"Cursor skill lock {cursor_lock} does not match the global managed skill state; "
                     "'skills update' refreshes only the global surface. Run "
                     "'./install.sh skills install' to refresh every agent in the manifest"
                 ),
             )
         )
         return issues
+
+    @staticmethod
+    def _lock_skill_receipts(path: Path) -> dict[str, dict[str, Any]] | None:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        if not isinstance(data, dict):
+            return None
+        skills = data.get("skills", {})
+        if not isinstance(skills, dict):
+            return None
+        return {
+            str(name): entry
+            for name, entry in skills.items()
+            if isinstance(entry, dict)
+        }
+
+    @staticmethod
+    def _cursor_receipt_is_current(
+        cursor: dict[str, Any] | None,
+        global_receipt: dict[str, Any],
+    ) -> bool:
+        if cursor is None:
+            return False
+        for field in ("source", "sourceType"):
+            expected = global_receipt.get(field)
+            if expected is not None and cursor.get(field) != expected:
+                return False
+        return True
 
     def _token_doctor_issues(self) -> list[DoctorIssue]:
         token_file = self.paths.config_home / "github.env"

@@ -203,7 +203,8 @@ class DoctorSeverityTests(unittest.TestCase):
                 any(issue.level == "error" and issue.scope == "graphify" for issue in issues)
             )
 
-    def test_cursor_lock_older_than_the_global_lock_is_a_warning(self) -> None:
+    def test_cursor_lock_matching_global_receipts_ignores_file_mtime(self) -> None:
+        """Break caught: rewriting the global lock alone manufactures Cursor staleness."""
         import os
         import time
 
@@ -219,8 +220,16 @@ class DoctorSeverityTests(unittest.TestCase):
             agents.mkdir(parents=True)
             cursor_lock = agents / "cursor-skills-lock.json"
             global_lock = agents / ".skill-lock.json"
-            cursor_lock.write_text("{}\n", encoding="utf-8")
-            global_lock.write_text("{}\n", encoding="utf-8")
+            cursor_lock.write_text(
+                '{"skills":{"alpha":{"source":"owner/repo",'
+                '"updatedAt":"2026-08-26T08:00:00Z"}}}\n',
+                encoding="utf-8",
+            )
+            global_lock.write_text(
+                '{"skills":{"alpha":{"source":"owner/repo",'
+                '"updatedAt":"2026-08-26T08:00:00Z"}}}\n',
+                encoding="utf-8",
+            )
 
             paths = AgentbotPaths(
                 root,
@@ -230,21 +239,49 @@ class DoctorSeverityTests(unittest.TestCase):
                 agents_home=agents,
             )
 
-            # cursor behind global -> warning naming the fix
             old = time.time() - 3600
             os.utime(cursor_lock, (old, old))
+            os.utime(global_lock, (time.time(), time.time()))
+            issues = Diagnostics(paths).doctor_issues()
+            self.assertEqual([], [i for i in issues if i.scope == "skills-cursor"])
+
+    def test_cursor_lock_missing_a_managed_receipt_is_a_warning(self) -> None:
+        """Break caught: a missing managed Cursor skill is treated as current."""
+        from src.diagnostics import Diagnostics
+        from src.paths import AgentbotPaths
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home = root / "home"
+            (root / "global").mkdir()
+            (root / "global" / "AGENTS.md").write_text("# baseline\n", encoding="utf-8")
+            agents = home / ".agents"
+            agents.mkdir(parents=True)
+            cursor_lock = agents / "cursor-skills-lock.json"
+            global_lock = agents / ".skill-lock.json"
+            cursor_lock.write_text(
+                '{"skills":{"other":{"source":"owner/repo",'
+                '"updatedAt":"2026-08-27T08:00:00Z"}}}\n',
+                encoding="utf-8",
+            )
+            global_lock.write_text(
+                '{"skills":{"alpha":{"source":"owner/repo",'
+                '"updatedAt":"2026-08-26T08:00:00Z"}}}\n',
+                encoding="utf-8",
+            )
+            paths = AgentbotPaths(
+                root,
+                root / "codex",
+                root / "claude",
+                root / "cursor",
+                agents_home=agents,
+            )
+
             issues = Diagnostics(paths).doctor_issues()
             cursor_issues = [issue for issue in issues if issue.scope == "skills-cursor"]
             self.assertEqual(1, len(cursor_issues))
             self.assertEqual("warning", cursor_issues[0].level)
             self.assertIn("skills install", cursor_issues[0].message)
-
-            # caught up -> silent
-            now = time.time()
-            os.utime(cursor_lock, (now, now))
-            os.utime(global_lock, (now - 10, now - 10))
-            issues = Diagnostics(paths).doctor_issues()
-            self.assertEqual([], [i for i in issues if i.scope == "skills-cursor"])
 
     def test_no_cursor_lock_means_no_cursor_warning(self) -> None:
         from src.diagnostics import Diagnostics

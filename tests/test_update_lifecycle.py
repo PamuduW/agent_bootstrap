@@ -85,6 +85,48 @@ class UpdateLifecycleTests(unittest.TestCase):
             self.assertEqual("head123", plan.snapshot.repository_head)
             self.assertEqual("abc123", plan.source_catalogs[0].revision)
 
+    def test_plan_update_does_not_readd_excluded_wildcard_skills(self) -> None:
+        """Break caught: update planning resurrects a skill excluded during install."""
+        from src.graphify import GraphifyStatus
+        from src.lifecycle import Lifecycle
+        from src.skill_catalog import SourceCatalog
+        from src.workspace_service import WorkspaceReport
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root, home, paths = self._fixture(temporary)
+            manifest = root / "skills.sources.yaml"
+            manifest.write_text(
+                manifest.read_text(encoding="utf-8")
+                + "    exclude:\n      - beta\n",
+                encoding="utf-8",
+            )
+            graphify = mock.Mock()
+            graphify.status.return_value = GraphifyStatus(
+                "not-installed",
+                None,
+                None,
+                home / ".agents/skills/graphify/SKILL.md",
+                None,
+                "missing",
+                "missing",
+                "not installed",
+            )
+            lifecycle = Lifecycle(
+                paths,
+                graphify=graphify,
+                catalog_discoverer=lambda _config: (
+                    SourceCatalog("source", "owner/repo", "abc123", ("alpha", "beta")),
+                ),
+                repository_head=lambda _root: "head123",
+                workspace_preview=lambda: WorkspaceReport(()),
+            )
+
+            with mock.patch.dict(os.environ, {"HOME": str(home)}, clear=False):
+                plan = lifecycle.plan_update()
+
+            self.assertEqual((), plan.reconcile.wildcard_additions)
+            self.assertEqual((), plan.reconcile.wildcard_removals)
+
     def test_apply_rejects_stale_local_snapshot_before_any_stage_runs(self) -> None:
         from src.graphify import GraphifyStatus
         from src.lifecycle import Lifecycle

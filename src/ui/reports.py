@@ -378,6 +378,20 @@ def print_skills_update_report(
     return 0
 
 
+def print_output_refresh_report(*, linked: int, updated: int, skipped: int) -> None:
+    print_section_block("── Output refresh ──")
+    print_table(
+        [
+            (
+                "Claude skill links",
+                f"{linked} linked, {updated} updated, {skipped} skipped",
+                "ok",
+            )
+        ],
+        show_header=False,
+    )
+
+
 def print_reconciliation_report(result) -> None:
     """Render the final source-owned reconciliation outcome as a compact table."""
     changed = ", ".join(str(path) for path in result.changed_paths) or "none"

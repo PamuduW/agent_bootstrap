@@ -22,6 +22,7 @@ from .ui import (
     print_doctor_summary,
     print_graphify_status,
     print_header,
+    print_output_refresh_report,
     print_reconciliation_report,
     print_skill_prune_report,
     print_skills_report,
@@ -450,8 +451,14 @@ def handle_skills_prune(lifecycle: Lifecycle, *, apply: bool, include_manual: bo
 def handle_skills_command(lifecycle: Lifecycle, skills_command: str) -> int:
     if skills_command == "install":
         results = lifecycle.install_skills()
-        lifecycle.refresh_outputs()
-        return print_skills_report(results, title="Skills install")
+        outputs = lifecycle.refresh_outputs()
+        install_rc = print_skills_report(results, title="Skills install")
+        print_output_refresh_report(
+            linked=outputs.claude_linked,
+            updated=outputs.claude_updated,
+            skipped=outputs.claude_skipped,
+        )
+        return install_rc
     if skills_command in {"update", "upgrade"}:
         title = skills_command.capitalize()
         result = lifecycle.update_skills()
@@ -489,6 +496,11 @@ def run_bootstrap_command(lifecycle: Lifecycle, paths: AgentbotPaths) -> int:
     print_header("Install Agentbot", "Agentbot › Install Agentbot")
     outcome = lifecycle.install()
     skills_rc = print_skills_report(list(outcome.skills), title="Skills install")
+    print_output_refresh_report(
+        linked=outcome.outputs.claude_linked,
+        updated=outcome.outputs.claude_updated,
+        skipped=outcome.outputs.claude_skipped,
+    )
     if outcome.graphify.cli_path is not None or outcome.graphify.state == "broken":
         print_graphify_status(outcome.graphify)
     if outcome.boost.cli_path is not None or outcome.boost.state == "broken":

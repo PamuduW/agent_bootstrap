@@ -287,14 +287,18 @@ class CliTests(unittest.TestCase):
     @patch("src.cli.default_paths")
     @patch("src.cli.Lifecycle")
     def test_skills_install_refreshes_agent_outputs(self, service_type, _default_paths) -> None:
+        from src.models import OutputRefreshOutcome
+
         service = MagicMock()
         service.install_skills.return_value = []
+        service.refresh_outputs.return_value = OutputRefreshOutcome(3, 2, 1)
         service_type.return_value = service
 
-        rc, _stdout, _stderr = self._run_main(["agentbot", "skills", "install"])
+        rc, stdout, _stderr = self._run_main(["agentbot", "skills", "install"])
 
         self.assertEqual(0, rc)
         service.refresh_outputs.assert_called_once_with()
+        self.assertIn("3 linked, 2 updated, 1 skipped", stdout)
 
     @patch("src.cli.default_paths")
     @patch("src.cli.Lifecycle")
@@ -346,7 +350,7 @@ class CliTests(unittest.TestCase):
                 "absent",
                 "Boost is not installed.",
             ),
-            outputs=OutputRefreshOutcome(0, 0, 0),
+            outputs=OutputRefreshOutcome(3, 2, 1),
             diagnostics=DiagnosticsSnapshot((), 0, True, True, False, 0, 0, 0, 0, "missing", ()),
         )
         lifecycle = MagicMock()
@@ -358,6 +362,7 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(0, rc)
         self.assertIn("Agentbot › Install Agentbot", output.getvalue())
+        self.assertIn("3 linked, 2 updated, 1 skipped", output.getvalue())
 
     @patch("src.cli.default_paths")
     @patch("src.cli.Lifecycle")

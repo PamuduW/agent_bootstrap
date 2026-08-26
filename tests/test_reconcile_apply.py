@@ -89,6 +89,50 @@ class ReconcileApplyTests(unittest.TestCase):
         self.assertEqual("owner/all", lock["new"]["source"])
         self.assertNotIn("old", lock)
 
+    def test_wildcard_apply_removes_excluded_skill_without_readding_it(self) -> None:
+        """Break caught: reconcile removes an excluded skill and copies it back from checkout."""
+        from src.skill_reconcile import apply_reconcile_plan, build_reconcile_plan
+        from src.skills_sources import load_skills_sources
+
+        self._skill("alpha")
+        lock = json.loads(self.lock.read_text(encoding="utf-8"))
+        lock["skills"]["alpha"] = {"source": "owner/all"}
+        self.lock.write_text(json.dumps(lock), encoding="utf-8")
+        manifest = self.root / "skills.sources.yaml"
+        manifest.write_text(
+            manifest.read_text(encoding="utf-8")
+            + "    exclude:\n      - alpha\n",
+            encoding="utf-8",
+        )
+        checkout = self.root / "excluded-checkout"
+        self._skill_from(checkout, "alpha")
+        config = load_skills_sources(manifest)
+        plan = build_reconcile_plan(
+            config,
+            discovered={"explicit": ("gone", "keep"), "wildcard": ("alpha",)},
+            lock=lock,
+        )
+
+        self.assertEqual((), plan.wildcard_additions)
+        self.assertEqual(("alpha", "old"), plan.wildcard_removals)
+        paths, patches = self._paths()
+        with patches[0], patches[1]:
+            result = apply_reconcile_plan(
+                paths,
+                config,
+                plan,
+                checkouts={"wildcard": checkout},
+                confirm=True,
+            )
+
+        self.assertEqual(("alpha", "old"), result.removed_skills)
+        self.assertEqual((), result.added_skills)
+        self.assertFalse((self.agents / "alpha").exists())
+        self.assertNotIn(
+            "alpha",
+            json.loads(self.lock.read_text(encoding="utf-8"))["skills"],
+        )
+
     def _skill_from(self, checkout: Path, name: str) -> None:
         path = checkout / name
         path.mkdir(parents=True, exist_ok=True)

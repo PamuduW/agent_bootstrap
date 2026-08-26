@@ -103,7 +103,11 @@ def build_reconcile_plan(
     updates: set[str] = set()
 
     for source in config.active_sources():
-        available = {str(name) for name in discovered.get(source.id, ())}
+        available = {
+            str(name)
+            for name in discovered.get(source.id, ())
+            if not source.excludes(str(name))
+        }
         if source.skills == ["*"]:
             owned = _source_owned_lock_names(lock or {}, source.repo)
             additions = available - owned

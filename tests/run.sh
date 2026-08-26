@@ -26,15 +26,9 @@ require_tool() {
 	exit 1
 }
 
-SHELL_SUITES=(
-	"$ROOT/tests/test_harness_contract.sh"
-	"$ROOT/tests/shell/test_menu_core.sh"
-	"$ROOT/tests/shell/test_menu_actions.sh"
-	"$ROOT/tests/shell/test_public_commands.sh"
-	"$ROOT/tests/test_github_token.sh"
-	"$ROOT/tests/test_repo_update.sh"
-	"$ROOT/tests/test_token_consumers.sh"
-	"$ROOT/tests/test_update_integration.sh"
+mapfile -t SHELL_SUITES < <(
+	find "$ROOT/tests" -type f -name 'test_*.sh' \
+		! -path "$ROOT/tests/lib/*" -print | sort
 )
 
 if [[ "${AGENTBOT_TEST_RUNNER_SOURCE_ONLY:-0}" == 1 ]]; then

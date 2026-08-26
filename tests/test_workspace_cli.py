@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import io
-import sys
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -9,17 +7,10 @@ from unittest.mock import MagicMock, patch
 from src.workspace_render import RenderAction
 from src.workspace_service import WorkspaceReport, WorkspaceResult
 from src.workspace_state import WorkspaceRecord
+from tests.support import run_cli_main
 
 
 class WorkspaceCliTests(unittest.TestCase):
-    def _run_main(self, argv: list[str]) -> tuple[int, str, str]:
-        from src.cli import main
-
-        stdout = io.StringIO()
-        stderr = io.StringIO()
-        with patch.object(sys, "argv", argv), patch("sys.stdout", stdout), patch("sys.stderr", stderr):
-            return main(), stdout.getvalue(), stderr.getvalue()
-
     def _service(self) -> MagicMock:
         service = MagicMock()
         service.preview_workspace.return_value = WorkspaceResult(
@@ -51,7 +42,7 @@ class WorkspaceCliTests(unittest.TestCase):
         service = self._service()
         service_type.return_value = service
 
-        rc, stdout, _stderr = self._run_main(["agentbot", "workspace", "/repo"])
+        rc, stdout, _stderr = run_cli_main(["agentbot", "workspace", "/repo"])
 
         self.assertEqual(0, rc)
         service.preview_workspace.assert_called_once_with(
@@ -69,7 +60,7 @@ class WorkspaceCliTests(unittest.TestCase):
         service = self._service()
         service_type.return_value = service
 
-        rc, _stdout, _stderr = self._run_main(
+        rc, _stdout, _stderr = run_cli_main(
             [
                 "agentbot",
                 "workspace",
@@ -96,7 +87,7 @@ class WorkspaceCliTests(unittest.TestCase):
         service = self._service()
         service_type.return_value = service
 
-        rc, stdout, _stderr = self._run_main(["agentbot", "resync", "--all"])
+        rc, stdout, _stderr = run_cli_main(["agentbot", "resync", "--all"])
 
         self.assertEqual(0, rc)
         service.resync_workspaces.assert_called_once_with(apply=False, paths=())
@@ -108,7 +99,7 @@ class WorkspaceCliTests(unittest.TestCase):
         service = self._service()
         service_type.return_value = service
 
-        rc, _stdout, _stderr = self._run_main(
+        rc, _stdout, _stderr = run_cli_main(
             ["agentbot", "resync", "--dry-run", "--all"]
         )
 
@@ -121,7 +112,7 @@ class WorkspaceCliTests(unittest.TestCase):
         service = self._service()
         service_type.return_value = service
 
-        rc, _stdout, _stderr = self._run_main(
+        rc, _stdout, _stderr = run_cli_main(
             ["agentbot", "resync", "--yes", "/repo", "/other"]
         )
 
@@ -149,7 +140,7 @@ class WorkspaceCliTests(unittest.TestCase):
         )
         service_type.return_value = service
 
-        rc, stdout, _stderr = self._run_main(["agentbot", "workspaces"])
+        rc, stdout, _stderr = run_cli_main(["agentbot", "workspaces"])
 
         self.assertEqual(0, rc)
         service.list_workspaces.assert_called_once_with()
@@ -184,7 +175,7 @@ class WorkspaceCliTests(unittest.TestCase):
         )
         service_type.return_value = service
 
-        rc, stdout, stderr = self._run_main(["agentbot", "workspaces", "--paths0"])
+        rc, stdout, stderr = run_cli_main(["agentbot", "workspaces", "--paths0"])
 
         self.assertEqual(0, rc)
         self.assertEqual("/repo\0/second\0", stdout)
@@ -208,7 +199,7 @@ class WorkspaceCliTests(unittest.TestCase):
         )
         service_type.return_value = service
 
-        rc, stdout, stderr = self._run_main(
+        rc, stdout, stderr = run_cli_main(
             ["agentbot", "workspaces", "--remove", "/missing/repo"]
         )
 
@@ -220,7 +211,7 @@ class WorkspaceCliTests(unittest.TestCase):
 
     def test_resync_requires_all_or_explicit_paths(self) -> None:
         with patch("src.cli.default_paths"), patch("src.cli.Lifecycle"):
-            rc, _stdout, stderr = self._run_main(["agentbot", "resync"])
+            rc, _stdout, stderr = run_cli_main(["agentbot", "resync"])
 
         self.assertEqual(1, rc)
         self.assertIn("resync requires --all or at least one PATH", stderr)

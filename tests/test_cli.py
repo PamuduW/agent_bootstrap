@@ -1,49 +1,20 @@
 import io
 import json
 import os
-import shutil
-import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from tests.support import (
+    configure_update,
+    isolated_launcher_env,
+    run_agentbot_launcher,
+    run_cli_main,
+)
+
 
 class CliTests(unittest.TestCase):
-    def _run_launcher(
-        self, args: tuple[str, ...], env: dict[str, str]
-    ) -> subprocess.CompletedProcess[str]:
-        root = Path(__file__).resolve().parents[1]
-        return subprocess.run(
-            [str(root / "bin" / "agentbot"), *args],
-            cwd=root,
-            env=env,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-
-    def _isolated_launcher_env(self, temporary_root: Path) -> dict[str, str]:
-        root = Path(__file__).resolve().parents[1]
-        fixture_bin = temporary_root / "path-bin"
-        fixture_bin.mkdir(exist_ok=True)
-        for command in ("bash", "dirname", "env", "python3"):
-            executable = shutil.which(command)
-            if executable is None:
-                self.fail(f"required base command is unavailable: {command}")
-            link = fixture_bin / command
-            if not link.exists():
-                link.symlink_to(executable)
-        return {
-            "AGENTBOT_HOME": str(root),
-            "AGENTBOT_TTY": "0",
-            "HOME": str(temporary_root / "home"),
-            "NO_COLOR": "1",
-            "PATH": str(fixture_bin),
-            "XDG_CONFIG_HOME": str(temporary_root / "config"),
-        }
-
     def test_real_launcher_help_resolves_every_metadata_topic_and_alias(self) -> None:
         """Break caught: help accepts only one argv token, hiding nested commands."""
         from src.commands import COMMANDS, command_by_name
@@ -52,10 +23,10 @@ class CliTests(unittest.TestCase):
             alias for spec in COMMANDS for alias in spec.aliases
         )
         with tempfile.TemporaryDirectory() as temporary_directory:
-            env = self._isolated_launcher_env(Path(temporary_directory))
+            env = isolated_launcher_env(Path(temporary_directory))
             for topic in topics:
                 with self.subTest(topic=topic):
-                    result = self._run_launcher(("help", *topic.split()), env)
+                    result = run_agentbot_launcher(("help", *topic.split()), env)
                     self.assertEqual(0, result.returncode, result.stderr)
                     self.assertIn(
                         f"=== {command_by_name(topic).name} ===",
@@ -66,9 +37,9 @@ class CliTests(unittest.TestCase):
     def test_real_launcher_help_rejects_unknown_topic_on_stderr(self) -> None:
         """Break caught: unknown help topics leak to stdout or return a success code."""
         with tempfile.TemporaryDirectory() as temporary_directory:
-            result = self._run_launcher(
+            result = run_agentbot_launcher(
                 ("help", "skills", "invented"),
-                self._isolated_launcher_env(Path(temporary_directory)),
+                isolated_launcher_env(Path(temporary_directory)),
             )
 
         self.assertEqual(2, result.returncode)
@@ -90,7 +61,7 @@ class CliTests(unittest.TestCase):
         """Break caught: read-only public commands depend on host state or mutate the isolated home."""
         with tempfile.TemporaryDirectory() as temporary_directory:
             isolated_root = Path(temporary_directory)
-            env = self._isolated_launcher_env(isolated_root)
+            env = isolated_launcher_env(isolated_root)
             self.assertEqual([str(isolated_root / "path-bin")], env["PATH"].split(os.pathsep))
             cases = {
                 ("status",): (0, "Agentbot › Check Status"),
@@ -104,7 +75,7 @@ class CliTests(unittest.TestCase):
             }
             for args, (expected_returncode, expected_stdout) in cases.items():
                 with self.subTest(args=args):
-                    result = self._run_launcher(args, env)
+                    result = run_agentbot_launcher(args, env)
                     self.assertEqual(expected_returncode, result.returncode, result.stderr)
                     self.assertEqual("", result.stderr)
                     if expected_stdout is not None:
@@ -113,44 +84,6 @@ class CliTests(unittest.TestCase):
                         self.assertEqual(0, json.loads(result.stdout)["installed_skills"])
 
             self.assertFalse((isolated_root / "home" / ".agents").exists())
-
-    def _run_main(self, argv: list[str]) -> tuple[int, str, str]:
-        from src.cli import main
-
-        stdout = io.StringIO()
-        stderr = io.StringIO()
-        with (
-            patch.object(sys, "argv", argv),
-            patch("sys.stdout", stdout),
-            patch("sys.stderr", stderr),
-        ):
-            return main(), stdout.getvalue(), stderr.getvalue()
-
-    def _configure_update(self, lifecycle: MagicMock, result) -> None:
-        from src.models import UpdateOutcome, UpdatePlan, UpdateSnapshot
-        from src.skill_reconcile import SkillReconcilePlan
-        from src.workspace_service import WorkspaceReport
-
-        workspace_report = result.workspace_report or WorkspaceReport(())
-        lifecycle.plan_update.return_value = UpdatePlan(
-            UpdateSnapshot("head", "manifest", None),
-            SkillReconcilePlan(
-                (),
-                tuple(result.added_skills),
-                tuple(result.removed_skills),
-                (),
-                (),
-                (),
-            ),
-            "skip",
-            workspace_report,
-        )
-        lifecycle.apply_update.return_value = UpdateOutcome(
-            result.status,
-            result.message,
-            reconcile=result,
-            workspace_report=result.workspace_report,
-        )
 
     @patch("src.cli.default_paths")
     @patch("src.cli.Lifecycle")
@@ -171,7 +104,7 @@ class CliTests(unittest.TestCase):
             )
             lifecycle_type.return_value = lifecycle
 
-            rc, _stdout, stderr = self._run_main(["agentbot", "boot", str(target)])
+            rc, _stdout, stderr = run_cli_main(["agentbot", "boot", str(target)])
 
         self.assertEqual(0, rc, stderr)
         lifecycle.apply_workspace.assert_called_once_with(
@@ -200,7 +133,7 @@ class CliTests(unittest.TestCase):
             )
             lifecycle_type.return_value = lifecycle
 
-            rc, _stdout, stderr = self._run_main(
+            rc, _stdout, stderr = run_cli_main(
                 ["agentbot", "boot", "--agents", "--cursor", str(target)]
             )
 
@@ -269,7 +202,7 @@ class CliTests(unittest.TestCase):
 
         for spec in COMMANDS:
             with self.subTest(command=spec.name):
-                rc, stdout, stderr = self._run_main(["agentbot", "help", spec.name])
+                rc, stdout, stderr = run_cli_main(["agentbot", "help", spec.name])
                 self.assertEqual(0, rc, stderr)
                 self.assertIn(f"=== {spec.name} ===", stdout)
                 for command_option in spec.options:
@@ -286,7 +219,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual({"upgrade": "update", "skills upgrade": "skills update"}, aliases)
         for alias, canonical in aliases.items():
             with self.subTest(alias=alias):
-                rc, stdout, stderr = self._run_main(["agentbot", "help", *alias.split()])
+                rc, stdout, stderr = run_cli_main(["agentbot", "help", *alias.split()])
                 self.assertEqual(0, rc, stderr)
                 self.assertIn(f"=== {canonical} ===", stdout)
 
@@ -308,7 +241,7 @@ class CliTests(unittest.TestCase):
             with self.subTest(argv=argv):
                 failure = OSError("isolated skills failure")
                 failing_boundary.side_effect = failure
-                rc, stdout, stderr = self._run_main(argv)
+                rc, stdout, stderr = run_cli_main(argv)
                 self.assertEqual(1, rc)
                 self.assertEqual("", stdout)
                 self.assertEqual("Error: isolated skills failure\n", stderr)
@@ -325,7 +258,7 @@ class CliTests(unittest.TestCase):
             with self.subTest(error=type(failure).__name__):
                 service.list_skills.side_effect = failure
                 with self.assertRaisesRegex(type(failure), str(failure)):
-                    self._run_main(["agentbot", "skills", "list"])
+                    run_cli_main(["agentbot", "skills", "list"])
 
     @patch("src.cli.default_paths")
     @patch("src.cli.Lifecycle")
@@ -338,7 +271,7 @@ class CliTests(unittest.TestCase):
         service.refresh_outputs.side_effect = OSError("refresh failed")
         lifecycle_type.return_value = service
 
-        rc, stdout, stderr = self._run_main(["agentbot", "skills", "install"])
+        rc, stdout, stderr = run_cli_main(["agentbot", "skills", "install"])
 
         self.assertEqual(1, rc)
         self.assertEqual("", stdout)
@@ -354,7 +287,7 @@ class CliTests(unittest.TestCase):
         service.refresh_outputs.return_value = OutputRefreshOutcome(3, 2, 1)
         service_type.return_value = service
 
-        rc, stdout, _stderr = self._run_main(["agentbot", "skills", "install"])
+        rc, stdout, _stderr = run_cli_main(["agentbot", "skills", "install"])
 
         self.assertEqual(0, rc)
         service.refresh_outputs.assert_called_once_with()
@@ -371,7 +304,7 @@ class CliTests(unittest.TestCase):
         service.install.side_effect = SkillsInstallError("failed to install source 'test': offline")
         service_type.return_value = service
 
-        rc, _stdout, stderr = self._run_main(["agentbot", "bootstrap"])
+        rc, _stdout, stderr = run_cli_main(["agentbot", "bootstrap"])
 
         self.assertEqual(1, rc)
         self.assertIn("Error: failed to install source 'test': offline", stderr)
@@ -432,7 +365,7 @@ class CliTests(unittest.TestCase):
         from src.skill_reconcile import ReconcileResult
 
         service = MagicMock()
-        self._configure_update(
+        configure_update(
             service,
             ReconcileResult(
                 "applied",
@@ -444,7 +377,7 @@ class CliTests(unittest.TestCase):
         )
         service_type.return_value = service
 
-        rc, stdout, _stderr = self._run_main(["agentbot", "update", "--yes"])
+        rc, stdout, _stderr = run_cli_main(["agentbot", "update", "--yes"])
 
         self.assertEqual(0, rc)
         self.assertIn("Reconciliation report", stdout)
@@ -462,7 +395,7 @@ class CliTests(unittest.TestCase):
         from src.workspace_service import WorkspaceReport
 
         service = MagicMock()
-        self._configure_update(
+        configure_update(
             service,
             ReconcileResult(
                 "applied",
@@ -484,7 +417,7 @@ class CliTests(unittest.TestCase):
         )
         service_type.return_value = service
 
-        rc, stdout, _stderr = self._run_main(["agentbot", "update", "--yes"])
+        rc, stdout, _stderr = run_cli_main(["agentbot", "update", "--yes"])
 
         self.assertEqual(1, rc)
         self.assertIn("conflict", stdout)
@@ -503,7 +436,7 @@ class CliTests(unittest.TestCase):
             for kind in ("create", "update", "unchanged")
         )
         service = MagicMock()
-        self._configure_update(
+        configure_update(
             service,
             ReconcileResult(
                 "applied",
@@ -515,7 +448,7 @@ class CliTests(unittest.TestCase):
         )
         service_type.return_value = service
 
-        rc, _stdout, _stderr = self._run_main(["agentbot", "update", "--yes"])
+        rc, _stdout, _stderr = run_cli_main(["agentbot", "update", "--yes"])
 
         self.assertEqual(0, rc)
 
@@ -527,12 +460,12 @@ class CliTests(unittest.TestCase):
         from src.skill_reconcile import ReconcileResult
 
         service = MagicMock()
-        self._configure_update(
+        configure_update(
             service, ReconcileResult("failed", (), (), (), message="Graphify: skill setup failed")
         )
         service_type.return_value = service
 
-        rc, stdout, _stderr = self._run_main(["agentbot", "update", "--yes"])
+        rc, stdout, _stderr = run_cli_main(["agentbot", "update", "--yes"])
 
         self.assertEqual(1, rc)
         self.assertIn("Graphify: skill setup failed", stdout)
@@ -545,7 +478,7 @@ class CliTests(unittest.TestCase):
         from src.skill_reconcile import ReconcileResult
 
         service = MagicMock()
-        self._configure_update(
+        configure_update(
             service,
             ReconcileResult(
                 "applied", (), ("removed-skill",), (), updated_skills=("updated-skill",)
@@ -553,7 +486,7 @@ class CliTests(unittest.TestCase):
         )
         service_type.return_value = service
 
-        rc, stdout, _stderr = self._run_main(["agentbot", "upgrade", "--yes"])
+        rc, stdout, _stderr = run_cli_main(["agentbot", "upgrade", "--yes"])
 
         self.assertEqual(0, rc)
         self.assertIn("Agentbot › Upgrade", stdout)
@@ -597,7 +530,7 @@ class CliTests(unittest.TestCase):
         lifecycle.apply_update.return_value = UpdateOutcome("applied")
         lifecycle_type.return_value = lifecycle
 
-        rc, _stdout, _stderr = self._run_main(["agentbot", "update", "--interactive"])
+        rc, _stdout, _stderr = run_cli_main(["agentbot", "update", "--interactive"])
 
         self.assertEqual(0, rc)
         lifecycle.plan_update.assert_called_once_with()
@@ -643,7 +576,7 @@ class CliTests(unittest.TestCase):
         )
         service_type.return_value = service
 
-        rc, stdout, _stderr = self._run_main(["agentbot", "graphify", "status"])
+        rc, stdout, _stderr = run_cli_main(["agentbot", "graphify", "status"])
 
         self.assertEqual(0, rc)
         self.assertIn("Agentbot › Graphify", stdout)
@@ -673,7 +606,7 @@ class CliTests(unittest.TestCase):
         )
         service_type.return_value = service
 
-        rc, stdout, _stderr = self._run_main(["agentbot", "graphify", "setup"])
+        rc, stdout, _stderr = run_cli_main(["agentbot", "graphify", "setup"])
 
         self.assertEqual(0, rc)
         self.assertIn("ready", stdout)
@@ -701,7 +634,7 @@ class CliTests(unittest.TestCase):
         )
         service_type.return_value = service
 
-        rc, stdout, _stderr = self._run_main(["agentbot", "graphify", "setup"])
+        rc, stdout, _stderr = run_cli_main(["agentbot", "graphify", "setup"])
 
         self.assertEqual(1, rc)
         self.assertIn("uv tool install graphifyy", stdout)
@@ -729,11 +662,11 @@ class CliTests(unittest.TestCase):
             claude_statusline_state="ok",
             issues=(),
         )
-        self._configure_update(service, ReconcileResult("preview", (), (), ()))
+        configure_update(service, ReconcileResult("preview", (), (), ()))
         service_type.return_value = service
 
-        status_rc, status_stdout, _ = self._run_main(["agentbot", "status"])
-        update_rc, update_stdout, _ = self._run_main(["agentbot", "update", "--dry-run"])
+        status_rc, status_stdout, _ = run_cli_main(["agentbot", "status"])
+        update_rc, update_stdout, _ = run_cli_main(["agentbot", "update", "--dry-run"])
 
         self.assertEqual(0, status_rc)
         self.assertEqual(0, update_rc)
@@ -785,7 +718,7 @@ class CliTests(unittest.TestCase):
             (DoctorIssue("error", "global", "baseline is missing"),),
         )
 
-        rc, stdout, _stderr = self._run_main(["agentbot", "status", "--doctor"])
+        rc, stdout, _stderr = run_cli_main(["agentbot", "status", "--doctor"])
 
         self.assertEqual(1, rc)
         diagnostics.collect.assert_called_once_with()
@@ -818,12 +751,12 @@ class CliTests(unittest.TestCase):
         from src.skill_reconcile import ReconcileResult
 
         service = MagicMock()
-        self._configure_update(
+        configure_update(
             service, ReconcileResult("preview", (Path("AGENTS.md"),), ("added",), ("removed",))
         )
         service_type.return_value = service
 
-        rc, stdout, _ = self._run_main(["agentbot", "update", "--dry-run"])
+        rc, stdout, _ = run_cli_main(["agentbot", "update", "--dry-run"])
 
         self.assertEqual(0, rc)
         self.assertEqual(1, stdout.count("  component              | detail"))

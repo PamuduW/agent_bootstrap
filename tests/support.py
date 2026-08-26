@@ -1,13 +1,92 @@
 from __future__ import annotations
 
+import io
 import json
+import shutil
 import subprocess
+import sys
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from src.paths import AgentbotPaths
+
+
+def run_cli_main(argv: list[str]) -> tuple[int, str, str]:
+    from src.cli import main
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    with (
+        patch.object(sys, "argv", argv),
+        patch("sys.stdout", stdout),
+        patch("sys.stderr", stderr),
+    ):
+        return main(), stdout.getvalue(), stderr.getvalue()
+
+
+def isolated_launcher_env(temporary_root: Path) -> dict[str, str]:
+    root = Path(__file__).resolve().parents[1]
+    fixture_bin = temporary_root / "path-bin"
+    fixture_bin.mkdir(exist_ok=True)
+    for command in ("bash", "dirname", "env", "python3"):
+        executable = shutil.which(command)
+        if executable is None:
+            raise RuntimeError(f"required base command is unavailable: {command}")
+        link = fixture_bin / command
+        if not link.exists():
+            link.symlink_to(executable)
+    return {
+        "AGENTBOT_HOME": str(root),
+        "AGENTBOT_TTY": "0",
+        "HOME": str(temporary_root / "home"),
+        "NO_COLOR": "1",
+        "PATH": str(fixture_bin),
+        "XDG_CONFIG_HOME": str(temporary_root / "config"),
+    }
+
+
+def run_agentbot_launcher(
+    args: tuple[str, ...], env: dict[str, str]
+) -> subprocess.CompletedProcess[str]:
+    root = Path(__file__).resolve().parents[1]
+    return subprocess.run(
+        [str(root / "bin" / "agentbot"), *args],
+        cwd=root,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+def configure_update(lifecycle: MagicMock, result) -> None:
+    from src.models import UpdateOutcome, UpdatePlan, UpdateSnapshot
+    from src.skill_reconcile import SkillReconcilePlan
+    from src.workspace_service import WorkspaceReport
+
+    workspace_report = result.workspace_report or WorkspaceReport(())
+    lifecycle.plan_update.return_value = UpdatePlan(
+        UpdateSnapshot("head", "manifest", None),
+        SkillReconcilePlan(
+            (),
+            tuple(result.added_skills),
+            tuple(result.removed_skills),
+            (),
+            (),
+            (),
+        ),
+        "skip",
+        workspace_report,
+    )
+    lifecycle.apply_update.return_value = UpdateOutcome(
+        result.status,
+        result.message,
+        reconcile=result,
+        workspace_report=result.workspace_report,
+    )
 
 
 def agentbot_paths(root: Path) -> AgentbotPaths:

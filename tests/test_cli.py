@@ -1,10 +1,119 @@
 import io
+import json
+import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
 class CliTests(unittest.TestCase):
+    def _run_launcher(
+        self, args: tuple[str, ...], env: dict[str, str]
+    ) -> subprocess.CompletedProcess[str]:
+        root = Path(__file__).resolve().parents[1]
+        return subprocess.run(
+            [str(root / "bin" / "agentbot"), *args],
+            cwd=root,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    def _isolated_launcher_env(self, temporary_root: Path) -> dict[str, str]:
+        root = Path(__file__).resolve().parents[1]
+        fixture_bin = temporary_root / "path-bin"
+        fixture_bin.mkdir(exist_ok=True)
+        for command in ("bash", "dirname", "env", "python3"):
+            executable = shutil.which(command)
+            if executable is None:
+                self.fail(f"required base command is unavailable: {command}")
+            link = fixture_bin / command
+            if not link.exists():
+                link.symlink_to(executable)
+        return {
+            "AGENTBOT_HOME": str(root),
+            "AGENTBOT_TTY": "0",
+            "HOME": str(temporary_root / "home"),
+            "NO_COLOR": "1",
+            "PATH": str(fixture_bin),
+            "XDG_CONFIG_HOME": str(temporary_root / "config"),
+        }
+
+    def test_real_launcher_help_resolves_every_metadata_topic_and_alias(self) -> None:
+        """Break caught: help accepts only one argv token, hiding nested commands."""
+        from src.commands import COMMANDS, command_by_name
+
+        topics = tuple(spec.name for spec in COMMANDS) + tuple(
+            alias for spec in COMMANDS for alias in spec.aliases
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            env = self._isolated_launcher_env(Path(temporary_directory))
+            for topic in topics:
+                with self.subTest(topic=topic):
+                    result = self._run_launcher(("help", *topic.split()), env)
+                    self.assertEqual(0, result.returncode, result.stderr)
+                    self.assertIn(
+                        f"=== {command_by_name(topic).name} ===",
+                        result.stdout,
+                    )
+                    self.assertEqual("", result.stderr)
+
+    def test_real_launcher_help_rejects_unknown_topic_on_stderr(self) -> None:
+        """Break caught: unknown help topics leak to stdout or return a success code."""
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            result = self._run_launcher(
+                ("help", "skills", "invented"),
+                self._isolated_launcher_env(Path(temporary_directory)),
+            )
+
+        self.assertEqual(2, result.returncode)
+        self.assertEqual("", result.stdout)
+        self.assertIn("Error: unknown help topic: skills invented", result.stderr)
+
+    def test_parser_accepts_skills_prune_options(self) -> None:
+        """Break caught: advertised prune flags fail before the skills handler sees them."""
+        from src.cli import build_parser
+
+        args = build_parser().parse_args(["skills", "prune", "--yes", "--include-manual"])
+
+        self.assertEqual("skills", args.command)
+        self.assertEqual("prune", args.skills_command)
+        self.assertTrue(args.confirm)
+        self.assertTrue(args.include_manual)
+
+    def test_real_launcher_read_only_process_matrix_uses_an_isolated_home(self) -> None:
+        """Break caught: read-only public commands depend on host state or mutate the isolated home."""
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            isolated_root = Path(temporary_directory)
+            env = self._isolated_launcher_env(isolated_root)
+            self.assertEqual([str(isolated_root / "path-bin")], env["PATH"].split(os.pathsep))
+            cases = {
+                ("status",): (0, "Agentbot › Check Status"),
+                ("status", "--json"): (0, None),
+                ("doctor",): (1, "Agentbot › Doctor"),
+                ("graphify", "status"): (
+                    0,
+                    "Graphify CLI and Agent Skills integration are not installed.",
+                ),
+                ("boost", "status"): (0, "Boost CLI is not installed."),
+            }
+            for args, (expected_returncode, expected_stdout) in cases.items():
+                with self.subTest(args=args):
+                    result = self._run_launcher(args, env)
+                    self.assertEqual(expected_returncode, result.returncode, result.stderr)
+                    self.assertEqual("", result.stderr)
+                    if expected_stdout is not None:
+                        self.assertIn(expected_stdout, result.stdout)
+                    else:
+                        self.assertEqual(0, json.loads(result.stdout)["installed_skills"])
+
+            self.assertFalse((isolated_root / "home" / ".agents").exists())
+
     def _run_main(self, argv: list[str]) -> tuple[int, str, str]:
         from src.cli import main
 
@@ -53,7 +162,27 @@ class CliTests(unittest.TestCase):
         subparsers = next(
             action for action in parser._actions if isinstance(action, argparse._SubParsersAction)
         )
-        parser_commands = set(subparsers.choices)
+        def parser_leaf_paths(
+            choices: dict[str, argparse.ArgumentParser], prefix: tuple[str, ...] = ()
+        ) -> set[str]:
+            paths: set[str] = set()
+            for name, child in choices.items():
+                child_subparsers = next(
+                    (
+                        action
+                        for action in child._actions
+                        if isinstance(action, argparse._SubParsersAction)
+                    ),
+                    None,
+                )
+                path = (*prefix, name)
+                if child_subparsers is None:
+                    paths.add(" ".join(path))
+                else:
+                    paths.update(parser_leaf_paths(child_subparsers.choices, path))
+            return paths
+
+        parser_commands = parser_leaf_paths(subparsers.choices)
         covered_parser_commands = {command for spec in COMMANDS for command in spec.parser_commands}
         self.assertEqual(parser_commands, covered_parser_commands)
         self.assertEqual(
@@ -87,11 +216,73 @@ class CliTests(unittest.TestCase):
                     self.assertIn(command_option.usage, stdout)
 
     def test_help_aliases_resolve_to_canonical_commands(self) -> None:
-        for alias, canonical in (("upgrade", "update"), ("skills upgrade", "skills update")):
+        from src.commands import COMMANDS
+
+        aliases = {
+            alias: spec.name
+            for spec in COMMANDS
+            for alias in spec.aliases
+        }
+        self.assertEqual({"upgrade": "update", "skills upgrade": "skills update"}, aliases)
+        for alias, canonical in aliases.items():
             with self.subTest(alias=alias):
-                rc, stdout, stderr = self._run_main(["agentbot", "help", alias])
+                rc, stdout, stderr = self._run_main(["agentbot", "help", *alias.split()])
                 self.assertEqual(0, rc, stderr)
                 self.assertIn(f"=== {canonical} ===", stdout)
+
+    @patch("src.cli.handle_skills_prune")
+    @patch("src.cli.default_paths")
+    @patch("src.cli.Lifecycle")
+    def test_skills_commands_render_failures_to_stderr_with_one_exit_contract(
+        self, lifecycle_type, _default_paths, prune_handler
+    ) -> None:
+        """Break caught: one skills path formats an exception differently from its siblings."""
+        service = MagicMock()
+        lifecycle_type.return_value = service
+        cases = (
+            (["agentbot", "skills", "install"], service.install_skills),
+            (["agentbot", "skills", "update"], service.update_skills),
+            (["agentbot", "skills", "prune"], prune_handler),
+        )
+        for argv, failing_boundary in cases:
+            with self.subTest(argv=argv):
+                failure = OSError("isolated skills failure")
+                failing_boundary.side_effect = failure
+                rc, stdout, stderr = self._run_main(argv)
+                self.assertEqual(1, rc)
+                self.assertEqual("", stdout)
+                self.assertEqual("Error: isolated skills failure\n", stderr)
+                failing_boundary.reset_mock()
+
+    @patch("src.cli.default_paths")
+    @patch("src.cli.Lifecycle")
+    def test_skills_programming_errors_propagate(self, lifecycle_type, _default_paths) -> None:
+        """Break caught: a programmer defect is misreported as an expected user failure."""
+        service = MagicMock()
+        lifecycle_type.return_value = service
+
+        for failure in (TypeError("programming defect"), AssertionError("broken invariant")):
+            with self.subTest(error=type(failure).__name__):
+                service.list_skills.side_effect = failure
+                with self.assertRaisesRegex(type(failure), str(failure)):
+                    self._run_main(["agentbot", "skills", "list"])
+
+    @patch("src.cli.default_paths")
+    @patch("src.cli.Lifecycle")
+    def test_skills_install_refresh_failure_has_no_success_report(
+        self, lifecycle_type, _default_paths
+    ) -> None:
+        """Break caught: install reports success before its required output refresh completes."""
+        service = MagicMock()
+        service.install_skills.return_value = []
+        service.refresh_outputs.side_effect = OSError("refresh failed")
+        lifecycle_type.return_value = service
+
+        rc, stdout, stderr = self._run_main(["agentbot", "skills", "install"])
+
+        self.assertEqual(1, rc)
+        self.assertEqual("", stdout)
+        self.assertEqual("Error: refresh failed\n", stderr)
 
     @patch("src.cli.default_paths")
     @patch("src.cli.Lifecycle")

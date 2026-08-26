@@ -140,6 +140,121 @@ test_install_repo_gate_link_and_failure_status() (
 	[[ "$(readlink "$HOME/bin/agentbot")" == "$ROOT/bin/agentbot" ]]
 )
 
+test_link_agentbot_only_replaces_owned_launchers() (
+	# Break caught: overwriting a foreign launcher that appears after ownership classification.
+	AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
+	local source="$ROOT/bin/agentbot" home target output rc raw before expected
+
+	run_link() {
+		local case_home="$1"
+		set +e
+		output="$(HOME="$case_home" link_agentbot 2>&1)"
+		rc=$?
+		set -e
+	}
+
+	assert_refusal() {
+		expected="[err] refusing to replace existing launcher: ${target}. Move or remove it, then retry."
+		[[ "$rc" -eq 1 && "$output" == "$expected" ]]
+	}
+
+	run_foreign_create_race() {
+		local case_home="$1"
+		set +e
+		output="$(
+			HOME="$case_home"
+			ln() {
+				printf 'foreign launcher contents\n' >"$target"
+				command ln "$@"
+			}
+			link_agentbot 2>&1
+		)"
+		rc=$?
+		set -e
+	}
+
+	run_wrong_link_success() {
+		local case_home="$1"
+		set +e
+		output="$(
+			HOME="$case_home"
+			ln() {
+				command ln -sT -- "$TEST_ROOT/foreign-agentbot" "$target"
+			}
+			link_agentbot 2>&1
+		)"
+		rc=$?
+		set -e
+	}
+
+	home="$TEST_ROOT/launcher-absent"
+	target="$home/bin/agentbot"
+	run_link "$home"
+	[[ "$rc" -eq 0 && "$output" == "[info] linked ${target} -> ${source}" ]] || return 1
+	[[ "$(readlink -f "$target")" == "$source" && -x "$(readlink -f "$target")" ]] || return 1
+
+	home="$TEST_ROOT/launcher-owned"
+	target="$home/bin/agentbot"
+	mkdir -p "$(dirname "$target")"
+	ln -s "$source" "$target"
+	run_link "$home"
+	[[ "$rc" -eq 0 && "$output" == "[info] linked ${target} -> ${source}" ]] || return 1
+	[[ "$(readlink -f "$target")" == "$source" && -x "$(readlink -f "$target")" ]] || return 1
+
+	home="$TEST_ROOT/launcher-foreign-symlink"
+	target="$home/bin/agentbot"
+	mkdir -p "$(dirname "$target")"
+	printf 'foreign executable\n' >"$TEST_ROOT/foreign-agentbot"
+	chmod +x "$TEST_ROOT/foreign-agentbot"
+	ln -s "$TEST_ROOT/foreign-agentbot" "$target"
+	raw="$(readlink "$target")"
+	run_link "$home"
+	assert_refusal || return 1
+	[[ -L "$target" && "$(readlink "$target")" == "$raw" ]] || return 1
+
+	home="$TEST_ROOT/launcher-unprovable-symlink"
+	target="$home/bin/agentbot"
+	mkdir -p "$(dirname "$target")"
+	ln -s "$TEST_ROOT/missing-agentbot" "$target"
+	raw="$(readlink "$target")"
+	run_link "$home"
+	assert_refusal || return 1
+	[[ -L "$target" && "$(readlink "$target")" == "$raw" ]] || return 1
+
+	home="$TEST_ROOT/launcher-foreign-file"
+	target="$home/bin/agentbot"
+	mkdir -p "$(dirname "$target")"
+	printf 'foreign launcher contents\n' >"$target"
+	before="$(sha256sum "$target")"
+	run_link "$home"
+	assert_refusal || return 1
+	[[ -f "$target" && ! -L "$target" && "$(sha256sum "$target")" == "$before" ]] || return 1
+
+	home="$TEST_ROOT/launcher-directory"
+	target="$home/bin/agentbot"
+	mkdir -p "$target"
+	printf 'do not alter\n' >"$target/marker"
+	run_link "$home"
+	assert_refusal || return 1
+	[[ -d "$target" && "$(<"$target/marker")" == 'do not alter' ]] || return 1
+
+	home="$TEST_ROOT/launcher-create-race"
+	target="$home/bin/agentbot"
+	run_foreign_create_race "$home"
+	expected="[err] failed to create Agentbot launcher: ${target}. Inspect the existing path, then retry."
+	[[ "$rc" -eq 1 && "$output" == "$expected" ]] || return 1
+	[[ -f "$target" && ! -L "$target" && "$(<"$target")" == 'foreign launcher contents' ]] || return 1
+
+	home="$TEST_ROOT/launcher-verification-failure"
+	target="$home/bin/agentbot"
+	printf 'foreign executable\n' >"$TEST_ROOT/foreign-agentbot"
+	chmod +x "$TEST_ROOT/foreign-agentbot"
+	run_wrong_link_success "$home"
+	expected="[err] failed to verify Agentbot launcher: ${target}"
+	[[ "$rc" -eq 1 && "$output" == "$expected" ]] || return 1
+	[[ -L "$target" && "$(readlink -f "$target")" == "$TEST_ROOT/foreign-agentbot" ]] || return 1
+)
+
 test_one_backend_and_complete_help() {
 	local bin_files output boot_help workspace_help workspaces_help
 	bin_files="$(find "$ROOT/bin" -maxdepth 1 -type f -printf '%f\n' | sort)"
@@ -161,6 +276,7 @@ check 'token command opens the existing token menu' test_token_route_loads_exist
 check 'install.sh forwards public commands unchanged' test_install_forwards_public_commands
 check 'boot selectors render safely and invalid input is atomic' test_boot_selectors_and_atomic_validation
 check 'install gates backend work, links launcher, and reports failure truthfully' test_install_repo_gate_link_and_failure_status
+check 'launcher linking preserves foreign paths and verifies owned targets' test_link_agentbot_only_replaces_owned_launchers
 check 'one backend remains and help documents the public surface' test_one_backend_and_complete_help
 
 test_harness_verify_safety || failed=$((failed + 1))

@@ -121,10 +121,30 @@ cleanup_owned_old_agentboot_link() {
 
 link_agentbot() {
 	local source="${AGENTBOT_HOME}/bin/agentbot"
-	local target="${HOME}/bin/agentbot"
+	local target="${HOME}/bin/agentbot" source_resolved target_resolved
 	[[ -x "$source" ]] || die "Agentbot executable is missing: $source"
-	mkdir -p "${HOME}/bin"
-	ln -sfn "$source" "$target"
+	source_resolved="$(readlink -f -- "$source" 2>/dev/null || true)"
+	[[ -n "$source_resolved" && -x "$source_resolved" ]] || die "Agentbot executable is missing: $source"
+
+	if [[ -e "$target" || -L "$target" ]]; then
+		if [[ ! -L "$target" ]]; then
+			die "refusing to replace existing launcher: ${target}. Move or remove it, then retry."
+		fi
+		target_resolved="$(readlink -f -- "$target" 2>/dev/null || true)"
+		if [[ "$target_resolved" != "$source_resolved" ]]; then
+			die "refusing to replace existing launcher: ${target}. Move or remove it, then retry."
+		fi
+	else
+		if ! mkdir -p "${HOME}/bin"; then
+			die "failed to create Agentbot launcher: ${target}. Inspect the existing path, then retry."
+		fi
+		if ! ln -sT -- "$source" "$target" >/dev/null 2>&1; then
+			die "failed to create Agentbot launcher: ${target}. Inspect the existing path, then retry."
+		fi
+	fi
+
+	target_resolved="$(readlink -f -- "$target" 2>/dev/null || true)"
+	[[ "$target_resolved" == "$source_resolved" && -x "$target_resolved" ]] || die "failed to verify Agentbot launcher: ${target}"
 	log_info "linked ${target} -> ${source}"
 }
 
@@ -350,7 +370,7 @@ Usage: ./install.sh <command> [args]
   update [--dry-run|--yes]   Run the repository-first update flow
   status [--json]            Show current Agentbot state
   doctor                     Validate the installation
-  skills <command>           Install, update, list, or validate skills
+  skills <command>           Install, update, list, validate, or prune skills
   global                     Refresh managed global outputs
   workspace|workspaces|resync Manage registered workspace outputs
   graphify status|setup      Inspect or repair generic Graphify Agent Skills
@@ -393,7 +413,7 @@ main() {
 		;;
 	skills)
 		if [[ $# -lt 2 ]]; then
-			die "usage: ./install.sh skills <install|update|upgrade|list|doctor>"
+			die "usage: ./install.sh skills <install|update|upgrade|list|doctor|prune>"
 		fi
 		case "${2}" in
 		install | update | upgrade) check_skills_deps ;;

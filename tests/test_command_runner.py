@@ -83,6 +83,86 @@ class CommandRunnerTests(unittest.TestCase):
         self.assertNotIn(canary, result.detail())
         self.assertNotIn(canary, repr(result))
 
+    def test_inherited_github_token_is_redacted_from_captured_results(self) -> None:
+        from src.command_runner import CommandRunner
+
+        canary = "agentbot-inherited-canary-2f4b8e"
+        with mock.patch.dict(os.environ, {"GITHUB_TOKEN": canary}):
+            result = CommandRunner().run(
+                [
+                    sys.executable,
+                    "-c",
+                    "import os, sys; print(os.environ['GITHUB_TOKEN']); print(os.environ['GITHUB_TOKEN'], file=sys.stderr)",
+                ],
+                timeout_seconds=5,
+            )
+
+        self.assertEqual(0, result.returncode)
+        self.assertEqual("[redacted]\n", result.stdout)
+        self.assertEqual("[redacted]\n", result.stderr)
+        self.assertNotIn(canary, result.stdout)
+        self.assertNotIn(canary, result.stderr)
+        self.assertNotIn(canary, result.detail())
+        self.assertNotIn(canary, repr(result))
+
+    def test_inherited_github_token_is_redacted_from_timeout_output(self) -> None:
+        from src.command_runner import CommandRunner
+
+        canary = "agentbot-timeout-canary-9c5d1a"
+        with mock.patch.dict(os.environ, {"GITHUB_TOKEN": canary}):
+            result = CommandRunner().run(
+                [
+                    sys.executable,
+                    "-c",
+                    "import os, sys, time; print(os.environ['GITHUB_TOKEN'], flush=True); print(os.environ['GITHUB_TOKEN'], file=sys.stderr, flush=True); time.sleep(2)",
+                ],
+                timeout_seconds=0.1,
+            )
+
+        self.assertTrue(result.timed_out)
+        self.assertEqual(124, result.returncode)
+        self.assertEqual("[redacted]\n", result.stdout)
+        self.assertEqual("[redacted]\n", result.stderr)
+        self.assertNotIn(canary, result.stdout)
+        self.assertNotIn(canary, result.stderr)
+        self.assertNotIn(canary, result.detail())
+        self.assertNotIn(canary, repr(result))
+
+    def test_explicit_short_redact_value_is_redacted_from_captured_results(self) -> None:
+        from src.command_runner import CommandRunner
+
+        canary = "abc"
+        with mock.patch.dict(
+            os.environ, {"AGENTBOT_TEST_SHORT_CANARY": canary}, clear=True
+        ):
+            result = CommandRunner().run(
+                [
+                    sys.executable,
+                    "-c",
+                    "import os, sys; print(os.environ['AGENTBOT_TEST_SHORT_CANARY']); print(os.environ['AGENTBOT_TEST_SHORT_CANARY'], file=sys.stderr)",
+                ],
+                timeout_seconds=5,
+                redact_values=(canary,),
+            )
+
+        self.assertEqual(0, result.returncode)
+        self.assertEqual("[redacted]\n", result.stdout)
+        self.assertEqual("[redacted]\n", result.stderr)
+        self.assertNotIn(canary, result.detail())
+        self.assertNotIn(canary, repr(result))
+
+    def test_inherited_ordinary_environment_value_remains_readable(self) -> None:
+        from src.command_runner import CommandRunner
+
+        readable = "agentbot-ordinary-value-31415"
+        with mock.patch.dict(os.environ, {"AGENTBOT_TEST_ORDINARY": readable}):
+            result = CommandRunner().run(
+                [sys.executable, "-c", "import os; print(os.environ['AGENTBOT_TEST_ORDINARY'])"],
+                timeout_seconds=5,
+            )
+
+        self.assertEqual(f"{readable}\n", result.stdout)
+
     def test_cwd_is_honored_and_argv_is_never_shell_parsed(self) -> None:
         from src.command_runner import CommandRunner
 

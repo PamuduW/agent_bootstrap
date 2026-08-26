@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from collections.abc import Mapping, Sequence
@@ -7,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 _ANSI_ESCAPE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+_SENSITIVE_ENVIRONMENT_KEYS = ("GITHUB_TOKEN",)
 
 
 def _text(value: str | bytes | None) -> str:
@@ -21,6 +23,21 @@ def _redact(text: str, values: tuple[str, ...]) -> str:
     for value in values:
         text = text.replace(value, "[redacted]")
     return text
+
+
+def _redaction_values(
+    env: Mapping[str, str] | None, redact_values: Sequence[str]
+) -> tuple[str, ...]:
+    values = {value for value in redact_values if value}
+    if env is None:
+        values.update(
+            os.environ[key]
+            for key in _SENSITIVE_ENVIRONMENT_KEYS
+            if os.environ.get(key) and len(os.environ[key]) >= 4
+        )
+    else:
+        values.update(value for value in env.values() if len(value) >= 4)
+    return tuple(sorted(values, key=len, reverse=True))
 
 
 @dataclass(frozen=True)
@@ -71,19 +88,14 @@ class CommandRunner:
         cwd: Path | str | None = None,
         timeout_seconds: float,
         env: Mapping[str, str] | None = None,
+        redact_values: Sequence[str] = (),
     ) -> CommandResult:
         if not argv or any(not isinstance(argument, str) for argument in argv):
             raise ValueError("argv must be a non-empty sequence of strings")
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
 
-        redactions = tuple(
-            sorted(
-                {value for value in (env or {}).values() if len(value) >= 4},
-                key=len,
-                reverse=True,
-            )
-        )
+        redactions = _redaction_values(env, redact_values)
         try:
             completed = subprocess.run(
                 list(argv),

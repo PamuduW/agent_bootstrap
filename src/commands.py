@@ -23,6 +23,7 @@ class CommandSpec:
     related: tuple[str, ...]
     surface: Literal["public", "bootstrap"]
     parser_commands: tuple[str, ...] = ()
+    aliases: tuple[str, ...] = ()
 
 
 def option(usage: str, description: str, default: str) -> CommandOption:
@@ -83,6 +84,7 @@ COMMANDS: tuple[CommandSpec, ...] = (
         ("install", "status"),
         "public",
         ("update", "upgrade"),
+        ("upgrade",),
     ),
     CommandSpec(
         "token",
@@ -192,7 +194,7 @@ COMMANDS: tuple[CommandSpec, ...] = (
         ("agentbot graphify status",),
         ("install", "update"),
         "public",
-        ("graphify",),
+        ("graphify status", "graphify setup"),
     ),
     CommandSpec(
         "boost",
@@ -208,7 +210,7 @@ COMMANDS: tuple[CommandSpec, ...] = (
         ("agentbot boost status",),
         ("install", "doctor"),
         "public",
-        ("boost",),
+        ("boost status", "boost setup", "boost off"),
     ),
     CommandSpec(
         "help",
@@ -230,9 +232,9 @@ COMMANDS: tuple[CommandSpec, ...] = (
         (),
         "May update the global skill store, lock, and managed assistant links.",
         ("./install.sh skills install",),
-        ("skills list", "skills doctor"),
+        ("skills update", "skills prune", "skills doctor"),
         "bootstrap",
-        ("skills",),
+        ("skills install",),
     ),
     CommandSpec(
         "skills update",
@@ -242,9 +244,10 @@ COMMANDS: tuple[CommandSpec, ...] = (
         (),
         "May update source-owned global skills and managed assistant links.",
         ("./install.sh skills update",),
-        ("update", "skills list"),
+        ("update", "skills prune", "skills list"),
         "bootstrap",
-        ("skills",),
+        ("skills update", "skills upgrade"),
+        ("skills upgrade",),
     ),
     CommandSpec(
         "skills list",
@@ -254,9 +257,9 @@ COMMANDS: tuple[CommandSpec, ...] = (
         (),
         "Reads the global skill store.",
         ("./install.sh skills list",),
-        ("skills install", "skills doctor"),
+        ("skills install", "skills prune", "skills doctor"),
         "bootstrap",
-        ("skills",),
+        ("skills list",),
     ),
     CommandSpec(
         "skills doctor",
@@ -266,9 +269,28 @@ COMMANDS: tuple[CommandSpec, ...] = (
         (),
         "Reads the manifest, lock, installed store, and tool availability.",
         ("./install.sh skills doctor",),
-        ("doctor", "skills install"),
+        ("doctor", "skills install", "skills prune"),
         "bootstrap",
-        ("skills",),
+        ("skills doctor",),
+    ),
+    CommandSpec(
+        "skills prune",
+        "./install.sh skills prune [--yes] [--include-manual]",
+        "mutating",
+        "Preview or remove installed skills no active manifest source wants.",
+        (
+            option("--yes", "Apply the planned removals.", "off"),
+            option(
+                "--include-manual",
+                "Also remove user-placed skills that have no lock entry.",
+                "off",
+            ),
+        ),
+        "Without --yes it only reads state; with --yes it may remove selected global skills.",
+        ("./install.sh skills prune", "./install.sh skills prune --yes"),
+        ("skills doctor", "skills update", "skills list"),
+        "bootstrap",
+        ("skills prune",),
     ),
     CommandSpec(
         "global",
@@ -287,11 +309,8 @@ COMMANDS: tuple[CommandSpec, ...] = (
 
 def command_by_name(name: str) -> CommandSpec:
     normalized = " ".join(name.strip().split())
-    normalized = {"upgrade": "update", "skills upgrade": "skills update"}.get(
-        normalized, normalized
-    )
     for command in COMMANDS:
-        if command.name == normalized:
+        if normalized == command.name or normalized in command.aliases:
             return command
     raise KeyError(name)
 

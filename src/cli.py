@@ -60,8 +60,9 @@ def main() -> int:
 
     command = args.command or "bootstrap"
     if command == "help":
+        help_topic = " ".join(getattr(args, "help_topic", ())) or None
         return print_help_command(
-            getattr(args, "help_topic", None),
+            help_topic,
             output_format=getattr(args, "help_format", "plain"),
         )
 
@@ -84,8 +85,7 @@ def main() -> int:
     try:
         return handler(context)
     except (SkillsInstallError, ValueError, OSError) as error:
-        print(f"Error: {error}", file=sys.stderr)
-        return 1
+        return print_skills_error(error)
 
 
 @dataclass(frozen=True)
@@ -256,7 +256,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     help_parser = subparsers.add_parser("help", help="Show the command reference")
-    help_parser.add_argument("help_topic", nargs="?", metavar="COMMAND")
+    help_parser.add_argument("help_topic", nargs="*", metavar="COMMAND")
     help_parser.add_argument(
         "--format",
         choices=("plain", "menu", "tui"),
@@ -424,25 +424,15 @@ def handle_skills_prune(lifecycle: Lifecycle, *, apply: bool, include_manual: bo
 
 def handle_skills_command(lifecycle: Lifecycle, skills_command: str) -> int:
     if skills_command == "install":
-        try:
-            results = lifecycle.install_skills()
-            skills_rc = print_skills_report(results, title="Skills install")
-            lifecycle.refresh_outputs()
-        except Exception as error:
-            print_header("Skills install", "Agentbot › Skills install")
-            print(f"  Error: {error}")
-            return 1
-        return skills_rc
+        results = lifecycle.install_skills()
+        lifecycle.refresh_outputs()
+        return print_skills_report(results, title="Skills install")
     if skills_command in {"update", "upgrade"}:
         title = skills_command.capitalize()
+        result = lifecycle.update_skills()
+        update_report = parse_update_output(result.stdout, result.stderr)
+        outputs = lifecycle.refresh_outputs()
         print_header(f"Skills {skills_command}", f"Agentbot › Skills {title}")
-        try:
-            result = lifecycle.update_skills()
-            update_report = parse_update_output(result.stdout, result.stderr)
-            outputs = lifecycle.refresh_outputs()
-        except Exception as error:
-            print(f"  Error: {error}")
-            return 1
         return print_skills_update_report(
             linked=outputs.claude_linked,
             skipped=outputs.claude_skipped,
@@ -463,6 +453,11 @@ def handle_skills_command(lifecycle: Lifecycle, skills_command: str) -> int:
     if skills_command == "doctor":
         return print_skills_doctor(lifecycle.diagnostics)
     raise SystemExit(f"unknown skills command: {skills_command}")
+
+
+def print_skills_error(error: Exception) -> int:
+    print(f"Error: {error}", file=sys.stderr)
+    return 1
 
 
 def run_bootstrap_command(lifecycle: Lifecycle, paths: AgentbotPaths) -> int:

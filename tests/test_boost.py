@@ -781,6 +781,7 @@ class BoostFeatureFlagTests(BoostIntegrationTests):
             {
                 "boost-agent-facing-redaction": True,
                 "boost-english-abbreviation": False,
+                "boost-files-optimization": True,
                 "boost-graph-integration": False,
                 "boost-mcp-toon-format": True,
             },
@@ -795,6 +796,7 @@ class BoostFeatureFlagTests(BoostIntegrationTests):
         self.assertIs(False, flags["boost-graph-integration"]["user"])
         self.assertIs(True, flags["boost-agent-facing-redaction"]["user"])
         self.assertIs(False, flags["boost-english-abbreviation"]["user"])
+        self.assertIs(True, flags["boost-files-optimization"]["user"])
         self.assertIs(True, flags["boost-mcp-toon-format"]["user"])
         # The remote value is JFrog's to set; only `user` is ours.
         self.assertIs(False, flags["boost-graph-integration"]["remote"])
@@ -849,8 +851,13 @@ class BoostFeatureFlagTests(BoostIntegrationTests):
         # change without warning, which is the drift the policy exists to stop.
         self._config('[feature_flags."boost-cli-filtering"]\nremote = true\n')
         self.assertEqual(
-            ("boost-agent-facing-redaction", "boost-english-abbreviation",
-             "boost-graph-integration", "boost-mcp-toon-format"),
+            (
+                "boost-agent-facing-redaction",
+                "boost-english-abbreviation",
+                "boost-files-optimization",
+                "boost-graph-integration",
+                "boost-mcp-toon-format",
+            ),
             self._status().diverged_flags,
         )
 

@@ -121,8 +121,9 @@ optional CLI already exists; it never builds project graphs or installs hooks.
 Boost follows the same ownership split: Dotfiles owns the verified CLI binary;
 Agentbot owns assistant setup and reporting. `agentbot install` skips Boost when
 the CLI is absent. When present, it disables tracing upload and Boost
-auto-update, previews Claude/Codex-only setup with BoostGraph disabled, and
-rejects graph, MCP, or indexing changes before running Boost interactively.
+auto-update, enables local File Optimization for allowlisted reads, previews
+Claude/Codex-only setup with BoostGraph disabled, and rejects graph, MCP, or
+indexing changes before running Boost interactively.
 Agentbot never passes `--accept-terms`; Boost presents its own agreement. Use
 `agentbot boost status|setup|off` for inspection, repair, or removal.
 
@@ -149,6 +150,7 @@ setup` writes the whole set:
 | Flag | Policy | Why |
 | --- | --- | --- |
 | `boost-agent-facing-redaction` | on | Scrubs secrets and abbreviates paths in what the agent sees, not just in the local database |
+| `boost-files-optimization` | on | Converts allowlisted document reads and shrinks large images in temporary local copies; originals remain unchanged and unsupported inputs fail open |
 | `boost-mcp-toon-format` | on | Lossless JSON→TOON reformat of MCP responses; costs nothing when no MCP tool is called |
 | `boost-english-abbreviation` | off | Aimed at article prose; in a code workspace it only makes tool output lossy |
 | `boost-graph-integration` | off | BoostGraph writes MCP config and marker blocks into managed `CLAUDE.md`/`AGENTS.md` |

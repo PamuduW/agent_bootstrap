@@ -72,6 +72,10 @@ BOOST_FEATURE_POLICY: dict[str, bool] = {
     # gain, and it makes what the agent reads a lossy abbreviation of what the
     # tool printed.
     "boost-english-abbreviation": False,
+    # Converts allowlisted document reads and shrinks large images in a local
+    # temporary copy. Source files are unchanged, unsupported inputs fail open,
+    # and ordinary code reads are outside this feature's scope.
+    "boost-files-optimization": True,
     # BoostGraph. Excluded: it writes MCP config and BOOSTGRAPH marker blocks
     # into CLAUDE.md and AGENTS.md, which Agentbot rewrites wholesale, so the
     # two would overwrite each other silently. Agentbot passes --no-boostgraph

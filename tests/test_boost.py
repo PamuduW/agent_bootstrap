@@ -767,8 +767,6 @@ class BoostFeatureFlagTests(BoostIntegrationTests):
         )
 
     def _parsed(self):
-        import tomllib
-
         return tomllib.loads((self.root / ".boost/config.toml").read_text(encoding="utf-8"))
 
     def _status(self):

@@ -4,7 +4,10 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10 compatibility
+    import tomli as tomllib
 
 _BOOST_CLAUDE_SETTINGS = json.dumps(
     {

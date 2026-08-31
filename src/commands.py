@@ -294,6 +294,25 @@ COMMANDS: tuple[CommandSpec, ...] = (
         ("skills prune",),
     ),
     CommandSpec(
+        "skills remove-manual",
+        "./install.sh skills remove-manual [SKILL ...] [--yes] [--names0]",
+        "mutating",
+        "List, preview, or selectively remove user-placed global skills.",
+        (
+            option("SKILL ...", "Select exact manual skill names.", "all in preview; none on apply"),
+            option("--yes", "Permanently remove the selected skills.", "off"),
+            option("--names0", "Print eligible names separated by NUL bytes.", "off"),
+        ),
+        "Without --yes it only reads state; with --yes it removes only selected manual skills and Agentbot-owned links.",
+        (
+            "./install.sh skills remove-manual",
+            "./install.sh skills remove-manual gpt-taste mermaid --yes",
+        ),
+        ("skills prune", "skills install", "skills doctor"),
+        "bootstrap",
+        ("skills remove-manual",),
+    ),
+    CommandSpec(
         "global",
         "./install.sh global",
         "mutating",

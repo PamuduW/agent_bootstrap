@@ -436,7 +436,7 @@ main() {
 		;;
 	skills)
 		if [[ $# -lt 2 ]]; then
-			die "usage: ./install.sh skills <install|update|upgrade|list|doctor|prune>"
+			die "usage: ./install.sh skills <install|update|upgrade|list|doctor|prune|remove-manual>"
 		fi
 		case "${2}" in
 		install | update | upgrade) check_skills_deps ;;

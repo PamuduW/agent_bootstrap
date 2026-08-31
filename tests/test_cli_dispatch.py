@@ -111,6 +111,22 @@ class HandlerTests(unittest.TestCase):
             self.assertEqual(cli._handle_skills(context), 3)
         handle.assert_called_once_with(context.lifecycle, "list")
 
+    def test_skills_remove_manual_delegates_exact_selected_names(self):
+        context = _context(
+            skills_command="remove-manual",
+            manual_names=["gpt-taste", "mermaid"],
+            confirm=True,
+            names0=False,
+        )
+        with mock.patch.object(cli, "handle_skills_remove_manual", return_value=0) as handle:
+            self.assertEqual(cli._handle_skills(context), 0)
+        handle.assert_called_once_with(
+            context.lifecycle,
+            names=("gpt-taste", "mermaid"),
+            apply=True,
+            names0=False,
+        )
+
     def test_graphify_status_fails_only_when_broken(self):
         for state, expected in (("ready", 0), ("stale", 0), ("broken", 1)):
             context = _context(graphify_command="status")

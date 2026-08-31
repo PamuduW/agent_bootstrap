@@ -570,3 +570,29 @@ def print_skill_prune_report(report, *, include_manual: bool = False) -> int:
             "never removed unless --include-manual is given."
         )
     return 0
+
+
+def print_manual_skill_removal_report(report) -> int:
+    """Render a selective manual-skill preview or applied result."""
+    print_header("Remove Manual Skills", "Agentbot › Remove Manual Skills")
+    if not report.candidates:
+        print_table(
+            [("Skill store", "no removable manual skills found", "ok")],
+            show_header=True,
+        )
+        print_rollup(ok=1, check=0, miss=0)
+        return 0
+
+    print_table(
+        [(item.name, item.detail, item.reason) for item in report.candidates],
+        show_header=True,
+    )
+    print()
+    if report.applied:
+        print(f"  Removed {len(report.removed)} skill(s): {', '.join(report.removed)}")
+    else:
+        print(
+            f"  {_c(str(len(report.manual)), DIM)} removable manual skill(s); "
+            "select exact skill names and rerun with --yes."
+        )
+    return 0

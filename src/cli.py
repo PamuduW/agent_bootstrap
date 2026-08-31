@@ -22,6 +22,7 @@ from .ui import (
     print_doctor_summary,
     print_graphify_status,
     print_header,
+    print_manual_skill_removal_report,
     print_output_refresh_report,
     print_reconciliation_report,
     print_skill_prune_report,
@@ -250,6 +251,13 @@ def _handle_skills(context: CommandContext) -> int:
             apply=bool(getattr(context.args, "confirm", False)),
             include_manual=bool(getattr(context.args, "include_manual", False)),
         )
+    if context.args.skills_command == "remove-manual":
+        return handle_skills_remove_manual(
+            context.lifecycle,
+            names=tuple(context.args.manual_names),
+            apply=bool(context.args.confirm),
+            names0=bool(context.args.names0),
+        )
     return handle_skills_command(context.lifecycle, context.args.skills_command)
 
 
@@ -406,6 +414,27 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Also remove user-placed skills that have no lock entry",
     )
+    remove_manual = skills_sub.add_parser(
+        "remove-manual",
+        help="Selectively remove user-placed skills that have no lock entry",
+    )
+    remove_manual.add_argument(
+        "manual_names",
+        nargs="*",
+        metavar="SKILL",
+        help="Exact manual skill names to preview or remove",
+    )
+    remove_manual.add_argument(
+        "--yes",
+        dest="confirm",
+        action="store_true",
+        help="Remove the selected skills; without it this only previews",
+    )
+    remove_manual.add_argument(
+        "--names0",
+        action="store_true",
+        help="Print removable manual skill names separated by NUL bytes",
+    )
 
     return parser
 
@@ -481,6 +510,43 @@ def handle_skills_prune(lifecycle: Lifecycle, *, apply: bool, include_manual: bo
     if apply:
         report = apply_prune(paths, report, include_manual=include_manual)
     return print_skill_prune_report(report, include_manual=include_manual)
+
+
+def handle_skills_remove_manual(
+    lifecycle: Lifecycle,
+    *,
+    names: tuple[str, ...],
+    apply: bool,
+    names0: bool,
+) -> int:
+    from .skill_prune import PruneReport, apply_prune, plan_prune
+    from .skills_sources import load_skills_sources
+
+    if names0 and (names or apply):
+        raise ValueError("--names0 cannot be combined with skill names or --yes")
+    if apply and not names:
+        raise ValueError("manual skill removal requires at least one manual skill name")
+    if len(set(names)) != len(names):
+        raise ValueError("manual skill names must not contain duplicates")
+
+    paths = lifecycle.paths
+    config = load_skills_sources(paths.skills_sources_file)
+    report = plan_prune(paths, config)
+    manual_by_name = {item.name: item for item in report.manual}
+
+    if names0:
+        for name in manual_by_name:
+            sys.stdout.write(f"{name}\0")
+        return 0
+
+    invalid = sorted(set(names) - set(manual_by_name))
+    if invalid:
+        raise ValueError(f"not removable manual skills: {', '.join(invalid)}")
+    selected = tuple(manual_by_name[name] for name in names) if names else report.manual
+    selected_report = PruneReport(candidates=selected)
+    if apply:
+        selected_report = apply_prune(paths, selected_report, manual_names=names)
+    return print_manual_skill_removal_report(selected_report)
 
 
 def handle_skills_command(lifecycle: Lifecycle, skills_command: str) -> int:

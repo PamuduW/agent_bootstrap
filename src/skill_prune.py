@@ -94,6 +94,8 @@ def plan_prune(paths: AgentbotPaths, config: SkillsSourcesConfig) -> PruneReport
     for name, directory in installed.items():
         entry = lock.get(name)
         if entry is None:
+            if name == "graphify" and (directory / ".graphify_version").is_file():
+                continue
             candidates.append(
                 PruneCandidate(
                     name=name,
@@ -188,9 +190,20 @@ def apply_prune(
     report: PruneReport,
     *,
     include_manual: bool = False,
+    manual_names: tuple[str, ...] | None = None,
 ) -> PruneReport:
     """Remove the classified skills: directory, lock pin, and bridge links."""
-    targets = [item for item in report.candidates if item.removable_by_default]
+    if include_manual and manual_names is not None:
+        raise ValueError("include_manual and manual_names cannot be combined")
+
+    if manual_names is not None:
+        manual_by_name = {item.name: item for item in report.manual}
+        invalid = sorted(set(manual_names) - set(manual_by_name))
+        if invalid:
+            raise ValueError(f"not removable manual skills: {', '.join(invalid)}")
+        targets = [manual_by_name[name] for name in dict.fromkeys(manual_names)]
+    else:
+        targets = [item for item in report.candidates if item.removable_by_default]
     if include_manual:
         targets.extend(report.manual)
     if not targets:

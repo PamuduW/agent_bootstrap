@@ -13,6 +13,8 @@ source "$_AGENTBOT_MENU_DIR/menus/install.sh"
 # shellcheck disable=SC1091
 source "$_AGENTBOT_MENU_DIR/menus/update.sh"
 # shellcheck disable=SC1091
+source "$_AGENTBOT_MENU_DIR/menus/manual_skills.sh"
+# shellcheck disable=SC1091
 source "$_AGENTBOT_MENU_DIR/menus/github_token.sh"
 # shellcheck disable=SC1091
 source "$_AGENTBOT_MENU_DIR/menus/workspaces.sh"
@@ -31,16 +33,18 @@ _agentbot_menu_setup() {
 		'Check Status'
 		'Install Agentbot'
 		'Update'
+		'Remove Manual Skills'
 		'GitHub Token Config'
 		'Workspaces'
 		'Libraries'
 		'Quit'
 	)
-	MENU_SIMPLE_KEYS=(status install update token workspaces libraries quit)
+	MENU_SIMPLE_KEYS=(status install update manual-skills token workspaces libraries quit)
 	MENU_SIMPLE_DESCS=(
 		$'Check the installed Agentbot components and baseline.\nRead-only status; no updates or writes are performed.'
 		$'Install skills, refresh rendered outputs, run Doctor, and link agentbot.\nUse the explicit install action when changes are intended.'
 		$'Update the repository, reconcile skills, and refresh workspaces plus global outputs.\nA preview and explicit confirmation are required before mutation.'
+		$'Select and permanently remove user-placed skills outside managed sources.\nOfficial Graphify integration is protected; confirmation is required.'
 		$'Configure the optional shared GitHub API token.\nThe token is stored outside this repository.'
 		$'List, preview, and resync locally registered workspaces.\nApply actions require explicit confirmation.'
 		$'Open the Agentbot and Graphify command reference libraries.\nRead-only command and safety information.'
@@ -54,6 +58,7 @@ agentbot_menu_dispatch() {
 	status) agentbot_menu_status || rc=$? ;;
 	install) agentbot_menu_install || rc=$? ;;
 	update) agentbot_menu_update || rc=$? ;;
+	manual-skills) agentbot_menu_manual_skills || rc=$? ;;
 	token) agentbot_menu_token || rc=$? ;;
 	workspaces) agentbot_menu_workspaces || rc=$? ;;
 	libraries) agentbot_menu_libraries || rc=$? ;;

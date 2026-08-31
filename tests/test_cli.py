@@ -57,6 +57,90 @@ class CliTests(unittest.TestCase):
         self.assertTrue(args.confirm)
         self.assertTrue(args.include_manual)
 
+    def test_parser_accepts_selective_manual_skill_removal(self) -> None:
+        """Break caught: the safe selective command is unavailable to scripts and the TUI."""
+        from src.cli import build_parser
+
+        args = build_parser().parse_args(
+            [
+                "skills",
+                "remove-manual",
+                "gpt-taste",
+                "mermaid",
+                "--yes",
+            ]
+        )
+
+        self.assertEqual("remove-manual", args.skills_command)
+        self.assertEqual(["gpt-taste", "mermaid"], args.manual_names)
+        self.assertTrue(args.confirm)
+        self.assertFalse(args.names0)
+
+    def test_parser_accepts_nul_separated_manual_skill_discovery(self) -> None:
+        """Break caught: the checkbox menu must scrape a human-formatted table for names."""
+        from src.cli import build_parser
+
+        args = build_parser().parse_args(["skills", "remove-manual", "--names0"])
+
+        self.assertTrue(args.names0)
+        self.assertEqual([], args.manual_names)
+
+    def test_manual_skill_discovery_is_machine_readable_and_protects_graphify(self) -> None:
+        """Break caught: the menu sees protected integrations or must parse display text."""
+        from types import SimpleNamespace
+
+        from src.cli import handle_skills_remove_manual
+        from src.paths import AgentbotPaths
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home = root / "home"
+            paths = AgentbotPaths(
+                root=root,
+                codex_home=home / ".codex",
+                claude_home=home / ".claude",
+                cursor_home=home / ".cursor",
+                agents_home=home / ".agents",
+            )
+            paths.agents_skills_home.mkdir(parents=True)
+            paths.skills_sources_file.write_text(
+                "version: 1\nagents: [codex]\nscope: global\nsources: []\n",
+                encoding="utf-8",
+            )
+            for name in ("gpt-taste", "mermaid", "graphify"):
+                skill = paths.agents_skills_home / name
+                skill.mkdir()
+                (skill / "SKILL.md").write_text(f"# {name}\n", encoding="utf-8")
+            (paths.agents_skills_home / "graphify" / ".graphify_version").write_text(
+                "1.2.3\n", encoding="utf-8"
+            )
+
+            output = io.StringIO()
+            with patch("sys.stdout", output):
+                rc = handle_skills_remove_manual(
+                    SimpleNamespace(paths=paths),
+                    names=(),
+                    apply=False,
+                    names0=True,
+                )
+
+        self.assertEqual(0, rc)
+        self.assertEqual("gpt-taste\0mermaid\0", output.getvalue())
+
+    def test_manual_skill_removal_requires_an_explicit_nonempty_selection(self) -> None:
+        """Break caught: --yes with no checkbox selection deletes every manual skill."""
+        from types import SimpleNamespace
+
+        from src.cli import handle_skills_remove_manual
+
+        with self.assertRaisesRegex(ValueError, "at least one manual skill name"):
+            handle_skills_remove_manual(
+                SimpleNamespace(paths=MagicMock()),
+                names=(),
+                apply=True,
+                names0=False,
+            )
+
     def test_real_launcher_read_only_process_matrix_uses_an_isolated_home(self) -> None:
         """Break caught: read-only public commands depend on host state or mutate the isolated home."""
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -207,6 +291,16 @@ class CliTests(unittest.TestCase):
                 self.assertIn(f"=== {spec.name} ===", stdout)
                 for command_option in spec.options:
                     self.assertIn(command_option.usage, stdout)
+
+    def test_selective_manual_removal_is_documented_as_a_mutating_command(self) -> None:
+        """Break caught: the new destructive path is absent from Agentbot's safety library."""
+        from src.commands import command_by_name
+
+        spec = command_by_name("skills remove-manual")
+
+        self.assertEqual("mutating", spec.behavior)
+        self.assertIn("--yes", spec.usage)
+        self.assertIn("selected", spec.effects.lower())
 
     def test_help_aliases_resolve_to_canonical_commands(self) -> None:
         from src.commands import COMMANDS

@@ -82,6 +82,8 @@ committed [`skills-lock.json`](skills-lock.json) is only a project stub.
 ./install.sh skills doctor
 ./install.sh skills prune          # report skills no active source wants
 ./install.sh skills prune --yes    # and remove them
+./install.sh skills remove-manual  # preview user-placed skills
+./install.sh skills remove-manual gpt-taste mermaid --yes
 ./install.sh full                  # install, then update, in one command
 ```
 
@@ -90,6 +92,13 @@ skill: `excluded` (its source installs it, the manifest excludes it),
 `orphaned` (pinned to a source that is no longer active), `stale-pin` (in the
 lock with no directory), and `manual` (user-placed, never removed unless you
 pass `--include-manual`). It reports by default and only writes with `--yes`.
+
+For manual skills, prefer `skills remove-manual`: it accepts exact names and
+never treats an empty selection as permission to remove everything. The
+interactive Agentbot menu exposes the same operation as an unchecked checkbox
+list, confirms the selected names before deletion, and refreshes every agent
+surface afterward. Graphify installations stamped by Agentbot's separate
+Graphify integration are protected and do not appear in this list.
 
 A `skills: all` source can refuse specific upstream names, which is how you keep
 a repository's own test fixtures out of every agent's context:

@@ -23,7 +23,7 @@ test_main_dispatch_and_pause_ownership() (
 	local calls="$TEST_ROOT/menu.calls"
 	: >"$calls"
 	local index=0
-	local -a choices=(status install update token workspaces libraries quit)
+	local -a choices=(status install update manual-skills token workspaces libraries quit)
 	menu_simple_run() {
 		MENU_SIMPLE_RESULT="${choices[$index]}"
 		index=$((index + 1))
@@ -33,6 +33,7 @@ test_main_dispatch_and_pause_ownership() (
 	agentbot_menu_status() { printf 'status\n' >>"$calls"; }
 	agentbot_menu_install() { printf 'install\n' >>"$calls"; }
 	agentbot_menu_update() { printf 'update\n' >>"$calls"; }
+	agentbot_menu_manual_skills() { printf 'manual-skills\n' >>"$calls"; }
 	# Submenus own their action pauses and say so; the parent must not add a
 	# second one. Direct actions do not, so the parent pauses for them.
 	agentbot_menu_token() {
@@ -48,7 +49,70 @@ test_main_dispatch_and_pause_ownership() (
 		printf 'libraries\n' >>"$calls"
 	}
 	agentbot_menu_loop
-	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\ntoken\nworkspaces\nlibraries' ]]
+	[[ "$(<"$calls")" == $'status\npause\ninstall\npause\nupdate\npause\nmanual-skills\npause\ntoken\nworkspaces\nlibraries' ]]
+)
+
+test_manual_skill_menu_removes_only_checked_names_and_refreshes_agents() (
+	# Break caught: the checkbox action deletes every manual skill or leaves
+	# Cursor's separate lock stale after removing the selected global copies.
+	local calls="$TEST_ROOT/manual-skills.calls" prompt="$TEST_ROOT/manual-skills.prompt"
+	: >"$calls"
+	agentbot_run_backend() {
+		if [[ "$*" == 'skills remove-manual --names0' ]]; then
+			printf 'gpt-taste\0mermaid\0pitstop\0'
+			return 0
+		fi
+		printf '%s\n' "$*" >>"$calls"
+	}
+	menu_checkbox_run() {
+		[[ "${MENU_CB_LABELS[*]}" == 'gpt-taste mermaid pitstop' ]] || return 1
+		[[ "${MENU_CB_CHECKED[*]}" == '0 0 0' ]] || return 1
+		MENU_CB_CHECKED[0]=1
+		MENU_CB_CHECKED[2]=1
+	}
+	tui_confirm() {
+		printf '%s\n' "$1" >"$prompt"
+		return 0
+	}
+	tui_run_to_output() { "$@"; }
+
+	agentbot_menu_manual_skills
+
+	[[ "$(<"$calls")" == $'skills remove-manual gpt-taste pitstop --yes\nskills install' ]] || return 1
+	[[ "$(<"$prompt")" == 'Permanently remove 2 manual skills (gpt-taste, pitstop)?' ]]
+)
+
+test_manual_skill_menu_does_nothing_when_no_skill_is_checked() (
+	# Break caught: pressing Enter on the default screen is interpreted as
+	# consent to remove all displayed manual skills.
+	local calls="$TEST_ROOT/manual-skills-none.calls"
+	: >"$calls"
+	agentbot_run_backend() {
+		if [[ "$*" == 'skills remove-manual --names0' ]]; then
+			printf 'gpt-taste\0mermaid\0'
+			return 0
+		fi
+		printf '%s\n' "$*" >>"$calls"
+	}
+	menu_checkbox_run() { return 0; }
+	tui_confirm() {
+		printf 'unexpected confirmation\n' >>"$calls"
+		return 0
+	}
+	tui_run_to_output() { "$@"; }
+
+	agentbot_menu_manual_skills >/dev/null
+
+	[[ ! -s "$calls" ]]
+)
+
+test_manual_skill_menu_propagates_discovery_failure() (
+	# Break caught: `! command` overwrites the backend status, turning a failed
+	# candidate query into a successful and misleading empty list.
+	agentbot_run_backend() { return 17; }
+	local rc=0
+	agentbot_menu_manual_skills >/dev/null || rc=$?
+	[[ "$rc" -eq 17 ]]
 )
 
 test_repository_change_reaches_the_outer_menu_without_pause() (
@@ -242,6 +306,9 @@ test_undeclared_submenu_still_gets_a_parent_pause() (
 )
 check 'Status uses one diagnostics snapshot' test_status_uses_one_diagnostics_snapshot
 check 'main dispatch gives direct actions exactly one pause' test_main_dispatch_and_pause_ownership
+check 'manual skill menu removes only checked names and refreshes agents' test_manual_skill_menu_removes_only_checked_names_and_refreshes_agents
+check 'manual skill menu leaves state unchanged when nothing is checked' test_manual_skill_menu_does_nothing_when_no_skill_is_checked
+check 'manual skill menu propagates candidate discovery failures' test_manual_skill_menu_propagates_discovery_failure
 check 'a submenu that does not declare pause ownership still gets one' test_undeclared_submenu_still_gets_a_parent_pause
 check 'repository changes reach the outer menu without a stale pause' test_repository_change_reaches_the_outer_menu_without_pause
 check 'TUI install and update preserve the repository-change exit contract' test_tui_install_and_update_preserve_repository_change_exit

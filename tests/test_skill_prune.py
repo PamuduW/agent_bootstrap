@@ -106,6 +106,15 @@ class PruneTests(unittest.TestCase):
         self.assertEqual((), report.removable)
         self.assertEqual(["graphify"], [item.name for item in report.manual])
 
+    def test_official_graphify_is_not_a_manual_prune_candidate(self):
+        graphify = self._skill("graphify")
+        (graphify / ".graphify_version").write_text("1.2.3\n", encoding="utf-8")
+        self._lock({})
+
+        report = plan_prune(self.paths, self._manifest(self.BASE))
+
+        self.assertEqual((), report.manual)
+
     def test_a_disabled_source_orphans_its_skills(self):
         self._skill("dropped")
         self._lock({"dropped": "owner/repo"})
@@ -149,6 +158,38 @@ class PruneTests(unittest.TestCase):
         )
         self.assertEqual(("graphify",), result.removed)
         self.assertFalse((self.store / "graphify").exists())
+
+    def test_apply_removes_only_named_manual_skills(self):
+        self._skill("remove-me")
+        self._skill("keep-me")
+        remove_claude, remove_codex = self._bridge("remove-me")
+        keep_claude, keep_codex = self._bridge("keep-me")
+        self._lock({})
+        config = self._manifest(self.BASE)
+
+        result = apply_prune(
+            self.paths,
+            plan_prune(self.paths, config),
+            manual_names=("remove-me",),
+        )
+
+        self.assertEqual(("remove-me",), result.removed)
+        self.assertFalse((self.store / "remove-me").exists())
+        self.assertFalse(remove_claude.is_symlink())
+        self.assertFalse(remove_codex.is_symlink())
+        self.assertTrue((self.store / "keep-me").is_dir())
+        self.assertTrue(keep_claude.is_symlink())
+        self.assertTrue(keep_codex.is_symlink())
+
+    def test_apply_rejects_a_requested_name_that_is_not_manual(self):
+        self._skill("managed")
+        self._lock({"managed": "owner/repo"})
+        report = plan_prune(self.paths, self._manifest(self.BASE))
+
+        with self.assertRaisesRegex(ValueError, "not removable manual skills: managed"):
+            apply_prune(self.paths, report, manual_names=("managed",))
+
+        self.assertTrue((self.store / "managed").is_dir())
 
     def test_a_bridge_link_pointing_outside_our_store_is_never_removed(self):
         # A link the user or another installer owns must survive, even when the

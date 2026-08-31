@@ -14,12 +14,14 @@ from unittest import mock
 
 from src.graphify import GraphifyStatus
 from src.models import DoctorIssue
+from src.skill_prune import PruneCandidate, PruneReport
 from src.skill_reconcile import ReconcileResult
 from src.skills_installer import InstallResult
 from src.ui import (
     print_command_help,
     print_doctor_summary,
     print_graphify_status,
+    print_manual_skill_removal_report,
     print_reconciliation_report,
     print_skills_report,
     print_skills_update_report,
@@ -171,6 +173,41 @@ class SkillsReportTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("alpha", text)
         self.assertIn("beta", text)
+
+
+class ManualSkillRemovalReportTests(unittest.TestCase):
+    @staticmethod
+    def _report(*, applied: bool = False) -> PruneReport:
+        candidate = PruneCandidate(
+            name="gpt-taste",
+            reason="manual",
+            detail="on disk, not in the lock; user-placed",
+            directory=Path("/tmp/gpt-taste"),
+            locked=False,
+        )
+        return PruneReport(
+            candidates=(candidate,),
+            removed=("gpt-taste",) if applied else (),
+            applied=applied,
+        )
+
+    def test_preview_explains_selective_removal_without_broad_prune_flag(self):
+        """Break caught: the safer command tells users to run broad --include-manual."""
+        text, rc = _capture(print_manual_skill_removal_report, self._report())
+
+        self.assertEqual(0, rc)
+        self.assertIn("Remove Manual Skills", text)
+        self.assertIn("select exact skill names and rerun with --yes", text)
+        self.assertNotIn("--include-manual", text)
+
+    def test_applied_report_names_exactly_what_was_removed(self):
+        text, rc = _capture(
+            print_manual_skill_removal_report,
+            self._report(applied=True),
+        )
+
+        self.assertEqual(0, rc)
+        self.assertIn("Removed 1 skill(s): gpt-taste", text)
 
 
 class GraphifyStatusTests(unittest.TestCase):

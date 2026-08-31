@@ -18,8 +18,9 @@ test_main_menu_snapshot() {
 	_agentbot_menu_setup
 	output="$(AGENTBOT_TUI=1 tui_menu_draw 0 80 | strip_ansi_stream)"
 	[[ "$output" == *$'=== Agentbot ===\n  Agentbot'* ]] || return 1
-	[[ "$output" == *'1. Check Status'* && "$output" == *'7. Quit'* ]] || return 1
-	[[ "$output" == *'GitHub Token Config'* && "$output" == *'Libraries'* ]] || return 1
+	[[ "$output" == *'1. Check Status'* && "$output" == *'8. Quit'* ]] || return 1
+	[[ "$output" == *'Remove Manual Skills'* && "$output" == *'GitHub Token Config'* ]] || return 1
+	[[ "$output" == *'Libraries'* ]] || return 1
 	[[ "$output" == *'Check the installed Agentbot components and baseline.'* ]]
 }
 

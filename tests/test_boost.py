@@ -615,6 +615,10 @@ class BoostShadowingConfigTests(BoostIntegrationTests):
         )
 
     def _ready_integration(self):
+        boost = self.root / ".local/bin/boost"
+        boost.parent.mkdir(parents=True, exist_ok=True)
+        boost.write_text("#!/bin/sh\nprintf 'boost v0.12.6\\n'\n", encoding="utf-8")
+        boost.chmod(0o755)
         integration = self._integration_type()(self._paths())
         integration.ensure_safe_config()
         return integration

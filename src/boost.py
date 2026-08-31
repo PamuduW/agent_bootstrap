@@ -16,7 +16,7 @@ from pathlib import Path, PurePosixPath
 try:
     import tomllib  # type: ignore[import-not-found]
 except ModuleNotFoundError:  # pragma: no cover - Python 3.10 compatibility
-    import tomli as tomllib  # type: ignore[import-not-found]
+    import tomli as tomllib
 
 from .command_runner import CommandRunner
 from .paths import AgentbotPaths

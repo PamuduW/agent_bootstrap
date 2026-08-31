@@ -31,7 +31,7 @@ class ClaudeStatuslineTests(unittest.TestCase):
         return agentbot_paths(self.root)
 
     def _run_real_statusline(
-        self, payload: dict | str
+        self, payload: dict | str, **env_overrides: str
     ) -> subprocess.CompletedProcess[str]:
         script = Path(__file__).resolve().parents[1] / "global/claude/statusline-command.sh"
         raw = payload if isinstance(payload, str) else json.dumps(payload)
@@ -41,7 +41,7 @@ class ClaudeStatuslineTests(unittest.TestCase):
             capture_output=True,
             text=True,
             check=False,
-            env={**os.environ, "TZ": "UTC"},
+            env={**os.environ, "TZ": "UTC", **env_overrides},
         )
 
     @staticmethod
@@ -110,7 +110,9 @@ class ClaudeStatuslineTests(unittest.TestCase):
                         "resets_at": 4102444800,
                     },
                 },
-            }
+            },
+            COLUMNS="240",
+            AGENTBOT_STATUSLINE_BOOST="0",
         )
 
         self.assertEqual(0, result.returncode)
@@ -119,6 +121,64 @@ class ClaudeStatuslineTests(unittest.TestCase):
             f"Opus 4.1 High (1M context) · {self.root} · "
             "Context 42% used · 5h 76% left (reset Jan 1 00:00) · "
             "7d 59% left (reset Jan 1 00:00)",
+            self._plain_output(result),
+        )
+
+    def test_real_statusline_wraps_complete_payload_at_segment_boundaries(
+        self,
+    ) -> None:
+        result = self._run_real_statusline(
+            {
+                "workspace": {"current_dir": str(self.root)},
+                "model": {"display_name": "Opus 4.1 (1M context)"},
+                "context_window": {
+                    "used_percentage": 42,
+                    "remaining_percentage": 58,
+                },
+                "effort": {"level": "high"},
+                "rate_limits": {
+                    "five_hour": {
+                        "used_percentage": 24,
+                        "resets_at": 4102444800,
+                    },
+                    "seven_day": {
+                        "used_percentage": 41,
+                        "resets_at": 4102444800,
+                    },
+                },
+            },
+            COLUMNS="72",
+            AGENTBOT_STATUSLINE_BOOST="0",
+        )
+        lines = self._plain_output(result).splitlines()
+
+        self.assertEqual(0, result.returncode)
+        self.assertEqual("", result.stderr)
+        self.assertEqual(2, len(lines))
+        self.assertTrue(all(len(line) <= 72 for line in lines), lines)
+        combined = " · ".join(lines)
+        for expected in (
+            "Opus 4.1",
+            self.root.name,
+            "Context 42%",
+            "5h 76%",
+            "7d 59%",
+        ):
+            self.assertIn(expected, combined)
+
+    def test_real_statusline_ignores_invalid_columns(self) -> None:
+        result = self._run_real_statusline(
+            {
+                "workspace": {"current_dir": str(self.root)},
+                "model": {"display_name": "Opus"},
+                "context_window": {"used_percentage": 10},
+            },
+            COLUMNS="wide",
+            AGENTBOT_STATUSLINE_BOOST="0",
+        )
+
+        self.assertEqual(
+            f"Opus · {self.root} · Context 10% used",
             self._plain_output(result),
         )
 
@@ -452,6 +512,16 @@ class BoostStatuslineSegmentTests(unittest.TestCase):
         output = self._run(AGENTBOT_STATUSLINE_BOOST="0")
         self.assertNotIn("Boost", output)
         self.assertIn("Context 42% used", output)
+
+    def test_narrow_output_keeps_the_boost_segment(self):
+        self._stub_boost(
+            "cat >/dev/null; printf 'Boost saved 123456789 tokens total\\n'"
+        )
+        lines = self._run(COLUMNS="48").splitlines()
+
+        self.assertEqual(2, len(lines))
+        self.assertTrue(all(len(line) <= 48 for line in lines), lines)
+        self.assertIn("Boost", " ".join(lines))
 
     def test_only_the_first_line_is_used(self):
         self._stub_boost("cat >/dev/null; printf 'line one\\nline two\\n'")

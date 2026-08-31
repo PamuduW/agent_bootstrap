@@ -80,6 +80,33 @@ class DoctorSeverityTests(unittest.TestCase):
             )
             self.assertFalse(any("short" in issue.message for issue in issues))
 
+    def test_stateless_installation_token_is_healthy(self) -> None:
+        from src.diagnostics import Diagnostics
+        from src.paths import AgentbotPaths
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "global").mkdir()
+            (root / "global" / "AGENTS.md").write_text("# baseline\n", encoding="utf-8")
+            config = root / "config" / "agentbot"
+            config.mkdir(parents=True)
+            token_file = config / "github.env"
+            token = f"ghs_12345_{'a' * 250}.{'b' * 200}.{'c' * 55}-x"
+            token_file.write_text(f"GITHUB_TOKEN={token}\n", encoding="utf-8")
+            token_file.chmod(0o600)
+            paths = AgentbotPaths(
+                root,
+                root / "codex",
+                root / "claude",
+                root / "cursor",
+                config,
+                agents_home=root / ".agents",
+            )
+
+            issues = Diagnostics(paths).doctor_issues()
+
+            self.assertFalse(any(issue.scope == "token" for issue in issues))
+
     def test_warning_only_doctor_is_success(self) -> None:
         from src.models import DoctorIssue
         from src.ui import print_doctor_summary

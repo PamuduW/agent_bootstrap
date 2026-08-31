@@ -21,6 +21,12 @@ from .skills_installer import doctor_skills, list_installed_skills
 from .skills_sources import load_skills_sources
 
 
+def _github_token_is_valid(value: str) -> bool:
+    if value.startswith("ghs_"):
+        return re.fullmatch(r"ghs_[A-Za-z0-9._-]{36,}", value) is not None
+    return len(value) >= 20 and re.fullmatch(r"[A-Za-z0-9_]+", value) is not None
+
+
 @dataclass(frozen=True)
 class _DiagnosticsFacts:
     enabled_sources: int
@@ -412,7 +418,7 @@ class Diagnostics:
         ):
             return [DoctorIssue("warning", "token", "saved GitHub token has malformed assignment")]
         value = lines[0][len("GITHUB_TOKEN=") : -1]
-        if len(value) < 20 or re.fullmatch(r"[A-Za-z0-9_]+", value) is None:
+        if not _github_token_is_valid(value):
             return [DoctorIssue("warning", "token", "saved GitHub token has an invalid value")]
         return []
 

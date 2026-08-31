@@ -16,6 +16,10 @@ token() {
 	printf '%s_%s_%024d' "${1:-consumer}" "$(date +%s%N)" "$seq"
 }
 
+stateless_token() {
+	printf 'ghs_12345_%0250d.%0200d.%055d-x' 0 0 0
+}
+
 active_file() { printf '%s\n' "$XDG_CONFIG_HOME/agentbot/github.env"; }
 
 write_token_file() {
@@ -43,7 +47,11 @@ set -u
 if [[ "${1:-}" == '-c' ]]; then exit 0; fi
 valid=no
 source_kind=none
-if [[ "${GITHUB_TOKEN:-}" =~ ^[A-Za-z0-9_]{20,}$ ]]; then valid=yes; fi
+if [[ "${GITHUB_TOKEN:-}" == ghs_* ]]; then
+  [[ "${GITHUB_TOKEN:-}" =~ ^ghs_[A-Za-z0-9._-]{36,}$ ]] && valid=yes
+elif [[ "${GITHUB_TOKEN:-}" =~ ^[A-Za-z0-9_]{20,}$ ]]; then
+  valid=yes
+fi
 case "${GITHUB_TOKEN:-}" in
   envpreferred_*) source_kind=environment ;;
   saved_*) source_kind=saved ;;
@@ -123,6 +131,17 @@ test_environment_precedence() (
 	[[ "$GITHUB_TOKEN" == envpreferred_* ]]
 )
 
+test_stateless_token_reaches_only_the_authenticated_child() (
+	reset_state
+	local value
+	value="$(stateless_token)"
+	write_token_file "$(active_file)" "$value"
+	run_install_script skills update >/dev/null || return 1
+	grep -q $'^python3\t-m\tsrc\.cli\t--root\t[^\t]*\tskills\tupdate\tvalid=yes\tsource=none$' "$TEST_COMMAND_LOG" || return 1
+	[[ -z "${GITHUB_TOKEN:-}" ]] || return 1
+	! grep -FRq -- "$value" "$TEST_COMMAND_LOG" "$TEST_URL_LOG" "$TEST_SIBLING_LOG" "$TEST_RELAUNCH_LOG"
+)
+
 test_child_status_propagates() (
 	reset_state
 	TEST_PYTHON_EXIT=37
@@ -190,6 +209,7 @@ expect 'read-only skills commands neither authenticate nor warn' test_readonly_s
 expect 'repository update authenticates only the Python update child' test_repo_update_child_is_authenticated
 expect 'bootstrap authenticates only its Python child' test_bootstrap_child_is_authenticated
 expect 'valid environment token takes precedence over saved state' test_environment_precedence
+expect 'stateless installation token reaches only the authenticated child' test_stateless_token_reaches_only_the_authenticated_child
 expect 'child nonzero status propagates unchanged' test_child_status_propagates
 expect 'saved token never remains in the calling shell' test_parent_never_gains_saved_token
 expect 'canary is absent from output logs diff and sampled process cmdline' test_canary_and_proc_safety

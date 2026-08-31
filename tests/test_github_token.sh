@@ -23,6 +23,9 @@ token() {
 	seq=$((seq + 1))
 	printf 'ghp_agentbot_%s_%024d' "${1:-test}" "$seq"
 }
+stateless_token() {
+	printf 'ghs_12345_%0250d.%0200d.%055d-x' 0 0 0
+}
 active_file() { printf '%s\n' "$XDG_CONFIG_HOME/agentbot/github.env"; }
 legacy_file() { printf '%s\n' "$XDG_CONFIG_HOME/agent_bootstrap/github.env"; }
 reset_state() {
@@ -38,7 +41,7 @@ write_token_file() {
 }
 require_contract() {
 	local fn
-	for fn in github_token_file github_token_read github_token_export_if_valid github_token_write github_token_remove github_token_fingerprint github_token_migrate_legacy; do
+	for fn in github_token_file github_token_is_valid github_token_read github_token_export_if_valid github_token_write github_token_remove github_token_fingerprint github_token_migrate_legacy; do
 		declare -F "$fn" >/dev/null || return 1
 	done
 }
@@ -92,6 +95,21 @@ test_strict_parser_and_warning_fallback() (
 	unset GITHUB_TOKEN
 	github_token_export_if_valid 2>"$err" || return 1
 	[[ -z "${GITHUB_TOKEN:-}" && "$(wc -l <"$err")" -eq 1 ]]
+)
+
+test_stateless_installation_token_round_trip() (
+	require_contract || return 1
+	reset_state
+	local value token
+	token="$(stateless_token)"
+	[[ ${#token} -ge 500 ]] || return 1
+	github_token_is_valid "$token" || return 1
+	github_token_write "$token" || return 1
+	github_token_read value || return 1
+	[[ "$value" == "$token" ]] || return 1
+	! github_token_is_valid 'ghs_short' || return 1
+	! github_token_is_valid "${token}/unsafe" || return 1
+	! github_token_is_valid "ordinary.${token#ghs_}" || return 1
 )
 
 test_private_atomic_storage_and_removal() (
@@ -183,6 +201,7 @@ test_sole_migration_owner() (
 expect 'independent Agentbot token interface targets shared active file' test_interface_and_independence
 expect 'environment precedence and absent optional fallback are strict' test_precedence_and_absent_optional
 expect 'strict parser rejects unsafe content and falls back anonymously' test_strict_parser_and_warning_fallback
+expect 'stateless GitHub App installation tokens round-trip through strict storage' test_stateless_installation_token_round_trip
 expect 'private atomic storage, replacement, symlink rejection, and removal work' test_private_atomic_storage_and_removal
 expect 'legacy migration handles absent, valid, identical, conflict, malformed, and wrong-mode states' test_migration_matrix
 expect 'fingerprint never returns the full token' test_fingerprint_is_safe

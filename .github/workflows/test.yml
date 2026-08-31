@@ -31,6 +31,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt -r requirements-dev.txt
           sudo apt-get update
-          sudo apt-get install --yes shellcheck
+          sudo apt-get install --yes shellcheck shfmt ripgrep
       - name: Run the full gate
         run: bash tests/run.sh

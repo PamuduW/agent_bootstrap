@@ -68,12 +68,26 @@ test_runner_lists_each_shell_suite_once() (
 	done
 )
 
+test_ci_installs_full_gate_system_tools() (
+	local install_step tool
+	install_step="$(grep 'apt-get install' "$ROOT/.github/workflows/test.yml")"
+	for tool in shellcheck shfmt ripgrep; do
+		[[ " $install_step " == *" $tool "* ]] || return 1
+	done
+)
+
 test_harness_setup "$ROOT"
 
 if test_runner_lists_each_shell_suite_once; then
 	pass "full runner lists every shell suite exactly once"
 else
 	fail "full runner lists every shell suite exactly once"
+fi
+
+if test_ci_installs_full_gate_system_tools; then
+	pass "CI installs every system tool required by the full gate"
+else
+	fail "CI installs every system tool required by the full gate"
 fi
 
 [[ "$HOME" == "$TEST_ROOT"/* ]] && pass "HOME is isolated" || fail "HOME is isolated"

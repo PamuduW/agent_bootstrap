@@ -112,6 +112,22 @@ a repository's own test fixtures out of every agent's context:
       - beta
 ```
 
+`repo` is `owner/name` on GitHub. Prefix a supported host to install from
+another forge:
+
+```yaml
+  - id: gitlab-ci-official
+    repo: gitlab.com/gitlab-org/ci-cd/gitlab-ci-skill
+    skills:
+      - gitlab-ci-skill
+```
+
+Supported hosts are `github.com` and `gitlab.com`. The host prefix is also the
+only form that accepts the nested group paths GitLab allows and GitHub does
+not. Sources are cloned locally before install, so the Skills CLI itself never
+needs to know which forge a source came from; the lock records the host as each
+skill's `sourceType`.
+
 Add a source to the manifest, then use `skills install`. Source discovery is
 performed once per update plan, and apply verifies that the repository,
 manifest, lock, and remote source revisions still match that plan.

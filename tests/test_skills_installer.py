@@ -69,7 +69,7 @@ sources:
 
         self.assertIn("--full-depth", command)
 
-    @patch("src.skills_installer._clone_github_source")
+    @patch("src.skills_installer._clone_remote_source")
     @patch("src.skills_installer.run_install_command")
     def test_install_skills_runs_npx_for_active_sources(self, mock_run, mock_clone) -> None:
         from src.skills_installer import build_add_argv, install_skills
@@ -145,7 +145,7 @@ sources:
         self.assertEqual("npx", install_command[0])
         self.assertNotEqual("obra/superpowers", install_command[4])
 
-    @patch("src.skills_installer._clone_github_source")
+    @patch("src.skills_installer._clone_remote_source")
     @patch("src.skills_installer.run_install_command")
     def test_install_source_uses_verified_checkout_without_recloning(
         self, mock_run, mock_clone
@@ -199,7 +199,7 @@ sources:
             skill_dir.mkdir(parents=True)
             (skill_dir / "SKILL.md").write_text("---\nname: brainstorming\n---\n", encoding="utf-8")
 
-        with patch("src.skills_installer._clone_github_source", side_effect=clone_with_skill):
+        with patch("src.skills_installer._clone_remote_source", side_effect=clone_with_skill):
             install_source(source, agents=["codex"], global_lock_file=lock_file)
 
         lock = json.loads(lock_file.read_text(encoding="utf-8"))
@@ -235,7 +235,7 @@ sources:
             fixture_skill.mkdir(parents=True)
             (fixture_skill / "SKILL.md").write_text("---\nname: alpha\n---\n", encoding="utf-8")
 
-        with patch("src.skills_installer._clone_github_source", side_effect=clone_with_skill_and_fixture):
+        with patch("src.skills_installer._clone_remote_source", side_effect=clone_with_skill_and_fixture):
             install_source(source, agents=["codex"], global_lock_file=lock_file)
 
         lock = json.loads(lock_file.read_text(encoding="utf-8"))
@@ -369,7 +369,7 @@ sources:
         self.assertEqual("ok", result.stdout)
         self.assertEqual("", output.getvalue())
 
-    @patch("src.skills_installer._clone_github_source")
+    @patch("src.skills_installer._clone_remote_source")
     @patch("src.skills_installer.run_install_command")
     def test_install_source_reports_start_and_finish_progress(self, mock_run, mock_clone) -> None:
         from src.skills_installer import install_source
@@ -504,12 +504,12 @@ sources:
     @patch("src.skills_installer.shutil.which", return_value="/usr/bin/git")
     def test_github_clone_timeout_can_be_overridden(self, _mock_which) -> None:
         from src.command_runner import CommandResult
-        from src.skills_installer import _clone_github_source
+        from src.skills_installer import _clone_remote_source
 
         runner = MagicMock()
         runner.run.return_value = CommandResult(0)
         with patch.dict(os.environ, {"AGENTBOT_GITHUB_CLONE_TIMEOUT_SECONDS": "600"}):
-            _clone_github_source("owner/repo", self.root / "checkout", runner=runner)
+            _clone_remote_source("owner/repo", self.root / "checkout", runner=runner)
 
         self.assertEqual(600, runner.run.call_args.kwargs["timeout_seconds"])
 

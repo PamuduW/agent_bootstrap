@@ -14,7 +14,13 @@ from .command_runner import CommandResult, CommandRunner
 from .models import DoctorIssue
 from .paths import AgentbotPaths
 from .skill_catalog import skill_name_from_file
-from .skills_sources import SkillSourceEntry, SkillsSourcesConfig, load_skills_sources
+from .skills_sources import (
+    SkillSourceEntry,
+    SkillsSourcesConfig,
+    load_skills_sources,
+    source_clone_url,
+    source_type,
+)
 
 
 class SkillsInstallError(RuntimeError):
@@ -165,26 +171,17 @@ def parse_update_output(*outputs: str) -> SkillsUpdateReport:
     )
 
 
-def _github_clone_url(repo: str) -> str | None:
-    if repo.count("/") != 1 or any(char.isspace() for char in repo):
-        return None
-    owner, name = repo.split("/", maxsplit=1)
-    if not owner or not name:
-        return None
-    return f"https://github.com/{repo}.git"
-
-
-def _clone_github_source(
+def _clone_remote_source(
     repo: str,
     destination: Path,
     *,
     runner: CommandRunner | None = None,
 ) -> None:
-    clone_url = _github_clone_url(repo)
+    clone_url = source_clone_url(repo)
     if clone_url is None:
-        raise ValueError(f"not a GitHub owner/repository source: {repo!r}")
+        raise ValueError(f"not a supported owner/repository source: {repo!r}")
     if shutil.which("git") is None:
-        raise SkillsInstallError("git is required to install GitHub skill sources")
+        raise SkillsInstallError("git is required to install remote skill sources")
 
     timeout_seconds = _github_clone_timeout_seconds()
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
@@ -195,11 +192,11 @@ def _clone_github_source(
     )
     if completed.timed_out:
         raise SkillsInstallError(
-            f"GitHub clone for source {repo!r} timed out after {timeout_seconds} seconds"
+            f"clone for source {repo!r} timed out after {timeout_seconds} seconds"
         )
     if completed.returncode != 0:
         detail = completed.detail(MAX_COMMAND_ERROR_DETAIL_LENGTH)
-        raise SkillsInstallError(f"failed to clone GitHub source {repo!r}: {detail}")
+        raise SkillsInstallError(f"failed to clone skill source {repo!r}: {detail}")
 
 
 def _skill_folder_hash(skill_dir: Path) -> str:
@@ -227,7 +224,7 @@ def _require_global_lock(global_lock_file: Path | None) -> Path:
     return global_lock_file
 
 
-def _record_github_checkout_lock(source: SkillSourceEntry, checkout: Path, lock_file: Path) -> None:
+def _record_checkout_lock(source: SkillSourceEntry, checkout: Path, lock_file: Path) -> None:
     if source.repo is None:
         raise SkillsInstallError(f"source {source.id!r} has no repository to record")
     try:
@@ -272,8 +269,8 @@ def _record_github_checkout_lock(source: SkillSourceEntry, checkout: Path, lock_
         existing = skills.get(name)
         skills[name] = {
             "source": source.repo,
-            "sourceType": "github",
-            "sourceUrl": _github_clone_url(source.repo),
+            "sourceType": source_type(source.repo),
+            "sourceUrl": source_clone_url(source.repo),
             "skillPath": relative_path,
             "skillFolderHash": _skill_folder_hash(skill_file.parent),
             "installedAt": existing.get("installedAt", now) if isinstance(existing, dict) else now,
@@ -399,7 +396,7 @@ def install_source(
     argv = build_add_argv(source, agents=agents, global_scope=global_scope, npx=npx)
     if progress is not None:
         progress(f"[STEP] Installing skill source: {source.id} ({source.repo})")
-    clone_url = _github_clone_url(source.repo)
+    clone_url = source_clone_url(source.repo)
     try:
         if dry_run or clone_url is None:
             result = run_install_command(
@@ -413,7 +410,7 @@ def install_source(
             argv[4] = str(checkout)
             result = run_install_command(argv, source_id=source.id, cwd=cwd, runner=runner)
             if result.returncode == 0 and global_scope:
-                _record_github_checkout_lock(
+                _record_checkout_lock(
                     source, checkout, _require_global_lock(global_lock_file)
                 )
             result = InstallResult(
@@ -432,11 +429,11 @@ def install_source(
         else:
             with tempfile.TemporaryDirectory(prefix="agentbot-skill-") as temp_dir:
                 checkout = Path(temp_dir) / source.id
-                _clone_github_source(source.repo, checkout, runner=runner)
+                _clone_remote_source(source.repo, checkout, runner=runner)
                 argv[4] = str(checkout)
                 result = run_install_command(argv, source_id=source.id, cwd=cwd, runner=runner)
                 if result.returncode == 0 and global_scope:
-                    _record_github_checkout_lock(
+                    _record_checkout_lock(
                         source, checkout, _require_global_lock(global_lock_file)
                     )
                 result = InstallResult(

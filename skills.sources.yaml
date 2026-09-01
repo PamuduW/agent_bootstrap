@@ -5,6 +5,10 @@
 # Use `skills: all` to install every skill supplied by a source; otherwise use
 # a YAML list of explicit skill names.
 #
+# `repo` is `owner/name` on GitHub. Prefix a supported host to use another
+# forge -- `gitlab.com/group/subgroup/name` -- which is also the only form
+# that accepts the nested group paths GitLab allows and GitHub does not.
+#
 # Lockfile: global installs (-g) pin versions in ~/.agents/.skill-lock.json.
 # This repo file stays a stub unless you switch to project-scoped installs.
 
@@ -33,6 +37,10 @@ sources:
       - kubernetes
       - terraform
       - gitlab-ci
+    # Disabled: these three are template-generated stubs with identical filler
+    # sections (partly untranslated) and no topic-specific depth. Real coverage
+    # lives in claude-devops/devops-engineer references and devops-anmol/k8s.
+    enabled: false
 
   - id: devops-anmol
     repo: anmolnagpal/devops-skills
@@ -49,8 +57,16 @@ sources:
 
   - id: research-papers
     repo: ShaishavMaisuria/research-paper-lifecycle-skills
+    # literature-review references these three siblings ~25 times: find-papers
+    # (key-free DBLP/Crossref/Semantic Scholar/arXiv search), fetch-paper
+    # (legal open-access full text), and verify-citations (the bibliography
+    # anti-hallucination gate). Installing literature-review alone left every
+    # one of those code paths broken.
     skills:
       - literature-review
+      - find-papers
+      - fetch-paper
+      - verify-citations
 
   - id: deslop
     repo: brycewang-stanford/Auto-Empirical-Research-Skills
@@ -74,7 +90,10 @@ sources:
 
   - id: watermarks-remover
     repo: guillaumemeyer/watermarks-remover
-    skills: all
+    # Was `skills: all`. remove-ai-marks is a thin client for a local HTTP
+    # service (127.0.0.1:8765) that is not deployed here, so it is inert.
+    skills:
+      - clean-user-facing-text
 
   - id: akindu-agent-skills
     repo: Akindu23/my-agent-skills
@@ -82,13 +101,35 @@ sources:
     # This repository ships its own Skills-CLI test fixtures under
     # cli/test/fixtures/, and `skills: all` sweeps them in. They are not real
     # skills; excluding them keeps them out of every agent's context.
+    # `tdd` duplicates superpowers/test-driven-development and, unlike most of
+    # this source, is model-listed -- so it costs description budget twice over.
+    # These four are model-listed (so they cost description budget) but are
+    # niche or overlap skills that are kept: recursive-decomposition and
+    # research overlap council/deep-research, svg-diagrams has a dangling
+    # ../assets/ reference, and prototype is only ever offered optionally by
+    # wayfinder. Their remaining 39 siblings are manual-only or path-scoped
+    # and cost nothing, so they stay installed.
     exclude:
       - alpha
       - beta
+      - tdd
+      - recursive-decomposition
+      - research
+      - svg-diagrams
+      - prototype
 
   - id: pamudu-agent-bootstrap-skills
     repo: PamuduW/agent_bootstrap_skills
     skills: all
+
+  - id: gitlab-ci-official
+    # GitLab's own CI/CD group ships this. Unlike the template stubs that used
+    # to cover GitLab here, it carries eight references, worked broken ->
+    # optimized examples, and `glci` integration that validates .gitlab-ci.yml
+    # against a real runner locally before anything is pushed.
+    repo: gitlab.com/gitlab-org/ci-cd/gitlab-ci-skill
+    skills:
+      - gitlab-ci-skill
 
   - id: obsidian-memory
     repo: AdamTylerLynch/obsidian-agent-memory-skills

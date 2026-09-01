@@ -8,9 +8,54 @@ import yaml
 
 SUPPORTED_VERSION = 1
 
+# Manifest `repo` hosts, mapped to the `sourceType` recorded in the skill lock.
+SOURCE_HOSTS = {"github.com": "github", "gitlab.com": "gitlab"}
+DEFAULT_SOURCE_HOST = "github.com"
+
 
 class SkillsSourcesError(ValueError):
     """Raised when skills.sources.yaml is missing or invalid."""
+
+
+def split_source_repo(repo: str) -> tuple[str, str] | None:
+    """Split a manifest `repo` value into `(host, repository path)`.
+
+    A bare `owner/name` stays GitHub, so existing manifests are unaffected. A
+    value may instead lead with a supported host -- `gitlab.com/group/sub/name`
+    -- which is also the only form that accepts the nested paths GitLab allows
+    and GitHub does not. Returns None when the value is not a usable source.
+    """
+    if not repo or any(character.isspace() for character in repo):
+        return None
+    for host in SOURCE_HOSTS:
+        prefix = f"{host}/"
+        if repo.startswith(prefix):
+            path = repo[len(prefix) :]
+            segments = path.split("/")
+            if len(segments) < 2 or not all(segments):
+                return None
+            return host, path
+    if repo.count("/") != 1:
+        return None
+    owner, name = repo.split("/", maxsplit=1)
+    if not owner or not name:
+        return None
+    return DEFAULT_SOURCE_HOST, repo
+
+
+def source_clone_url(repo: str) -> str | None:
+    """Return the HTTPS clone URL for a manifest `repo` value, or None."""
+    split = split_source_repo(repo)
+    if split is None:
+        return None
+    host, path = split
+    return f"https://{host}/{path}.git"
+
+
+def source_type(repo: str) -> str | None:
+    """Return the skill-lock `sourceType` for a manifest `repo` value."""
+    split = split_source_repo(repo)
+    return None if split is None else SOURCE_HOSTS[split[0]]
 
 
 @dataclass(frozen=True)

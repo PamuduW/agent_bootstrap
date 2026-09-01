@@ -57,6 +57,20 @@ class CliTests(unittest.TestCase):
         self.assertTrue(args.confirm)
         self.assertTrue(args.include_manual)
 
+    def test_parser_accepts_selective_prune_and_candidate_discovery(self) -> None:
+        """Break caught: the pruning TUI cannot discover details or select exact skills."""
+        from src.cli import build_parser
+
+        selected = build_parser().parse_args(
+            ["skills", "prune", "gitlab-ci", "remove-ai-marks", "--yes"]
+        )
+        discovery = build_parser().parse_args(["skills", "prune", "--candidates0"])
+
+        self.assertEqual(["gitlab-ci", "remove-ai-marks"], selected.prune_names)
+        self.assertTrue(selected.confirm)
+        self.assertTrue(discovery.candidates0)
+        self.assertEqual([], discovery.prune_names)
+
     def test_parser_accepts_selective_manual_skill_removal(self) -> None:
         """Break caught: the safe selective command is unavailable to scripts and the TUI."""
         from src.cli import build_parser

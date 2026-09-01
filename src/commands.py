@@ -276,19 +276,32 @@ COMMANDS: tuple[CommandSpec, ...] = (
     ),
     CommandSpec(
         "skills prune",
-        "./install.sh skills prune [--yes] [--include-manual]",
+        "./install.sh skills prune [SKILL ...] [--yes] [--include-manual] [--candidates0]",
         "mutating",
         "Preview or remove installed skills no active manifest source wants.",
         (
+            option(
+                "SKILL ...",
+                "Select exact prune candidate names.",
+                "all non-manual candidates",
+            ),
             option("--yes", "Apply the planned removals.", "off"),
             option(
                 "--include-manual",
                 "Also remove user-placed skills that have no lock entry.",
                 "off",
             ),
+            option(
+                "--candidates0",
+                "Print candidate name, reason, and detail as NUL-separated fields.",
+                "off",
+            ),
         ),
-        "Without --yes it only reads state; with --yes it may remove selected global skills.",
-        ("./install.sh skills prune", "./install.sh skills prune --yes"),
+        "Without --yes it only reads state; with --yes it removes only the selected candidates, or every default candidate when no names are given.",
+        (
+            "./install.sh skills prune",
+            "./install.sh skills prune gitlab-ci terraform --yes",
+        ),
         ("skills doctor", "skills update", "skills list"),
         "bootstrap",
         ("skills prune",),

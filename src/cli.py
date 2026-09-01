@@ -248,8 +248,10 @@ def _handle_skills(context: CommandContext) -> int:
     if context.args.skills_command == "prune":
         return handle_skills_prune(
             context.lifecycle,
+            names=tuple(context.args.prune_names),
             apply=bool(getattr(context.args, "confirm", False)),
             include_manual=bool(getattr(context.args, "include_manual", False)),
+            candidates0=bool(getattr(context.args, "candidates0", False)),
         )
     if context.args.skills_command == "remove-manual":
         return handle_skills_remove_manual(
@@ -404,6 +406,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Remove installed skills that no active manifest source wants",
     )
     prune.add_argument(
+        "prune_names",
+        nargs="*",
+        metavar="SKILL",
+        help="Exact prune candidate names to preview or remove",
+    )
+    prune.add_argument(
         "--yes",
         dest="confirm",
         action="store_true",
@@ -413,6 +421,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--include-manual",
         action="store_true",
         help="Also remove user-placed skills that have no lock entry",
+    )
+    prune.add_argument(
+        "--candidates0",
+        action="store_true",
+        help="Print candidate name, reason, and detail as NUL-separated fields",
     )
     remove_manual = skills_sub.add_parser(
         "remove-manual",
@@ -500,16 +513,53 @@ def parse_workspace_targets(value: str | None) -> tuple[str, ...] | None:
     return ("agents", *(target for target in targets if target != "agents"))
 
 
-def handle_skills_prune(lifecycle: Lifecycle, *, apply: bool, include_manual: bool) -> int:
-    from .skill_prune import apply_prune, plan_prune
+def handle_skills_prune(
+    lifecycle: Lifecycle,
+    *,
+    names: tuple[str, ...] = (),
+    apply: bool,
+    include_manual: bool,
+    candidates0: bool = False,
+) -> int:
+    from .skill_prune import PruneReport, apply_prune, plan_prune
     from .skills_sources import load_skills_sources
+
+    if candidates0 and (names or apply or include_manual):
+        raise ValueError(
+            "--candidates0 cannot be combined with skill names, --yes, or --include-manual"
+        )
+    if include_manual and names:
+        raise ValueError("--include-manual cannot be combined with exact skill names")
+    if len(set(names)) != len(names):
+        raise ValueError("prune candidate names must not contain duplicates")
 
     paths = lifecycle.paths
     config = load_skills_sources(paths.skills_sources_file)
     report = plan_prune(paths, config)
+    candidates_by_name = {item.name: item for item in report.candidates}
+    invalid = sorted(set(names) - set(candidates_by_name))
+    if invalid:
+        raise ValueError(f"not prune candidates: {', '.join(invalid)}")
+
+    if candidates0:
+        for item in report.candidates:
+            for field in (item.name, item.reason, item.detail):
+                sys.stdout.write(f"{field}\0")
+        return 0
+
+    selected_report = report
+    if names:
+        selected_report = PruneReport(
+            candidates=tuple(candidates_by_name[name] for name in names)
+        )
     if apply:
-        report = apply_prune(paths, report, include_manual=include_manual)
-    return print_skill_prune_report(report, include_manual=include_manual)
+        selected_report = apply_prune(
+            paths,
+            report,
+            include_manual=include_manual,
+            candidate_names=names or None,
+        )
+    return print_skill_prune_report(selected_report, include_manual=include_manual)
 
 
 def handle_skills_remove_manual(

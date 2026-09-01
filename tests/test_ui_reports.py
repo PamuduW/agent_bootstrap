@@ -323,6 +323,8 @@ class StatusSummaryTests(unittest.TestCase):
             doctor_issue_count=3,
         )
         self.assertIn("Check Status", text)
+        self.assertIn("Prunable skills", text)
+        self.assertNotIn("Manual skills", text)
 
 
 class CommandHelpTests(unittest.TestCase):

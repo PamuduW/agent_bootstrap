@@ -1,3 +1,4 @@
+import json
 import unittest
 from unittest import mock
 
@@ -5,6 +6,39 @@ from tests.support import isolated_agentbot_paths, write_skills_manifest
 
 
 class DiagnosticsTests(unittest.TestCase):
+    def test_disabled_source_skill_is_reported_as_orphaned_and_prunable(self) -> None:
+        """Break caught: Doctor calls a lock-pinned orphan a manual skill."""
+        from src.diagnostics import Diagnostics
+
+        with isolated_agentbot_paths() as (root, paths):
+            write_skills_manifest(
+                root,
+                sources=(
+                    "sources:\n"
+                    "  - id: retired\n"
+                    "    repo: owner/retired\n"
+                    "    skills: [leftover]\n"
+                    "    enabled: false\n"
+                ),
+            )
+            skill = paths.agents_skills_home / "leftover"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text("# leftover\n", encoding="utf-8")
+            paths.global_skill_lock.parent.mkdir(parents=True, exist_ok=True)
+            paths.global_skill_lock.write_text(
+                json.dumps(
+                    {"version": 3, "skills": {"leftover": {"source": "owner/retired"}}}
+                ),
+                encoding="utf-8",
+            )
+
+            snapshot = Diagnostics(paths).collect()
+
+            messages = [issue.message for issue in snapshot.issues]
+            self.assertTrue(any("Orphaned skill 'leftover'" in item for item in messages))
+            self.assertFalse(any("Manual skill 'leftover'" in item for item in messages))
+            self.assertEqual(1, snapshot.manual_skill_count)
+
     def test_collect_reads_shared_general_diagnostics_facts_once(self) -> None:
         from src.claude_statusline import StatuslineState
         from src.diagnostics import Diagnostics
@@ -73,7 +107,7 @@ class DiagnosticsTests(unittest.TestCase):
     def test_collect_combines_general_and_skills_issues_once(self) -> None:
         from src.diagnostics import Diagnostics
         from src.models import DoctorIssue
-        with isolated_agentbot_paths() as (root, paths):
+        with isolated_agentbot_paths() as (_root, paths):
             diagnostics = Diagnostics(paths)
             general = (DoctorIssue("warning", "token", "unsafe"),)
             skills = (DoctorIssue("error", "skills", "broken"),)
@@ -87,8 +121,6 @@ class DiagnosticsTests(unittest.TestCase):
                 diagnostics, "list_skills", return_value=["alpha", "beta"]
             ) as list_skills, mock.patch(
                 "src.diagnostics.managed_skill_names", return_value={"alpha"}
-            ), mock.patch.object(
-                diagnostics, "_unmanaged_skill_dirs", return_value=(root / "manual",)
             ), mock.patch(
                 "src.diagnostics.inspect_claude_statusline", return_value=statusline
             ):
@@ -97,7 +129,7 @@ class DiagnosticsTests(unittest.TestCase):
             self.assertEqual(("alpha", "beta"), snapshot.installed_skills)
             self.assertEqual(general + skills, snapshot.issues)
             self.assertEqual(1, snapshot.managed_skill_count)
-            self.assertEqual(1, snapshot.manual_skill_count)
+            self.assertEqual(0, snapshot.manual_skill_count)
             self.assertEqual("ready", snapshot.claude_statusline_state)
             doctor.assert_called_once()
             skills_doctor.assert_called_once_with()

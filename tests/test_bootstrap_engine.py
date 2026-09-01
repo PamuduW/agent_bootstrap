@@ -426,7 +426,7 @@ sources:
         self.assertIn("global_lock_skills", summary)
         self.assertIn("doctor_issue_count", summary)
 
-    def test_status_excludes_official_graphify_from_unmanaged_skill_count(self) -> None:
+    def test_status_counts_all_prune_candidates_except_official_graphify(self) -> None:
         from src.diagnostics import Diagnostics
 
         paths = self._paths()
@@ -446,7 +446,9 @@ sources:
         ):
             summary = Diagnostics(paths).status_summary()
 
-        self.assertEqual(4, summary["manual_skill_count"])
+        # Four manual directories plus two stale pins already present in this
+        # fixture; the stamped Graphify integration is protected.
+        self.assertEqual(6, summary["manual_skill_count"])
 
 
 if __name__ == "__main__":

@@ -158,7 +158,7 @@ def print_status_summary(
                         "ok" if claude_statusline_state == "ok" else "check",
                     ),
                     (
-                        "Manual skills",
+                        "Prunable skills",
                         f"{manual_skill_count} outside managed sources"
                         if manual_skill_count
                         else "none",

@@ -17,6 +17,7 @@ from .graphify import GraphifyIntegration, GraphifyStatus
 from .models import DiagnosticsSnapshot, DoctorIssue
 from .paths import AgentbotPaths
 from .render import installed_skill_dirs, managed_skill_names
+from .skill_prune import PruneCandidate, plan_prune
 from .skills_installer import doctor_skills, list_installed_skills
 from .skills_sources import load_skills_sources
 
@@ -32,6 +33,7 @@ class _DiagnosticsFacts:
     enabled_sources: int
     managed_names: frozenset[str]
     declared_names: frozenset[str]
+    prune_candidates: tuple[PruneCandidate, ...]
     statusline: StatuslineState
     graphify_status: GraphifyStatus
     graphify_official: bool
@@ -60,9 +62,7 @@ class Diagnostics:
             global_lock_exists=self.paths.global_skill_lock.exists(),
             global_lock_skills=self._count_global_lock_skills(self.paths),
             managed_skill_count=len(facts.managed_names),
-            manual_skill_count=len(
-                self._unmanaged_skill_dirs(set(facts.managed_names), set(facts.declared_names))
-            ),
+            manual_skill_count=len(facts.prune_candidates),
             claude_bridge_links=claude_bridge_links,
             claude_statusline_state=facts.statusline.status_label,
             issues=issues,
@@ -101,7 +101,6 @@ class Diagnostics:
 
         issues.extend(doctor_claude_statusline(self.paths, state=facts.statusline))
         managed_names = set(facts.managed_names)
-        declared_names = set(facts.declared_names)
         managed_dirs = {skill_dir.name: skill_dir for skill_dir in installed_skill_dirs(self.paths)}
         codex_skills = self.paths.codex_home / "skills"
         if facts.graphify_official and facts.graphify_status.state != "ready":
@@ -159,22 +158,39 @@ class Diagnostics:
                     )
                 )
 
-        for source in self._unmanaged_skill_dirs(managed_names, declared_names):
-            target = codex_skills / source.name
-            if (
-                not target.is_symlink()
-                or not target.exists()
-                or target.resolve() != source.resolve()
-            ):
+        for candidate in facts.prune_candidates:
+            if candidate.reason == "manual" and candidate.directory is not None:
+                target = codex_skills / candidate.name
+                if (
+                    not target.is_symlink()
+                    or not target.exists()
+                    or target.resolve() != candidate.directory.resolve()
+                ):
+                    message = (
+                        f"Manual skill {candidate.name!r} is outside managed sources and has "
+                        "no Codex link yet; select it under 'Prune Skills' or add a manifest "
+                        "source to make it reproducible"
+                    )
+                else:
+                    message = (
+                        f"Manual skill {candidate.name!r} is available to Codex but outside "
+                        "managed sources; select it under 'Prune Skills' or add a manifest "
+                        "source to make it reproducible"
+                    )
+            elif candidate.reason == "orphaned":
                 message = (
-                    f"Manual skill {source.name!r} is outside managed sources and has no "
-                    "Codex link yet; run './install.sh global' to make the local skill "
-                    "available, then add a source to make it reproducible"
+                    f"Orphaned skill {candidate.name!r} is {candidate.detail}; select it "
+                    "under 'Prune Skills' or restore its manifest source"
+                )
+            elif candidate.reason == "excluded":
+                message = (
+                    f"Excluded skill {candidate.name!r} is still installed: {candidate.detail}; "
+                    "select it under 'Prune Skills'"
                 )
             else:
                 message = (
-                    f"Manual skill {source.name!r} is available to Codex but outside "
-                    "managed sources; add a manifest source to make it reproducible"
+                    f"Stale skill pin {candidate.name!r}: {candidate.detail}; select it "
+                    "under 'Prune Skills'"
                 )
             issues.append(DoctorIssue("warning", "reproducibility", message))
         return issues
@@ -185,6 +201,8 @@ class Diagnostics:
     def _collect_facts(self) -> _DiagnosticsFacts:
         enabled_sources = 0
         declared_names: set[str] = set()
+        prune_candidates: tuple[PruneCandidate, ...] = ()
+        config = None
         if self.paths.skills_sources_file.exists():
             try:
                 config = load_skills_sources(self.paths.skills_sources_file)
@@ -196,12 +214,29 @@ class Diagnostics:
                 declared_names = {
                     skill for source in active_sources for skill in source.skills if skill != "*"
                 }
+                prune_candidates = plan_prune(self.paths, config).candidates
+
+        managed = frozenset(managed_skill_names(self.paths))
+        if config is None:
+            prune_candidates = tuple(
+                PruneCandidate(
+                    name=source.name,
+                    reason="manual",
+                    detail="on disk, not in the lock; user-placed",
+                    directory=source,
+                    locked=False,
+                )
+                for source in self._unmanaged_skill_dirs(
+                    set(managed), set(declared_names)
+                )
+            )
 
         graphify = GraphifyIntegration(self.paths)
         return _DiagnosticsFacts(
             enabled_sources=enabled_sources,
-            managed_names=frozenset(managed_skill_names(self.paths)),
+            managed_names=managed,
             declared_names=frozenset(declared_names),
+            prune_candidates=prune_candidates,
             statusline=inspect_claude_statusline(self.paths),
             graphify_status=self.graphify_status(),
             graphify_official=graphify.version_path.is_file(),

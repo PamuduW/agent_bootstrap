@@ -181,6 +181,40 @@ class PruneTests(unittest.TestCase):
         self.assertTrue(keep_claude.is_symlink())
         self.assertTrue(keep_codex.is_symlink())
 
+    def test_apply_removes_only_selected_candidates_across_reasons(self):
+        """Break caught: selective pruning can remove only manual directories."""
+        self._skill("manual")
+        self._skill("orphaned")
+        self._skill("keeper")
+        self._lock({"orphaned": "gone/repo", "keeper": "owner/repo"})
+        manual_claude, manual_codex = self._bridge("manual")
+        orphaned_claude, orphaned_codex = self._bridge("orphaned")
+        config = self._manifest(self.BASE)
+
+        result = apply_prune(
+            self.paths,
+            plan_prune(self.paths, config),
+            candidate_names=("manual", "orphaned"),
+        )
+
+        self.assertEqual(("manual", "orphaned"), result.removed)
+        self.assertFalse(manual_claude.is_symlink())
+        self.assertFalse(manual_codex.is_symlink())
+        self.assertFalse(orphaned_claude.is_symlink())
+        self.assertFalse(orphaned_codex.is_symlink())
+        self.assertTrue((self.store / "keeper").is_dir())
+
+    def test_apply_rejects_a_selected_managed_skill(self):
+        """Break caught: a forged checkbox name removes an active managed skill."""
+        self._skill("managed")
+        self._lock({"managed": "owner/repo"})
+        report = plan_prune(self.paths, self._manifest(self.BASE))
+
+        with self.assertRaisesRegex(ValueError, "not prune candidates: managed"):
+            apply_prune(self.paths, report, candidate_names=("managed",))
+
+        self.assertTrue((self.store / "managed").is_dir())
+
     def test_apply_rejects_a_requested_name_that_is_not_manual(self):
         self._skill("managed")
         self._lock({"managed": "owner/repo"})

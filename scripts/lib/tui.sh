@@ -70,16 +70,43 @@ tui_print() {
 	tui_refresh_tty_seam
 	tty_printf "$@"
 }
+
+_tui_color_backend_line() {
+	local line="$1" terminator="${2-$'\n'}"
+	line="${line//\[STEP\]/${C_BOLD}${C_CYAN}[STEP]${C_RESET}}"
+	line="${line//\[OK\]/${C_BOLD}${C_GREEN}[OK]${C_RESET}}"
+	line="${line//\[FAIL\]/${C_BOLD}${C_RED}[FAIL]${C_RESET}}"
+	line="${line//\[ERR\]/${C_BOLD}${C_RED}[ERR]${C_RESET}}"
+	line="${line//\[WARN\]/${C_BOLD}${C_YELLOW}[WARN]${C_RESET}}"
+	line="${line//\[INFO\]/${C_CYAN}[INFO]${C_RESET}}"
+	printf '%s%s' "$line" "$terminator"
+}
+
+_tui_color_backend_stream() {
+	local line=''
+	while IFS= read -r line; do
+		_tui_color_backend_line "$line" $'\n'
+	done
+	[[ -z "$line" ]] || _tui_color_backend_line "$line" ''
+}
+
 tui_run_to_output() {
+	local -a pipeline_status
 	tui_refresh_tty_seam
 	if tty_use_output_fd; then
-		"$@" >&"$DOTFILES_TTY_OUT_FD" 2>&1
-		return
+		"$@" 2>&1 | _tui_color_backend_stream >&"$DOTFILES_TTY_OUT_FD"
+		pipeline_status=("${PIPESTATUS[@]}")
+	else
+		local output_path
+		tty_output_available || return 1
+		output_path="$(tty_output_path)"
+		"$@" 2>&1 | _tui_color_backend_stream >>"$output_path"
+		pipeline_status=("${PIPESTATUS[@]}")
 	fi
-	local output_path
-	tty_output_available || return 1
-	output_path="$(tty_output_path)"
-	"$@" >>"$output_path" 2>&1
+	if ((pipeline_status[0] != 0)); then
+		return "${pipeline_status[0]}"
+	fi
+	return "${pipeline_status[1]}"
 }
 tui_pause() {
 	tui_refresh_tty_seam

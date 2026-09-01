@@ -75,6 +75,68 @@ test_shortcuts_use_cyan_tokens() (
 	[[ "$output" == *$'\033[36mq'* ]]
 )
 
+test_tui_backend_output_colors_semantic_markers_only() (
+	# Break caught: backend progress markers remain plain white in the TUI, or
+	# coloring spills across the descriptive text that follows each marker.
+	local output="$TEST_ROOT/tui-markers.output" expected
+	unset NO_COLOR
+	tui_init_colors
+	_emit_markers() {
+		printf '%s\n' \
+			'  [STEP] Installing source' \
+			'  [OK] Source installed' \
+			'  [FAIL] Source failed' \
+			'  [ERR] Invalid source' \
+			'  [WARN] Source skipped' \
+			'  [INFO] Source detail' \
+			'  ordinary output'
+	}
+
+	AGENTBOT_TUI_OUTPUT="$output" tui_run_to_output _emit_markers
+
+	expected="  ${C_BOLD}${C_CYAN}[STEP]${C_RESET} Installing source
+  ${C_BOLD}${C_GREEN}[OK]${C_RESET} Source installed
+  ${C_BOLD}${C_RED}[FAIL]${C_RESET} Source failed
+  ${C_BOLD}${C_RED}[ERR]${C_RESET} Invalid source
+  ${C_BOLD}${C_YELLOW}[WARN]${C_RESET} Source skipped
+  ${C_CYAN}[INFO]${C_RESET} Source detail
+  ordinary output"
+	[[ "$(<"$output")" == "$expected" ]]
+)
+
+test_tui_backend_output_respects_no_color() (
+	# Break caught: semantic markers inject ANSI even when NO_COLOR explicitly
+	# requests stable plain output for logs and accessibility, or the stream
+	# adapter invents a final newline the child never wrote.
+	local output="$TEST_ROOT/tui-markers-no-color.output"
+	local expected="$TEST_ROOT/tui-markers-no-color.expected"
+	NO_COLOR=1
+	tui_init_colors
+	_emit_plain_markers() { printf '  [STEP] Installing source\n  [OK] Source installed'; }
+	printf '  [STEP] Installing source\n  [OK] Source installed' >"$expected"
+
+	AGENTBOT_TUI_OUTPUT="$output" tui_run_to_output _emit_plain_markers
+
+	cmp -s "$expected" "$output"
+)
+
+test_tui_backend_output_preserves_child_failure_status() (
+	# Break caught: adding a coloring pipeline turns a failed install into a
+	# successful menu action by returning the formatter's status.
+	local output="$TEST_ROOT/tui-markers-failure.output" rc=0
+	unset NO_COLOR
+	tui_init_colors
+	_emit_failure() {
+		printf '  [FAIL] Source failed\n'
+		return 17
+	}
+
+	AGENTBOT_TUI_OUTPUT="$output" tui_run_to_output _emit_failure || rc=$?
+
+	[[ "$rc" -eq 17 ]] || return 1
+	[[ "$(<"$output")" == "  ${C_BOLD}${C_RED}[FAIL]${C_RESET} Source failed" ]]
+)
+
 test_pause_uses_one_blank_line_and_shared_prompt() (
 	local input="$TEST_ROOT/pause.input" output="$TEST_ROOT/pause.output"
 	printf '\n' >"$input"
@@ -197,6 +259,9 @@ check 'main menu snapshot uses the unified labels and breadcrumb' test_main_menu
 check 'TUI frames fit 48, 80, and 120 columns with the shared palette' test_width_and_palette_snapshots
 check 'menu redraw frames clear stale tails and preserve height' test_draw_clears_line_tails_and_matches_frame_height
 check 'shortcut tokens use the shared cyan treatment' test_shortcuts_use_cyan_tokens
+check 'TUI backend output colors semantic markers only' test_tui_backend_output_colors_semantic_markers_only
+check 'TUI backend output respects NO_COLOR' test_tui_backend_output_respects_no_color
+check 'TUI backend output preserves child failure status' test_tui_backend_output_preserves_child_failure_status
 check 'pause uses one blank line and one shared prompt' test_pause_uses_one_blank_line_and_shared_prompt
 check 'TTY refresh preserves Agentbot and Dotfiles overrides for pause and confirm' test_refresh_preserves_agentbot_and_dotfiles_tty_overrides_for_pause_and_confirm
 check 'TTY refresh restores immutable Dotfiles paths and descriptors after Agentbot overrides' test_refresh_restores_immutable_dotfiles_paths_and_descriptors_after_agentbot_overrides

@@ -123,6 +123,75 @@ class PruneTests(unittest.TestCase):
         report = plan_prune(self.paths, config)
         self.assertEqual(["dropped"], [item.name for item in report.removable])
 
+    def test_malformed_lock_blocks_planning_without_manual_candidates(self):
+        """Break caught: malformed managed state is presented as user-owned."""
+        self._skill("managed-by-wildcard")
+        self.paths.global_skill_lock.parent.mkdir(parents=True, exist_ok=True)
+        self.paths.global_skill_lock.write_text("{invalid", encoding="utf-8")
+
+        report = plan_prune(self.paths, self._manifest(self.BASE))
+
+        self.assertEqual((), report.candidates)
+        self.assertIn("invalid global skill lock", report.blocked_reason or "")
+
+    def test_invalid_lock_entry_blocks_planning_without_manual_candidates(self):
+        """Break caught: a malformed pin is dropped and its skill becomes manual."""
+        self._skill("managed-by-wildcard")
+        self.paths.global_skill_lock.parent.mkdir(parents=True, exist_ok=True)
+        self.paths.global_skill_lock.write_text(
+            json.dumps({"version": 3, "skills": {"managed-by-wildcard": "invalid"}}),
+            encoding="utf-8",
+        )
+
+        report = plan_prune(self.paths, self._manifest(self.BASE))
+
+        self.assertEqual((), report.candidates)
+        self.assertIn("invalid global skill lock", report.blocked_reason or "")
+
+    def test_unreadable_lock_blocks_planning_without_manual_candidates(self):
+        """Break caught: a transient lock read error becomes an empty lock."""
+        self._skill("managed-by-wildcard")
+        self._lock({"managed-by-wildcard": "owner/repo"})
+        config = self._manifest(self.BASE)
+        real_read_text = Path.read_text
+
+        def fail_lock_read(path: Path, *args, **kwargs) -> str:
+            if path == self.paths.global_skill_lock:
+                raise PermissionError("lock is unreadable")
+            return real_read_text(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "read_text", autospec=True, side_effect=fail_lock_read):
+            report = plan_prune(self.paths, config)
+
+        self.assertEqual((), report.candidates)
+        self.assertIn("lock is unreadable", report.blocked_reason or "")
+
+    def test_invalid_lock_container_types_block_planning(self):
+        """Break caught: invalid root or skills containers become an empty lock."""
+        self._skill("managed-by-wildcard")
+        self.paths.global_skill_lock.parent.mkdir(parents=True, exist_ok=True)
+        config = self._manifest(self.BASE)
+
+        for payload in ([], {"version": 3, "skills": []}):
+            with self.subTest(payload=payload):
+                self.paths.global_skill_lock.write_text(json.dumps(payload), encoding="utf-8")
+                report = plan_prune(self.paths, config)
+                self.assertEqual((), report.candidates)
+                self.assertIn("invalid global skill lock", report.blocked_reason or "")
+
+    def test_a_blocked_plan_cannot_be_applied(self):
+        """Break caught: an invalid-lock plan is converted into a successful no-op."""
+        skill = self._skill("managed-by-wildcard")
+        self.paths.global_skill_lock.parent.mkdir(parents=True, exist_ok=True)
+        self.paths.global_skill_lock.write_text("{invalid", encoding="utf-8")
+        report = plan_prune(self.paths, self._manifest(self.BASE))
+
+        with self.assertRaisesRegex(ValueError, "invalid global skill lock"):
+            apply_prune(self.paths, report)
+
+        self.assertTrue(skill.is_dir())
+        self.assertEqual("{invalid", self.paths.global_skill_lock.read_text(encoding="utf-8"))
+
     # --- removal --------------------------------------------------------
     def test_apply_removes_directory_lock_entry_and_both_bridges(self):
         self._skill("alpha")

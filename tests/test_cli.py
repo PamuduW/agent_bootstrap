@@ -99,6 +99,39 @@ class CliTests(unittest.TestCase):
         self.assertTrue(args.names0)
         self.assertEqual([], args.manual_names)
 
+    def test_prune_candidate_discovery_rejects_an_invalid_lock(self) -> None:
+        """Break caught: invalid managed state becomes a successful empty picker."""
+        from types import SimpleNamespace
+
+        from src.cli import handle_skills_prune
+        from src.paths import AgentbotPaths
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home = root / "home"
+            paths = AgentbotPaths(
+                root=root,
+                codex_home=home / ".codex",
+                claude_home=home / ".claude",
+                cursor_home=home / ".cursor",
+                agents_home=home / ".agents",
+            )
+            paths.agents_skills_home.mkdir(parents=True)
+            paths.skills_sources_file.write_text(
+                "version: 1\nagents: [codex]\nscope: global\nsources: []\n",
+                encoding="utf-8",
+            )
+            paths.global_skill_lock.write_text("{invalid", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "invalid global skill lock"):
+                handle_skills_prune(
+                    SimpleNamespace(paths=paths),
+                    names=(),
+                    apply=False,
+                    include_manual=False,
+                    candidates0=True,
+                )
+
     def test_manual_skill_discovery_is_machine_readable_and_protects_graphify(self) -> None:
         """Break caught: the menu sees protected integrations or must parse display text."""
         from types import SimpleNamespace

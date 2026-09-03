@@ -531,6 +531,15 @@ def print_skill_prune_report(report, *, include_manual: bool = False) -> int:
     """Render the prune plan or result. Returns the command's exit code."""
     print_header("Skills Prune", "Agentbot › Skills Prune")
 
+    if report.blocked_reason is not None:
+        print_table(
+            [("Skill lock", report.blocked_reason, "error")],
+            show_header=True,
+            wrap_details=True,
+        )
+        print_rollup(ok=0, check=0, miss=1)
+        return 1
+
     rows = [
         (item.name, item.detail, item.reason)
         for item in report.candidates

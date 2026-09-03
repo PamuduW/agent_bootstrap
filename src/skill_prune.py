@@ -52,6 +52,7 @@ class PruneReport:
     candidates: tuple[PruneCandidate, ...]
     removed: tuple[str, ...] = ()
     applied: bool = False
+    blocked_reason: str | None = None
 
     @property
     def removable(self) -> tuple[PruneCandidate, ...]:
@@ -62,19 +63,35 @@ class PruneReport:
         return tuple(item for item in self.candidates if item.reason == "manual")
 
 
-def _read_lock(lock_file: Path) -> dict[str, dict]:
+@dataclass(frozen=True)
+class _LockState:
+    status: str
+    skills: dict[str, dict]
+    detail: str | None = None
+
+
+def _read_lock(lock_file: Path) -> _LockState:
+    if not lock_file.exists() and not lock_file.is_symlink():
+        return _LockState("absent", {})
     if not lock_file.is_file():
-        return {}
+        return _LockState("invalid", {}, "path is not a regular file")
     try:
         payload = json.loads(lock_file.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
+    except (OSError, json.JSONDecodeError) as error:
+        return _LockState("invalid", {}, str(error))
     if not isinstance(payload, dict):
-        return {}
+        return _LockState("invalid", {}, "root must be a JSON object")
     skills = payload.get("skills")
     if not isinstance(skills, dict):
-        return {}
-    return {name: entry for name, entry in skills.items() if isinstance(entry, dict)}
+        return _LockState("invalid", {}, "skills must be a JSON object")
+    invalid_entries = sorted(name for name, entry in skills.items() if not isinstance(entry, dict))
+    if invalid_entries:
+        return _LockState(
+            "invalid",
+            {},
+            f"skill entries must be JSON objects: {', '.join(invalid_entries)}",
+        )
+    return _LockState("valid", skills)
 
 
 def _installed_skill_dirs(skills_home: Path) -> dict[str, Path]:
@@ -89,7 +106,13 @@ def _installed_skill_dirs(skills_home: Path) -> dict[str, Path]:
 
 def plan_prune(paths: AgentbotPaths, config: SkillsSourcesConfig) -> PruneReport:
     """Classify every installed skill and lock pin against the manifest."""
-    lock = _read_lock(paths.global_skill_lock)
+    lock_state = _read_lock(paths.global_skill_lock)
+    if lock_state.status == "invalid":
+        return PruneReport(
+            candidates=(),
+            blocked_reason=f"invalid global skill lock: {lock_state.detail}",
+        )
+    lock = lock_state.skills
     installed = _installed_skill_dirs(paths.agents_skills_home)
 
     active_repos = {source.repo: source for source in config.active_sources() if source.repo}
@@ -173,6 +196,8 @@ def enforce_exclusions(paths: AgentbotPaths, config: SkillsSourcesConfig) -> tup
     them again.
     """
     report = plan_prune(paths, config)
+    if report.blocked_reason is not None:
+        raise ValueError(report.blocked_reason)
     excluded = PruneReport(
         candidates=tuple(item for item in report.candidates if item.reason == "excluded")
     )
@@ -265,6 +290,8 @@ def apply_prune(
     candidate_names: tuple[str, ...] | None = None,
 ) -> PruneReport:
     """Remove the classified skills: directory, lock pin, and bridge links."""
+    if report.blocked_reason is not None:
+        raise ValueError(report.blocked_reason)
     selectors = sum(value is not None for value in (manual_names, candidate_names)) + int(
         include_manual
     )

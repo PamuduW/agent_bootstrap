@@ -23,6 +23,7 @@ from src.ui import (
     print_graphify_status,
     print_manual_skill_removal_report,
     print_reconciliation_report,
+    print_skill_prune_report,
     print_skills_report,
     print_skills_update_report,
     print_status_summary,
@@ -208,6 +209,20 @@ class ManualSkillRemovalReportTests(unittest.TestCase):
 
         self.assertEqual(0, rc)
         self.assertIn("Removed 1 skill(s): gpt-taste", text)
+
+
+class SkillPruneReportTests(unittest.TestCase):
+    def test_blocked_plan_reports_the_invalid_lock_as_an_error(self):
+        """Break caught: blocked pruning is displayed as a healthy empty plan."""
+        report = PruneReport(
+            candidates=(), blocked_reason="invalid global skill lock: malformed JSON"
+        )
+
+        text, rc = _capture(print_skill_prune_report, report)
+
+        self.assertEqual(1, rc)
+        self.assertIn("invalid global skill lock", text)
+        self.assertNotIn("every installed skill has an active source", text)
 
 
 class GraphifyStatusTests(unittest.TestCase):

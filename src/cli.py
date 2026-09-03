@@ -536,6 +536,8 @@ def handle_skills_prune(
     paths = lifecycle.paths
     config = load_skills_sources(paths.skills_sources_file)
     report = plan_prune(paths, config)
+    if report.blocked_reason is not None and (candidates0 or names or apply):
+        raise ValueError(report.blocked_reason)
     candidates_by_name = {item.name: item for item in report.candidates}
     invalid = sorted(set(names) - set(candidates_by_name))
     if invalid:
@@ -582,6 +584,8 @@ def handle_skills_remove_manual(
     paths = lifecycle.paths
     config = load_skills_sources(paths.skills_sources_file)
     report = plan_prune(paths, config)
+    if report.blocked_reason is not None:
+        raise ValueError(report.blocked_reason)
     manual_by_name = {item.name: item for item in report.manual}
 
     if names0:

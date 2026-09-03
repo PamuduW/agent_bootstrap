@@ -37,16 +37,16 @@ class ManifestAgentsSyncTests(unittest.TestCase):
             overlap = global_lines & repo_lines
             self.assertEqual(set(), overlap, msg=f"{path} duplicates global baseline: {overlap}")
 
-    def test_root_agents_uses_the_canonical_base_baseline(self) -> None:
-        from src.workspace_render import split_base_template
+    def test_root_agents_is_a_development_overlay(self) -> None:
+        root_policy = (self.repo_root / "AGENTS.md").read_text(encoding="utf-8")
+        base_template = (self.repo_root / "base" / "AGENTS.md").read_text(encoding="utf-8")
 
-        base_baseline, _ = split_base_template(
-            (self.repo_root / "base" / "AGENTS.md").read_text(encoding="utf-8")
-        )
-        root_baseline, _ = split_base_template(
-            (self.repo_root / "AGENTS.md").read_text(encoding="utf-8")
-        )
-        self.assertEqual(base_baseline, root_baseline)
+        self.assertNotEqual(base_template, root_policy)
+        self.assertIn("The parent", root_policy)
+        self.assertIn("`new_setup/AGENTS.md`", root_policy)
+        self.assertIn("`base/AGENTS.md`", root_policy)
+        self.assertIn("canonical product sources", root_policy)
+        self.assertIn("not development policy", root_policy)
 
     def test_canonical_policies_keep_the_tool_gate_generic(self) -> None:
         # Graphify usage guidance belongs to its skill. The baseline keeps only

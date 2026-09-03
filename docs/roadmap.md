@@ -1,12 +1,10 @@
 # Agentbot roadmap
 
-**Status:** Phases 0, 1, 2, and 5 are complete and verified against the live
-repositories. Phase 4 is the next workstream; its Slice 4M migration gate is
-merged and complete, so Slice 4.0A is next. Phase 3 remains deferred. Phase 5
-branches directly from the completed Phase 2 foundation. Current behavior and
-documentation were reconciled on 2026-08-20. The current core has one Python
-lifecycle backend, one diagnostics snapshot, one command model, and focused
-shell adapters and tests.
+**Status:** Phases 0, 1, 2, and 5 are complete. Phase 3 MCP ownership and Phase
+4 memory remain deferred to the parent workspace roadmap. Slice 4M is complete,
+but Slice 4.0A must not start until the planned cross-agent memory comparison is
+resolved. The current core has one Python lifecycle backend, one diagnostics
+snapshot, one command model, and focused shell adapters and tests.
 
 This is a living roadmap. The runtime source and operational documentation are
 the authority; this file records the delivered contracts and the future
@@ -28,8 +26,8 @@ must use Agentbot and agentbot.
 | Global machine baseline | global/AGENTS.md and install.sh global | Live |
 | Curated skills | skills.sources.yaml and install.sh skills ... | Live |
 | Dotfiles integration | sibling dotfiles Agentbot bridge | Live |
-| Package catalog and MCP bundles | archive/catalog/, archive/mcp/ | Phase 3 (deferred) |
-| Durable memory | workspace `docs/designs/memory/` design plus sanitized legacy note | Next (Phase 4; Slice 4M complete) |
+| Package catalog and MCP bundles | historical snapshots in archive/catalog/ and archive/mcp/ | Phase 3 (deferred) |
+| Durable memory | workspace `docs/designs/memory/` design | Pending cross-agent memory comparison |
 | Graphify CLI and assistant integration | sibling dotfiles component plus Agentbot integration | Live (Phase 5) |
 
 Agentbot is the installed product and public command. agent_bootstrap remains
@@ -51,7 +49,7 @@ Phase 2: profiles + managed workspace render + local resync ✅
     |
     +----> Phase 3: package catalog + profile-filtered MCP bundles (deferred)
     |
-    +----> Phase 4: durable memory (next: Slice 4.0A)
+    +----> Phase 4: durable memory (pending cross-agent comparison)
 ```
 
 ## Phase 0 — slim bootstrap ✅
@@ -190,7 +188,8 @@ related artifacts are rendered for a selected profile or workspace.
 
 Planned work:
 
-1. validate and promote archive/catalog/packages.json;
+1. revalidate the historical `archive/catalog/packages.json` and
+   `archive/mcp/mcp.json` snapshots against current client schemas;
 2. restore catalog load/filter and provenance-aware managed-artifact behavior;
 3. add profile-filtered MCP output only after the Phase 2 renderer contract is
    stable;
@@ -201,7 +200,7 @@ Planned work:
 Phase 3 must extend the Phase 2 renderer; it must not create a second unrelated
 configuration system.
 
-## Phase 4 — durable memory (next: Slice 4.0A)
+## Phase 4 — durable memory (pending cross-agent comparison)
 
 **Goal:** Add human-approved durable project knowledge only when the current
 Markdown policy surface is no longer sufficient.
@@ -210,7 +209,8 @@ Current gate status:
 
 - [x] remove the public `archive/memory-vault/` prototype from the current
   branch;
-- [x] retain only a sanitized historical note under `archive/docs/`;
+- [x] remove the retired public-memory prose and keep the active private design
+  in the parent workspace;
 - [x] keep the private-memory design and implementation contracts in workspace
   workspace `docs/designs/memory/`;
 - [x] review and merge the migration gate before implementation slices begin.
@@ -222,7 +222,9 @@ Later planned work:
 - keep obsidian-memory disabled until its source layout and provenance are
   explicitly designed.
 
-Do not start with a vector database or an always-on laptop service.
+Before implementation, compare the current design with viable cross-agent
+memory systems identified by the workspace roadmap. Do not start with a vector
+database or an always-on laptop service merely because a candidate bundles one.
 
 ## Phase 5 — optional Graphify integration ✅
 
@@ -292,8 +294,8 @@ CLI ownership, assistant integration, or Agentbot's canonical policy ownership.
   Git skill source.
 
 Phase 5 was independent of the package-catalog and MCP work. Its completion did
-not implement Phase 4; Slice 4M is complete and Slice 4.0A is the next
-workstream.
+not implement Phase 4; Slice 4M is complete, while the next implementation
+slice waits for the parent workspace's cross-agent memory decision.
 
 ## Explicitly out of scope
 
@@ -330,3 +332,4 @@ removed control-plane code directly into the live lifecycle.
 | 2026-08-06 | Confirmed Slice 4M merged, reconciled Graphify Lib and automatic Install/Update setup behavior, and selected Slice 4.0A as next |
 | 2026-08-20 | Consolidated lifecycle, diagnostics, command metadata, TUI primitives, and validation before Phase 4 implementation |
 | 2026-09-03 | Consolidated technical documentation and moved deferred AgentOS notes into the active roadmap |
+| 2026-09-03 | Deferred Slice 4.0A until provider-neutral MCP and cross-agent memory evaluations are complete |

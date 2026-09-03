@@ -109,7 +109,7 @@ See [Workspaces and rendering](docs/workspaces-and-rendering.md).
 - [Lifecycle and updates](docs/lifecycle-and-updates.md)
 - [Validation](docs/validation.md)
 - [Roadmap](docs/roadmap.md)
-- [Archive restore map](archive/docs/README.md)
+- [Archived MCP research inputs](archive/docs/README.md)
 - [Quick start](QUICKSTART.md)
 
 ## Development

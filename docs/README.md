@@ -17,5 +17,6 @@ manifest is `skills.sources.yaml`, and private workspace state lives under
 | [Validation](validation.md) | Complete and focused validation commands |
 | [Roadmap](roadmap.md) | Delivered phases and planned capabilities |
 
-Retired designs and inactive configuration payloads are indexed by the
-[archive restore map](../archive/docs/README.md). They are not runtime input.
+Historical MCP snapshots are indexed in
+[the archive](../archive/docs/README.md). They are research inputs, not runtime
+configuration.

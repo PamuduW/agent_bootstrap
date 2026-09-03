@@ -36,8 +36,8 @@ are derived outputs. Edit an authored source and use the documented Agentbot
 flow to refresh its outputs.
 
 Local mutable state is outside the checkout under
-`${XDG_CONFIG_HOME:-$HOME/.config}/agentbot` and `~/.agents/`. Archived files
-under `archive/` are reference material only.
+`${XDG_CONFIG_HOME:-$HOME/.config}/agentbot` and `~/.agents/`. The MCP snapshots
+under `archive/` are research inputs only.
 
 ## Cross-repository ownership
 

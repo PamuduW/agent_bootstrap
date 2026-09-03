@@ -9,6 +9,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from src.paths import AgentbotPaths
 from src.skill_prune import apply_prune, plan_prune
@@ -143,6 +144,132 @@ class PruneTests(unittest.TestCase):
         lock = json.loads(self.paths.global_skill_lock.read_text(encoding="utf-8"))
         self.assertNotIn("alpha", lock["skills"])
         self.assertIn("keeper", lock["skills"])
+
+    def test_lock_replace_failure_restores_skill_and_bridges(self):
+        """Break caught: a failed lock commit leaves the skill store pruned."""
+        skill = self._skill("alpha")
+        self._lock({"alpha": "owner/repo"})
+        original_lock = self.paths.global_skill_lock.read_bytes()
+        claude_link, codex_link = self._bridge("alpha")
+        config = self._manifest(self.BASE + "    exclude:\n      - alpha\n")
+
+        with (
+            mock.patch("os.replace", side_effect=OSError("replace failed")),
+            self.assertRaisesRegex(OSError, "replace failed"),
+        ):
+            apply_prune(self.paths, plan_prune(self.paths, config))
+
+        self.assertTrue(skill.is_dir())
+        self.assertTrue(claude_link.is_symlink())
+        self.assertTrue(codex_link.is_symlink())
+        self.assertEqual(original_lock, self.paths.global_skill_lock.read_bytes())
+
+    def test_directory_staging_failure_rolls_back_without_temporary_paths(self):
+        """Break caught: staging failure leaks backups after restoring bridges."""
+        skill = self._skill("alpha")
+        self._lock({"alpha": "owner/repo"})
+        original_lock = self.paths.global_skill_lock.read_bytes()
+        claude_link, codex_link = self._bridge("alpha")
+        config = self._manifest(self.BASE + "    exclude:\n      - alpha\n")
+        real_rename = Path.rename
+
+        def fail_skill_stage(path: Path, target: Path) -> Path:
+            if path == skill:
+                raise OSError("directory staging failed")
+            return real_rename(path, target)
+
+        with (
+            mock.patch.object(Path, "rename", autospec=True, side_effect=fail_skill_stage),
+            self.assertRaisesRegex(OSError, "directory staging failed"),
+        ):
+            apply_prune(self.paths, plan_prune(self.paths, config))
+
+        self.assertTrue(skill.is_dir())
+        self.assertTrue(claude_link.is_symlink())
+        self.assertTrue(codex_link.is_symlink())
+        self.assertEqual(original_lock, self.paths.global_skill_lock.read_bytes())
+        self.assertEqual([], list(self.home.rglob(".agentbot-prune-*")))
+
+    def test_invalid_lock_at_apply_time_aborts_before_staging(self):
+        """Break caught: a lock changed after planning is treated as absent."""
+        skill = self._skill("alpha")
+        self._lock({"alpha": "owner/repo"})
+        claude_link, codex_link = self._bridge("alpha")
+        config = self._manifest(self.BASE + "    exclude:\n      - alpha\n")
+        report = plan_prune(self.paths, config)
+        self.paths.global_skill_lock.write_text("{invalid", encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "invalid skill lock"):
+            apply_prune(self.paths, report)
+
+        self.assertTrue(skill.is_dir())
+        self.assertTrue(claude_link.is_symlink())
+        self.assertTrue(codex_link.is_symlink())
+        self.assertEqual("{invalid", self.paths.global_skill_lock.read_text(encoding="utf-8"))
+        self.assertEqual([], list(self.home.rglob(".agentbot-prune-*")))
+
+    def test_missing_lock_at_apply_time_aborts_for_a_locked_candidate(self):
+        """Break caught: a vanished lock is accepted after a locked prune plan."""
+        skill = self._skill("alpha")
+        self._lock({"alpha": "owner/repo"})
+        claude_link, codex_link = self._bridge("alpha")
+        config = self._manifest(self.BASE + "    exclude:\n      - alpha\n")
+        report = plan_prune(self.paths, config)
+        self.paths.global_skill_lock.unlink()
+
+        with self.assertRaisesRegex(ValueError, "skill lock disappeared"):
+            apply_prune(self.paths, report)
+
+        self.assertTrue(skill.is_dir())
+        self.assertTrue(claude_link.is_symlink())
+        self.assertTrue(codex_link.is_symlink())
+        self.assertEqual([], list(self.home.rglob(".agentbot-prune-*")))
+
+    def test_lock_temporary_write_failure_does_not_stage_any_paths(self):
+        """Break caught: lock preflight failure starts mutating the skill store."""
+        skill = self._skill("alpha")
+        self._lock({"alpha": "owner/repo"})
+        original_lock = self.paths.global_skill_lock.read_bytes()
+        claude_link, codex_link = self._bridge("alpha")
+        config = self._manifest(self.BASE + "    exclude:\n      - alpha\n")
+
+        with (
+            mock.patch("os.fsync", side_effect=OSError("temporary write failed")),
+            self.assertRaisesRegex(OSError, "temporary write failed"),
+        ):
+            apply_prune(self.paths, plan_prune(self.paths, config))
+
+        self.assertTrue(skill.is_dir())
+        self.assertTrue(claude_link.is_symlink())
+        self.assertTrue(codex_link.is_symlink())
+        self.assertEqual(original_lock, self.paths.global_skill_lock.read_bytes())
+        self.assertEqual([], list(self.paths.global_skill_lock.parent.glob(".*.json.*")))
+
+    def test_bridge_staging_failure_restores_an_already_staged_bridge(self):
+        """Break caught: one bridge-stage failure strands the other bridge."""
+        skill = self._skill("alpha")
+        self._lock({"alpha": "owner/repo"})
+        original_lock = self.paths.global_skill_lock.read_bytes()
+        claude_link, codex_link = self._bridge("alpha")
+        config = self._manifest(self.BASE + "    exclude:\n      - alpha\n")
+        real_rename = Path.rename
+
+        def fail_codex_bridge(path: Path, target: Path) -> Path:
+            if path == codex_link:
+                raise OSError("bridge staging failed")
+            return real_rename(path, target)
+
+        with (
+            mock.patch.object(Path, "rename", autospec=True, side_effect=fail_codex_bridge),
+            self.assertRaisesRegex(OSError, "bridge staging failed"),
+        ):
+            apply_prune(self.paths, plan_prune(self.paths, config))
+
+        self.assertTrue(skill.is_dir())
+        self.assertTrue(claude_link.is_symlink())
+        self.assertTrue(codex_link.is_symlink())
+        self.assertEqual(original_lock, self.paths.global_skill_lock.read_bytes())
+        self.assertEqual([], list(self.home.rglob(".agentbot-prune-*")))
 
     def test_apply_leaves_manual_skills_unless_asked(self):
         self._skill("graphify")

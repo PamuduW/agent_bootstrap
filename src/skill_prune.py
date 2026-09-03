@@ -22,7 +22,9 @@ Classification, in order:
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -179,20 +181,79 @@ def enforce_exclusions(paths: AgentbotPaths, config: SkillsSourcesConfig) -> tup
     return apply_prune(paths, excluded).removed
 
 
-def _unlink_bridge(link: Path, owned_root: Path) -> None:
-    """Remove a bridge symlink, but only one that points into our own store."""
+def _bridge_is_owned(link: Path, owned_root: Path) -> bool:
+    """Return whether a bridge symlink points into Agentbot's skill store."""
     if not link.is_symlink():
-        return
+        return False
     try:
         target = link.resolve()
     except OSError:
-        return
+        return False
     try:
         target.relative_to(owned_root.resolve())
     except ValueError:
         # Points somewhere else: belongs to the user or another installer.
-        return
-    link.unlink()
+        return False
+    return True
+
+
+def _prepare_lock_update(
+    lock_file: Path, removed: list[str], *, required: bool
+) -> Path | None:
+    """Write the updated lock beside the destination without replacing it."""
+    if not lock_file.exists() and not lock_file.is_symlink():
+        if required:
+            raise ValueError("skill lock disappeared after the prune plan was created")
+        return None
+    if not lock_file.is_file():
+        raise ValueError(f"invalid skill lock: {lock_file} is not a regular file")
+    try:
+        payload = json.loads(lock_file.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise ValueError(f"invalid skill lock: {error}") from error
+    if not isinstance(payload, dict) or not isinstance(payload.get("skills"), dict):
+        raise ValueError("invalid skill lock: expected an object with a skills object")
+    for name in removed:
+        payload["skills"].pop(name, None)
+
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{lock_file.name}.", dir=lock_file.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream, indent=2, sort_keys=True)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.chmod(lock_file.stat().st_mode & 0o777)
+    except BaseException:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        temporary.unlink(missing_ok=True)
+        raise
+    return temporary
+
+
+def _stage_path(path: Path, staging_roots: dict[Path, Path]) -> tuple[Path, Path]:
+    """Move one path into a private directory on the same filesystem."""
+    staging_root = staging_roots.get(path.parent)
+    if staging_root is None:
+        staging_root = Path(
+            tempfile.mkdtemp(prefix=".agentbot-prune-", dir=path.parent)
+        )
+        staging_roots[path.parent] = staging_root
+    staged = staging_root / str(len(tuple(staging_root.iterdir())))
+    path.rename(staged)
+    return path, staged
+
+
+def _restore_staged(staged_paths: list[tuple[Path, Path]]) -> None:
+    for original, staged in reversed(staged_paths):
+        if staged.exists() or staged.is_symlink():
+            staged.rename(original)
 
 
 def apply_prune(
@@ -231,27 +292,39 @@ def apply_prune(
     if not targets:
         return PruneReport(candidates=report.candidates, removed=(), applied=True)
 
-    store = paths.agents_skills_home
-    removed: list[str] = []
-    for item in targets:
-        if item.directory is not None and item.directory.is_dir():
-            shutil.rmtree(item.directory)
-        _unlink_bridge(paths.claude_skills_home / item.name, store)
-        _unlink_bridge(paths.codex_home / "skills" / item.name, store)
-        removed.append(item.name)
-
+    removed = [item.name for item in targets]
     lock_file = paths.global_skill_lock
-    if lock_file.is_file():
-        try:
-            payload = json.loads(lock_file.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            payload = None
-        if isinstance(payload, dict) and isinstance(payload.get("skills"), dict):
-            for name in removed:
-                payload["skills"].pop(name, None)
-            lock_file.write_text(
-                json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-            )
+    prepared_lock = _prepare_lock_update(
+        lock_file, removed, required=any(item.locked for item in targets)
+    )
+    store = paths.agents_skills_home
+    staging_roots: dict[Path, Path] = {}
+    staged_paths: list[tuple[Path, Path]] = []
+    committed = False
+    try:
+        for item in targets:
+            for bridge in (
+                paths.claude_skills_home / item.name,
+                paths.codex_home / "skills" / item.name,
+            ):
+                if _bridge_is_owned(bridge, store):
+                    staged_paths.append(_stage_path(bridge, staging_roots))
+            if item.directory is not None and item.directory.is_dir():
+                staged_paths.append(_stage_path(item.directory, staging_roots))
+        if prepared_lock is not None:
+            os.replace(prepared_lock, lock_file)
+        committed = True
+    except BaseException:
+        _restore_staged(staged_paths)
+        for staging_root in staging_roots.values():
+            staging_root.rmdir()
+        raise
+    finally:
+        if not committed and prepared_lock is not None:
+            prepared_lock.unlink(missing_ok=True)
+
+    for staging_root in staging_roots.values():
+        shutil.rmtree(staging_root)
 
     return PruneReport(
         candidates=report.candidates, removed=tuple(sorted(removed)), applied=True

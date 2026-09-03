@@ -5,7 +5,6 @@ import re
 import stat
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from .boost import BoostIntegration, BoostStatus
 from .claude_statusline import (
@@ -80,7 +79,6 @@ class Diagnostics:
     def _doctor_issues(self, facts: _DiagnosticsFacts) -> list[DoctorIssue]:
         issues: list[DoctorIssue] = []
         issues.extend(self._token_doctor_issues())
-        issues.extend(self._agent_surface_issues())
 
         if not self.paths.global_agents.exists():
             issues.append(
@@ -346,79 +344,6 @@ class Diagnostics:
         if status.state == "forbidden":
             return f"{status.message} Run `agentbot boost off` and inspect the reported files."
         return status.message
-
-    def _agent_surface_issues(self) -> list[DoctorIssue]:
-        """Report agent skill surfaces that lag the global lock.
-
-        `skills install` targets every agent in the manifest, but `skills
-        update` refreshes the global lock only. Cursor keeps its own store and
-        its own lock, so it silently falls behind. Agentbot deliberately does
-        not write into that store -- Cursor manages it, built-ins and all -- so
-        the honest thing is to report the lag and name the command that fixes
-        it.
-        """
-        issues: list[DoctorIssue] = []
-        global_lock = self.paths.global_skill_lock
-        if not global_lock.is_file():
-            return issues
-
-        cursor_lock = self.paths.agents_home / "cursor-skills-lock.json"
-        if not cursor_lock.is_file():
-            return issues
-
-        global_skills = self._lock_skill_receipts(global_lock)
-        cursor_skills = self._lock_skill_receipts(cursor_lock)
-        if global_skills is None or cursor_skills is None:
-            return issues
-
-        if all(
-            self._cursor_receipt_is_current(cursor_skills.get(name), receipt)
-            for name, receipt in global_skills.items()
-        ):
-            return issues
-
-        issues.append(
-            DoctorIssue(
-                level="warning",
-                scope="skills-cursor",
-                message=(
-                    f"Cursor skill lock {cursor_lock} does not match the global managed skill state; "
-                    "'skills update' refreshes only the global surface. Run "
-                    "'./install.sh skills install' to refresh every agent in the manifest"
-                ),
-            )
-        )
-        return issues
-
-    @staticmethod
-    def _lock_skill_receipts(path: Path) -> dict[str, dict[str, Any]] | None:
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return None
-        if not isinstance(data, dict):
-            return None
-        skills = data.get("skills", {})
-        if not isinstance(skills, dict):
-            return None
-        return {
-            str(name): entry
-            for name, entry in skills.items()
-            if isinstance(entry, dict)
-        }
-
-    @staticmethod
-    def _cursor_receipt_is_current(
-        cursor: dict[str, Any] | None,
-        global_receipt: dict[str, Any],
-    ) -> bool:
-        if cursor is None:
-            return False
-        for field in ("source", "sourceType"):
-            expected = global_receipt.get(field)
-            if expected is not None and cursor.get(field) != expected:
-                return False
-        return True
 
     def _token_doctor_issues(self) -> list[DoctorIssue]:
         token_file = self.paths.config_home / "github.env"

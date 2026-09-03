@@ -230,50 +230,8 @@ class DoctorSeverityTests(unittest.TestCase):
                 any(issue.level == "error" and issue.scope == "graphify" for issue in issues)
             )
 
-    def test_cursor_lock_matching_global_receipts_ignores_file_mtime(self) -> None:
-        """Break caught: rewriting the global lock alone manufactures Cursor staleness."""
-        import os
-        import time
-
-        from src.diagnostics import Diagnostics
-        from src.paths import AgentbotPaths
-
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            home = root / "home"
-            (root / "global").mkdir()
-            (root / "global" / "AGENTS.md").write_text("# baseline\n", encoding="utf-8")
-            agents = home / ".agents"
-            agents.mkdir(parents=True)
-            cursor_lock = agents / "cursor-skills-lock.json"
-            global_lock = agents / ".skill-lock.json"
-            cursor_lock.write_text(
-                '{"skills":{"alpha":{"source":"owner/repo",'
-                '"updatedAt":"2026-08-26T08:00:00Z"}}}\n',
-                encoding="utf-8",
-            )
-            global_lock.write_text(
-                '{"skills":{"alpha":{"source":"owner/repo",'
-                '"updatedAt":"2026-08-26T08:00:00Z"}}}\n',
-                encoding="utf-8",
-            )
-
-            paths = AgentbotPaths(
-                root,
-                root / "codex",
-                root / "claude",
-                root / "cursor",
-                agents_home=agents,
-            )
-
-            old = time.time() - 3600
-            os.utime(cursor_lock, (old, old))
-            os.utime(global_lock, (time.time(), time.time()))
-            issues = Diagnostics(paths).doctor_issues()
-            self.assertEqual([], [i for i in issues if i.scope == "skills-cursor"])
-
-    def test_cursor_lock_missing_a_managed_receipt_is_a_warning(self) -> None:
-        """Break caught: a missing managed Cursor skill is treated as current."""
+    def test_legacy_cursor_lock_does_not_override_the_universal_skill_store(self) -> None:
+        """Cursor and Codex now consume the shared global skill store."""
         from src.diagnostics import Diagnostics
         from src.paths import AgentbotPaths
 
@@ -305,29 +263,7 @@ class DoctorSeverityTests(unittest.TestCase):
             )
 
             issues = Diagnostics(paths).doctor_issues()
-            cursor_issues = [issue for issue in issues if issue.scope == "skills-cursor"]
-            self.assertEqual(1, len(cursor_issues))
-            self.assertEqual("warning", cursor_issues[0].level)
-            self.assertIn("skills install", cursor_issues[0].message)
-
-    def test_no_cursor_lock_means_no_cursor_warning(self) -> None:
-        from src.diagnostics import Diagnostics
-        from src.paths import AgentbotPaths
-
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            home = root / "home"
-            (root / "global").mkdir()
-            (root / "global" / "AGENTS.md").write_text("# baseline\n", encoding="utf-8")
-            agents = home / ".agents"
-            agents.mkdir(parents=True)
-            (agents / ".skill-lock.json").write_text("{}\n", encoding="utf-8")
-            paths = AgentbotPaths(
-                root, root / "codex", root / "claude", root / "cursor", agents_home=agents
-            )
-            issues = Diagnostics(paths).doctor_issues()
-            self.assertEqual([], [i for i in issues if i.scope == "skills-cursor"])
-
+            self.assertEqual([], [issue for issue in issues if issue.scope == "skills-cursor"])
 
 if __name__ == "__main__":
     unittest.main()

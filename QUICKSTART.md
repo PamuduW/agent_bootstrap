@@ -54,5 +54,5 @@ Agentbot menu. Headless runs should use an explicit command such as
 
 Update skills later: `./install.sh skills update`.
 
-Active phases: [`docs/roadmap.md`](docs/roadmap.md). Deferred features:
-[`archive/docs/stuff.md`](archive/docs/stuff.md).
+Active and deferred phases: [`docs/roadmap.md`](docs/roadmap.md). Retained
+historical payloads: [`archive/docs/README.md`](archive/docs/README.md).

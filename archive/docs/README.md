@@ -1,117 +1,76 @@
-# agent_bootstrap archive
+# Agentbot archive
 
-This directory holds **pre-slim `agent_bootstrap` assets** moved during the 2026-07-09 rework. It is **not part of the runtime install path** — `./install.sh`, `npx skills`, `bin/agentbot`, and slim bootstrap flows do not read from here.
+## Status and runtime boundary
 
-Historical notes and restore indexes live in `archive/docs/`. The active
-roadmap lives at [`docs/roadmap.md`](../../docs/roadmap.md). The archive root
-keeps the remaining JSON/YAML/environment configuration and template payloads
-described here.
+This archive preserves inactive configuration payloads and historical context.
+Nothing under `archive/` is loaded by `./install.sh`, the Agentbot lifecycle,
+or the Skills CLI at runtime. Current behavior is documented under
+[`docs/`](../../docs/README.md).
 
-**Archive documentation:**
+## Retained payloads
 
-| File | Role |
-|------|------|
-| [stuff.md](./stuff.md) | Deferred capability map + restore pointers |
-| [../../docs/roadmap.md](../../docs/roadmap.md) | Active implementation roadmap (kept outside the archive) |
-| [legacy-memory-vault-design.md](./legacy-memory-vault-design.md) | Sanitized historical note; not an active memory store |
-| [future.md](./future.md) | Deferred AgentOS feature notes |
-| [LOCKFILE-NOTES.md](./LOCKFILE-NOTES.md) | Historical lockfile strategy |
+| Path | Restoration value |
+|---|---|
+| [`../.env.example`](../.env.example) | Names of optional MCP environment variables |
+| [`../agentos.yaml`](../agentos.yaml) | Pre-slim profile and export reference |
+| [`../catalog/packages.json`](../catalog/packages.json) | Deferred package-catalog schema and entries |
+| [`../mcp/mcp.json`](../mcp/mcp.json) | Deferred MCP server registry |
+| [`../templates/.codexignore`](../templates/.codexignore) | Historical export-ignore template |
+| [`../templates/AGENTS.md`](../templates/AGENTS.md) | Historical workspace overlay template |
+| [`legacy-memory-vault-design.md`](legacy-memory-vault-design.md) | Sanitized history of the removed public memory prototype |
 
-**Docs-only policy (2026-07-10):** Python modules and tests were removed from
-`archive/`; recover them from **git history** when restoring. Configuration
-(JSON/YAML) remains under `archive/`; Markdown documentation stays in this
-directory.
+The active repository already has a live `agentos.yaml`, workspace renderer,
+registration service, and managed policy templates. Archived versions are
+references, not replacements.
 
-Restore **design** from this folder and **configuration** from the archive root
-and its payload directories; restore **code** from git. See [stuff.md § If you
-restore](./stuff.md#if-you-restore-a-deferred-feature).
+## Deferred capabilities
 
-## Pre-slim snapshot
+The active [roadmap](../../docs/roadmap.md) owns future scope. Deferred ideas
+include package-catalog and profile-filtered MCP rendering, a larger AgentOS
+TUI and ingest pipeline, additional provider adapters, home-server
+orchestration, and later memory-graph technologies. None should be restored
+without a new design and tests against the current lifecycle.
 
-Tier 1/2 move tables below record what left the repo root on 2026-07-09. See [stuff.md](./stuff.md) for the deferred map and [the active roadmap](../../docs/roadmap.md) for current phases.
+The Phase 4 durable-memory design lives in the parent setup workspace under
+`docs/designs/memory/`. It is intentionally outside this standalone repository
+and is not linked relatively from here.
 
-## Tier 1 moves (Phase 2 — 2026-07-09)
+## Removed code and Git recovery
 
-Moved from repo root with `git mv` (except `exports/`, which was gitignored and relocated with `mv`):
+The pre-slim catalog control plane was removed from the current tree. Its
+catalog, discovery, state, full-render, interactive UI modules, and associated
+tests remain available in Git history. Use history for code; do not expect the
+retained JSON, YAML, and templates to form a working implementation by
+themselves.
 
-| Original path | Archive path | Notes |
-|---------------|--------------|-------|
-| `memory-vault/` | *(removed in Phase 4 Slice 4M)* | Public memory prototype; see [legacy-memory-vault-design.md](./legacy-memory-vault-design.md) |
-| `future/` | `archive/docs/future.md` | Deferred AgentOS / harness phases |
-| `agentos.yaml` | `archive/agentos.yaml` | v4 Lite profiles and export targets |
-| `templates/` | `archive/templates/` | Per-repo AGENTS.md overlay template for workspace render |
-| `exports/` | `archive/exports/` | Generated outputs (was gitignored) |
+Useful history queries include:
 
-Top-level `docs/` and `skills/` were removed after the moves (empty). Restore from this directory or from git history.
+```bash
+git log --all -- archive/src archive/tests
+git log --all -- catalog mcp
+git show <commit>:<path>
+```
 
-## Tier 2 moves (Phase 3 — 2026-07-09)
+## Restoration procedure
 
-Moved after CLI/service/render surgery:
+1. Define a narrow Phase 3 or later scope in the active roadmap and design.
+2. Create a branch and identify the exact historical commit and files.
+3. Reuse only the required retained payloads from `archive/`.
+4. Adapt recovered code to `src/cli.py`, `src/lifecycle.py`, current workspace
+   services, and current ownership rules; do not copy an old tree wholesale.
+5. Restore or rewrite focused tests for every recovered contract.
+6. Run `env -u NO_COLOR bash tests/run.sh` and Doctor before considering the
+   feature live.
 
-| Original path | Archive path | Notes |
-|---------------|--------------|-------|
-| `catalog/` | `archive/catalog/` | Package catalog + MCP key provenance |
-| `mcp/` | `archive/mcp/` | `mcp.json` for rendered MCP bundles |
-| `.env.example` | `archive/.env.example` | Optional MCP-related env vars |
-| `src/agent_bootstrap/discovery.py` | *(removed 2026-07-10)* | Workspace/package discovery — **git history** |
-| `src/agent_bootstrap/catalog.py` | *(removed 2026-07-10)* | Catalog load/filter — **git history** |
-| `src/agent_bootstrap/state.py` | *(removed 2026-07-10)* | Tracked workspaces + audit log — **git history** |
-| `src/agent_bootstrap/ui.py` (full) | *(removed 2026-07-10)* | Interactive Apply menus — **git history** |
-| `src/agent_bootstrap/render.py` (full) | *(removed 2026-07-10)* | Workspace render + MCP filter — **git history** |
-| `tests/test_bootstrap_engine.py` (full) | *(removed 2026-07-10)* | Catalog/workspace tests — **git history** |
-| `exports/` | *(removed 2026-07-10)* | Was empty generated-output placeholder |
+## Historical notes
 
-**Slim replacements at repo root:**
+The repository was slimmed in July 2026. Workspace rendering and registration
+were subsequently rebuilt as the live Phase 2 implementation, while catalog
+and MCP bundles remained deferred. The public memory-vault prototype was later
+removed because moving personal memory into a public archive does not make it
+private.
 
-- `src/render.py` — `render_global_outputs` only (no MCP write from catalog)
-- `src/ui.py` — print helpers only (no interactive menus)
-- `bin/agentbot` — live unified scaffold and Phase 2 workspace entrypoint
-
-## Pack → bootstrap matrix
-
-Maps v4 Lite / pre-slim config-plane concepts to the slim bootstrap (2026-07-09 rework):
-
-| v4 pack concept | Slim status | Location |
-|-----------------|-------------|----------|
-| Upstream skills manifest (`npx skills`) | **Live** | `skills.sources.yaml` |
-| Global skill lockfile | **Live** (repo stub; global pins in `~/.agents/.skill-lock.json`) | `skills-lock.json` |
-| `install.sh` / Python CLI | **Live** | `install.sh`, `src/cli.py`, `src/lifecycle.py`, `src/diagnostics.py` |
-| `agentbot` scaffold | **Live** | `bin/agentbot`, `base/` |
-| Global `AGENTS.md` render | **Live** | `global/AGENTS.md`, `src/render.py` |
-| Claude skills bridge | **Live** | `src/claude_bridge.py`, invoked by managed output rendering |
-| Package catalog + MCP provenance | **Archived** | `archive/catalog/`, `archive/mcp/` |
-| Workspace render + templates | **Live (Phase 2)** | `agentos.yaml`, `src/workspace_render.py`, `base/` |
-| Local registration / tracked workspaces | **Live (Phase 2)** | `src/workspace_state.py`, `src/workspace_service.py` |
-| `agentos.yaml` profiles | **Live (Phase 2)** | `agentos.yaml`, `src/workspace_profiles.py` |
-| Durable memory design | **Next (Phase 4)** | Workspace `temp/mem/`; public prototype removed |
-| Deferred AgentOS / harness phases | **Archived** | `archive/docs/future.md`, `archive/docs/` |
-| Graphify skill integration | **On-demand / live** | Main Agentbot Install/Update plus direct `agentbot graphify setup` repair; not a manifest source |
-| `obsidian-memory` skill source | **Disabled** | `skills.sources.yaml` (`enabled: false`) |
-
-## Archived and deferred use cases
-
-| Use case | Archive / git dependency |
-|----------|--------------------------|
-| Full bootstrap / catalog Apply | `ui.py`, `state.py` — **git**; restore only with a new Phase 3 design |
-| Workspace render | **Live Phase 2**: `src/workspace_render.py`, `base/`, `agentos.yaml` |
-| Render all registered workspaces | **Live Phase 2**: `src/workspace_state.py`, `src/workspace_service.py` |
-| Package catalog / import-local | `archive/catalog/` |
-| MCP filter / render into `.cursor/mcp.json` | `archive/mcp/`, `catalog/packages.json` |
-| Memory vault workflows | Workspace `temp/mem/`; implementation begins after the Phase 4 migration gate |
-| Agentbot workspace exports (Copilot + Cursor rules) | `src/workspace_render.py` — live Phase 2 |
-| `agentos.yaml` profiles | `agentos.yaml` |
-
-## Slim core (stays at repo root)
-
-`install.sh`, `skills.sources.yaml`, `skills-lock.json`, `bin/*`, `base/`, `global/AGENTS.md`, trimmed `src/`, and focused tests.
-
-## Restore notes
-
-See [stuff.md](./stuff.md) and [the active roadmap](../../docs/roadmap.md). Summary:
-
-1. **Pick scope** — catalog, discovery, state, full render, and ui are coupled.
-2. **Config/docs** — copy from `archive/` (`catalog/`, `mcp/`, `templates/`, `agentos.yaml`); use the Phase 4 design in workspace `temp/mem/` for the private memory workflow.
-3. **Code** — restore from git (pre-2026-07-10 archive layout or `git show <commit>:archive/src/...`).
-4. **Re-wire** — `src/cli.py`, `src/lifecycle.py`, and `install.sh`; archived CLI subcommands.
-5. **Env** — copy `archive/.env.example` if MCP servers need credentials.
-6. **Verify** — unittest + `./install.sh doctor`.
+Global skill installs use `~/.agents/.skill-lock.json`. The committed
+`skills-lock.json` remains a differently shaped project-install stub. That
+current lock ownership is documented in
+[`docs/skills.md`](../../docs/skills.md), not as an archive-only rule.

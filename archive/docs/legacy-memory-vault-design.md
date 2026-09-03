@@ -15,8 +15,9 @@ its visibility or make its contents safe to publish. The prototype was removed
 from the current branch during the Phase 4 migration gate; its previous files
 remain recoverable from Git history if historical investigation is required.
 
-The current Phase 4 design is maintained in the workspace notes at
-[`temp/mem/README.md`](../../../temp/mem/README.md). It uses one private,
+The current Phase 4 design is maintained in the parent setup workspace under
+`docs/designs/memory/`. That workspace location is stated as text because this
+repository can also be cloned independently. The design uses one private,
 Markdown-only repository with explicit validation, approval, backup, and Git
 transport contracts. This historical note contains no active memory records,
 personal preferences, project notes, or synchronization instructions.

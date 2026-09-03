@@ -98,7 +98,8 @@ repo as a small CLI plus shell entrypoint, not a full config plane.
 | `global/AGENTS.md` | Authored machine baseline rendered to managed agent homes. |
 | `global/claude/statusline-command.sh` | Managed Claude Code status line installed to `~/.claude/statusline-command.sh` during global render, update refresh, workspace resync, and Doctor/Status checks. |
 | `tests/` | Python and shell regression suites. |
-| `archive/` | Deferred catalog/MCP material and sanitized historical notes; Phase 4 design lives in the workspace `temp/mem/` notes. |
+| `docs/` | Current technical documentation and roadmap. The Phase 4 design lives in the parent setup workspace under `docs/designs/memory/`. |
+| `archive/` | Inactive catalog/MCP payloads and sanitized historical notes; never runtime input. |
 
 **Commands:**
 

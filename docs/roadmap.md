@@ -29,7 +29,7 @@ must use Agentbot and agentbot.
 | Curated skills | skills.sources.yaml and install.sh skills ... | Live |
 | Dotfiles integration | sibling dotfiles Agentbot bridge | Live |
 | Package catalog and MCP bundles | archive/catalog/, archive/mcp/ | Phase 3 (deferred) |
-| Durable memory | workspace `temp/mem/` design plus sanitized legacy note | Next (Phase 4; Slice 4M complete) |
+| Durable memory | workspace `docs/designs/memory/` design plus sanitized legacy note | Next (Phase 4; Slice 4M complete) |
 | Graphify CLI and assistant integration | sibling dotfiles component plus Agentbot integration | Live (Phase 5) |
 
 Agentbot is the installed product and public command. agent_bootstrap remains
@@ -212,7 +212,7 @@ Current gate status:
   branch;
 - [x] retain only a sanitized historical note under `archive/docs/`;
 - [x] keep the private-memory design and implementation contracts in workspace
-  `temp/mem/`;
+  workspace `docs/designs/memory/`;
 - [x] review and merge the migration gate before implementation slices begin.
 
 Later planned work:
@@ -304,6 +304,19 @@ workstream.
 - obsolete product names, legacy TUI variables, and broad profile modes;
 - Hermes, Proxmox, vector databases, or always-on laptop services.
 
+## Deferred AgentOS capabilities
+
+These ideas remain planning inputs, not runtime features:
+
+- a full numbered policy taxonomy;
+- an `agentos tui` overhaul and a source-ingest review pipeline;
+- Hermes or opencode orchestration and home-server control planes;
+- OpenClaw bootstrap files and additional ChatGPT/export adapters;
+- Graphify hooks, Mem0, Graphiti, or GraphRAG memory upgrades.
+
+Restore catalog or MCP work only through a new Phase 3 design. Do not restore
+removed control-plane code directly into the live lifecycle.
+
 ## Change log
 
 | Date | Change |
@@ -316,3 +329,4 @@ workstream.
 | 2026-07-28 | Selected Phase 4 as the next workstream and applied Slice 4M public-memory retirement in the working tree; review remains pending |
 | 2026-08-06 | Confirmed Slice 4M merged, reconciled Graphify Lib and automatic Install/Update setup behavior, and selected Slice 4.0A as next |
 | 2026-08-20 | Consolidated lifecycle, diagnostics, command metadata, TUI primitives, and validation before Phase 4 implementation |
+| 2026-09-03 | Consolidated technical documentation and moved deferred AgentOS notes into the active roadmap |

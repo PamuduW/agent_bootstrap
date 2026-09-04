@@ -397,7 +397,7 @@ Usage: ./install.sh <command> [args]
   global                     Refresh managed global outputs
   workspace|workspaces|resync Manage registered workspace outputs
   graphify status|setup      Inspect or repair generic Graphify Agent Skills
-  boost status|setup|off     Inspect or manage Boost Claude/Codex integration
+  boost status|setup|off     Inspect or manage Boost Claude/Codex/Cursor integration
   help                       Show this rescue summary
 
 For the complete command and option reference, run: agentbot help

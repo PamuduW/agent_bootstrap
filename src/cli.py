@@ -318,8 +318,8 @@ def build_parser() -> argparse.ArgumentParser:
     boost = subparsers.add_parser("boost", help="Inspect or manage Boost shell integration")
     boost_sub = boost.add_subparsers(dest="boost_command")
     boost_sub.add_parser("status", help="Show Boost CLI, safety, and integration state")
-    boost_sub.add_parser("setup", help="Preview and set up Claude and Codex integration")
-    boost_sub.add_parser("off", help="Preview and remove Claude and Codex integration")
+    boost_sub.add_parser("setup", help="Set up Boost for installed Claude, Codex, and Cursor CLIs")
+    boost_sub.add_parser("off", help="Remove Boost integration from Claude, Codex, and Cursor")
     for command in ("update", "upgrade"):
         update = subparsers.add_parser(
             command,

@@ -27,6 +27,7 @@ class DoctorSeverityTests(unittest.TestCase):
                 False,
                 "ready",
                 "ready",
+                "ready",
                 "absent",
                 "Boost privacy or update pinning is not safely configured.",
             )

@@ -238,7 +238,7 @@ def print_graphify_status(status) -> None:
 
 
 def print_boost_status(status) -> None:
-    """Render Boost CLI, safety, and Claude/Codex integration state."""
+    """Render Boost CLI, safety, and Claude/Codex/Cursor integration state."""
     print_header("Boost", "Agentbot › Boost")
     rows = [
         ("State", status.state, status.state),
@@ -263,8 +263,9 @@ def print_boost_status(status) -> None:
             status.graph_state,
             "ok" if status.graph_state == "absent" else "error",
         ),
-        ("Claude", status.claude_state, "ok" if status.claude_state == "ready" else "check"),
-        ("Codex", status.codex_state, "ok" if status.codex_state == "ready" else "check"),
+        ("Claude", status.claude_state, "ok" if status.claude_state in {"ready", "skipped"} else "check"),
+        ("Codex", status.codex_state, "ok" if status.codex_state in {"ready", "skipped"} else "check"),
+        ("Cursor", status.cursor_state, "ok" if status.cursor_state in {"ready", "skipped"} else "check"),
     ]
     if status.user_flags:
         rows.append(

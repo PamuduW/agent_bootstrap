@@ -121,6 +121,7 @@ class LifecycleTests(unittest.TestCase):
                 False,
                 "missing",
                 "missing",
+                "missing",
                 "absent",
                 "Boost CLI is not installed.",
             )

@@ -40,9 +40,10 @@ Git-source manifest.
 
 ## Boost
 
-Dotfiles owns the verified `boost` executable. Agentbot owns Claude and Codex
-setup, feature policy, diagnostics, and removal through
-`agentbot boost status|setup|off`.
+Dotfiles owns the verified `boost` executable. Agentbot owns Claude, Codex,
+and Cursor setup, feature policy, diagnostics, and removal through
+`agentbot boost status|setup|off`. Setup wires whichever of those CLIs are
+installed and skips the rest. A later run picks up a newly installed CLI.
 
 Setup disables tracing upload and Boost auto-update, keeps BoostGraph and its
 MCP changes disabled, and writes the declared policy from

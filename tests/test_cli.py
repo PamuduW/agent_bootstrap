@@ -481,6 +481,7 @@ class CliTests(unittest.TestCase):
                 False,
                 "missing",
                 "missing",
+                "missing",
                 "absent",
                 "Boost is not installed.",
             ),

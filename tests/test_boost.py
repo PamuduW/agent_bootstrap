@@ -57,6 +57,54 @@ _BOOST_CODEX_HOOKS = json.dumps(
 )
 
 
+_BOOST_CURSOR_HOOKS = json.dumps(
+    {
+        "version": 1,
+        "hooks": {
+            "postToolUse": [
+                {
+                    "command": "~/.cursor/hooks/boost-hook-cursor.sh",
+                    "matcher": "MCP:.*",
+                }
+            ],
+            "preToolUse": [
+                {
+                    "command": "~/.cursor/hooks/boost-hook-cursor.sh",
+                    "matcher": "Shell|Read",
+                }
+            ],
+            "sessionStart": [
+                {"command": "~/.cursor/hooks/boost-observe-cursor.sh"}
+            ],
+            "stop": [
+                {"command": "~/.cursor/hooks/boost-sync.sh"},
+                {"command": "~/.cursor/hooks/boost-observe-cursor.sh"},
+            ],
+        },
+    }
+)
+
+
+def patch_boost_which(*, boost: Path | str | None = None, present: tuple[str, ...] = ()):
+    """Isolate PATH so tests do not see the developer's real agent CLIs.
+
+    `shutil.which` is shared by Boost CLI discovery and host presence. A mock
+    that returns the boost path for every name would mark Claude, Codex, and
+    Cursor all present.
+    """
+    boost_path = str(boost) if boost is not None else None
+    present_names = set(present)
+
+    def which(name: str) -> str | None:
+        if name == "boost":
+            return boost_path
+        if name in present_names:
+            return f"/fake/bin/{name}"
+        return None
+
+    return mock.patch("src.boost.shutil.which", side_effect=which)
+
+
 class BoostIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -80,6 +128,22 @@ class BoostIntegrationTests(unittest.TestCase):
             config_home=self.root / ".config/agentbot",
             agents_home=self.root / ".agents",
         )
+
+    def _cursor(self) -> Path:
+        return self.root / ".cursor"
+
+    def _install_cursor_files(self) -> None:
+        cursor = self._cursor()
+        (cursor / "hooks").mkdir(parents=True, exist_ok=True)
+        for name in (
+            "boost-hook-cursor.sh",
+            "boost-observe-cursor.sh",
+            "boost-sync.sh",
+        ):
+            (cursor / "hooks" / name).write_text("hook\n", encoding="utf-8")
+        (cursor / "rules").mkdir(parents=True, exist_ok=True)
+        (cursor / "rules/boost-awareness.mdc").write_text("# boost\n", encoding="utf-8")
+        (cursor / "hooks.json").write_text(_BOOST_CURSOR_HOOKS, encoding="utf-8")
 
     def _integration_type(self):
         try:
@@ -131,6 +195,7 @@ class BoostIntegrationTests(unittest.TestCase):
                     stdout=(
                         "Claude Code global settings.json patch\n"
                         "Codex CLI global hooks.json and BOOST.md\n"
+                        "Cursor global hooks.json and boost-awareness.mdc\n"
                     ),
                 )
 
@@ -148,10 +213,21 @@ class BoostIntegrationTests(unittest.TestCase):
                 (paths.codex_home / "hooks/boost-sync.sh").write_text("hook\n")
                 (paths.codex_home / "BOOST.md").write_text("# Boost\n")
                 (paths.codex_home / "hooks.json").write_text(_BOOST_CODEX_HOOKS)
+                cursor = paths.cursor_home
+                (cursor / "hooks").mkdir(parents=True)
+                for name in (
+                    "boost-hook-cursor.sh",
+                    "boost-observe-cursor.sh",
+                    "boost-sync.sh",
+                ):
+                    (cursor / "hooks" / name).write_text("hook\n")
+                (cursor / "rules").mkdir(parents=True)
+                (cursor / "rules/boost-awareness.mdc").write_text("rule\n")
+                (cursor / "hooks.json").write_text(_BOOST_CURSOR_HOOKS)
                 return CommandResult(0)
 
         runner = Runner()
-        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+        with patch_boost_which(boost=boost, present=("claude", "codex", "agent")):
             status = BoostIntegration(paths, runner=runner).setup()
 
         expected = [
@@ -160,6 +236,7 @@ class BoostIntegrationTests(unittest.TestCase):
             "--no-boostgraph",
             "--claude",
             "--codex",
+            "--cursor",
         ]
         self.assertIn([*expected[:2], "--dry-run", *expected[2:]], runner.calls)
         self.assertEqual([expected], runner.interactive_calls)
@@ -181,7 +258,7 @@ class BoostIntegrationTests(unittest.TestCase):
 
         runner.run.side_effect = run
 
-        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+        with patch_boost_which(boost=boost, present=("claude",)):
             status = BoostIntegration(self._paths(), runner=runner).setup()
 
         self.assertEqual("broken", status.state)
@@ -210,8 +287,19 @@ class BoostIntegrationTests(unittest.TestCase):
 
         runner.run.side_effect = run
         runner.run_interactive.return_value = CommandResult(0)
+        self._install_cursor_files()
+        (self.claude / "hooks").mkdir(parents=True)
+        (self.claude / "hooks/boost-hook-claude.sh").write_text("hook\n")
+        (self.claude / "rules").mkdir(parents=True)
+        (self.claude / "rules/boost-awareness.md").write_text("rule\n")
+        (self.claude / "settings.json").write_text(_BOOST_CLAUDE_SETTINGS)
+        (self.codex / "hooks").mkdir(parents=True)
+        for name in ("boost-hook-codex.sh", "boost-sync.sh"):
+            (self.codex / "hooks" / name).write_text("hook\n")
+        (self.codex / "BOOST.md").write_text("# Boost\n")
+        (self.codex / "hooks.json").write_text(_BOOST_CODEX_HOOKS)
 
-        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+        with patch_boost_which(boost=boost):
             BoostIntegration(self._paths(), runner=runner).off()
 
         interactive = [call.args[0] for call in runner.run_interactive.call_args_list]
@@ -219,6 +307,7 @@ class BoostIntegrationTests(unittest.TestCase):
             [
                 [str(boost), "init", "--uninstall", "--no-boostgraph", "--claude"],
                 [str(boost), "init", "--uninstall", "--no-boostgraph", "--codex"],
+                [str(boost), "init", "--uninstall", "--no-boostgraph", "--cursor"],
             ],
             interactive,
         )
@@ -248,8 +337,10 @@ class BoostIntegrationTests(unittest.TestCase):
         runner.run_interactive.return_value = CommandResult(
             1, stderr="specify only one target to uninstall"
         )
+        (self.claude / "hooks").mkdir(parents=True)
+        (self.claude / "hooks/boost-hook-claude.sh").write_text("hook\n")
 
-        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+        with patch_boost_which(boost=boost):
             status = BoostIntegration(self._paths(), runner=runner).off()
 
         self.assertEqual("broken", status.state)
@@ -271,12 +362,75 @@ class BoostIntegrationTests(unittest.TestCase):
             return CommandResult(0, stdout="Claude Code global settings.json patch\n")
 
         runner.run.side_effect = run
-        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+        with patch_boost_which(boost=boost, present=("claude", "codex")):
             status = BoostIntegration(self._paths(), runner=runner).setup()
 
         self.assertEqual("broken", status.state)
-        self.assertIn("Claude and Codex", status.message)
+        self.assertIn("Codex", status.message)
         runner.run_interactive.assert_not_called()
+
+    def test_setup_with_only_cursor_present_passes_cursor_flag(self) -> None:
+        from src.command_runner import CommandResult
+
+        BoostIntegration = self._integration_type()
+        boost = self.root / "boost"
+        boost.write_text("binary", encoding="utf-8")
+        paths = self._paths()
+        runner = mock.Mock()
+
+        def run(argv, **_kwargs):
+            if argv[-1] == "version":
+                return CommandResult(0, stdout="boost v0.12.6\n")
+            return CommandResult(0, stdout="Cursor global hooks.json\n")
+
+        def run_interactive(argv, **_kwargs):
+            self._install_cursor_files()
+            return CommandResult(0)
+
+        runner.run.side_effect = run
+        runner.run_interactive.side_effect = run_interactive
+        with patch_boost_which(boost=boost, present=("agent",)):
+            status = BoostIntegration(paths, runner=runner).setup()
+
+        argv = runner.run_interactive.call_args.args[0]
+        self.assertEqual(
+            [str(boost), "init", "--no-boostgraph", "--cursor"],
+            argv,
+        )
+        self.assertNotIn("--claude", argv)
+        self.assertNotIn("--codex", argv)
+        self.assertEqual("ready", status.state)
+
+    def test_setup_without_agent_clis_does_not_call_boost_init(self) -> None:
+        from src.command_runner import CommandResult
+
+        BoostIntegration = self._integration_type()
+        boost = self.root / "boost"
+        boost.write_text("binary", encoding="utf-8")
+        runner = mock.Mock()
+        runner.run.return_value = CommandResult(0, stdout="boost v0.12.6\n")
+        with patch_boost_which(boost=boost):
+            status = BoostIntegration(self._paths(), runner=runner).setup()
+        runner.run_interactive.assert_not_called()
+        self.assertEqual("cli-only", status.state)
+
+    def test_off_uninstalls_orphaned_cursor_without_the_cli(self) -> None:
+        from src.command_runner import CommandResult
+
+        BoostIntegration = self._integration_type()
+        boost = self.root / "boost"
+        boost.write_text("binary", encoding="utf-8")
+        self._install_cursor_files()
+        runner = mock.Mock()
+        runner.run.return_value = CommandResult(0, stdout="boost v0.12.6\n")
+        runner.run_interactive.return_value = CommandResult(0)
+        with patch_boost_which(boost=boost):
+            BoostIntegration(self._paths(), runner=runner).off()
+        interactive = [call.args[0] for call in runner.run_interactive.call_args_list]
+        self.assertEqual(
+            [[str(boost), "init", "--uninstall", "--no-boostgraph", "--cursor"]],
+            interactive,
+        )
 
     def test_status_reports_cli_only_partial_ready_and_forbidden_states(self) -> None:
         from src.boost import BoostIntegration
@@ -289,8 +443,9 @@ class BoostIntegrationTests(unittest.TestCase):
         integration = BoostIntegration(self._paths(), runner=runner)
         integration.ensure_safe_config()
 
-        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+        with patch_boost_which(boost=boost):
             self.assertEqual("cli-only", integration.status().state)
+        with patch_boost_which(boost=boost, present=("claude", "codex")):
             (self.claude / "hooks").mkdir(parents=True)
             (self.claude / "hooks/boost-hook-claude.sh").write_text("hook\n")
             (self.claude / "rules").mkdir(parents=True)
@@ -334,6 +489,73 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class BoostCursorRegistrationTests(BoostIntegrationTests):
+    """Cursor earns ready the same way Claude and Codex do."""
+
+    def test_hook_files_without_registration_are_unregistered(self) -> None:
+        integration = self._integration_type()(self._paths())
+        cursor = self._cursor()
+        (cursor / "hooks").mkdir(parents=True)
+        (cursor / "hooks/boost-hook-cursor.sh").write_text("hook\n", encoding="utf-8")
+        (cursor / "rules").mkdir(parents=True)
+        (cursor / "rules/boost-awareness.mdc").write_text("# boost\n", encoding="utf-8")
+        with patch_boost_which(present=("agent",)):
+            self.assertEqual("unregistered", integration._cursor_state())
+
+    def test_registered_hooks_read_ready(self) -> None:
+        integration = self._integration_type()(self._paths())
+        self._install_cursor_files()
+        with patch_boost_which(present=("agent",)):
+            self.assertEqual("ready", integration._cursor_state())
+
+    def test_absent_cli_without_files_is_skipped(self) -> None:
+        integration = self._integration_type()(self._paths())
+        with patch_boost_which():
+            self.assertEqual("skipped", integration._cursor_state())
+
+    def test_absent_cli_with_leftover_files_is_orphaned(self) -> None:
+        integration = self._integration_type()(self._paths())
+        self._install_cursor_files()
+        with patch_boost_which():
+            self.assertEqual("orphaned", integration._cursor_state())
+
+    def test_present_cli_without_files_is_missing(self) -> None:
+        integration = self._integration_type()(self._paths())
+        with patch_boost_which(present=("cursor",)):
+            self.assertEqual("missing", integration._cursor_state())
+
+    def test_a_missing_awareness_file_is_partial(self) -> None:
+        integration = self._integration_type()(self._paths())
+        self._install_cursor_files()
+        (self._cursor() / "rules/boost-awareness.mdc").unlink()
+        with patch_boost_which(present=("agent",)):
+            self.assertEqual("partial", integration._cursor_state())
+
+    def test_a_registered_hook_missing_from_disk_is_partial(self) -> None:
+        integration = self._integration_type()(self._paths())
+        self._install_cursor_files()
+        (self._cursor() / "hooks/boost-sync.sh").unlink()
+        with patch_boost_which(present=("agent",)):
+            self.assertEqual("partial", integration._cursor_state())
+
+    def test_only_cursor_present_and_wired_is_ready(self) -> None:
+        from src.command_runner import CommandResult
+
+        boost = self.root / "boost"
+        boost.write_text("binary", encoding="utf-8")
+        runner = mock.Mock()
+        runner.run.return_value = CommandResult(0, stdout="boost v0.12.6\n")
+        self._install_cursor_files()
+        integration = self._integration_type()(self._paths(), runner=runner)
+        integration.ensure_safe_config()
+        with patch_boost_which(boost=boost, present=("agent",)):
+            status = integration.status()
+        self.assertEqual("ready", status.state)
+        self.assertEqual("ready", status.cursor_state)
+        self.assertEqual("skipped", status.claude_state)
+        self.assertEqual("skipped", status.codex_state)
+
+
 class BoostClaudeRegistrationTests(BoostIntegrationTests):
     """Hook files on disk do not mean Claude runs them."""
 
@@ -351,8 +573,8 @@ class BoostClaudeRegistrationTests(BoostIntegrationTests):
         integration = self._integration_type()(self._paths())
         self._install_claude_hook_files()
         self._settings({"statusLine": {"command": "~/.claude/statusline-command.sh"}})
-
-        self.assertEqual("unregistered", integration._claude_state())
+        with patch_boost_which(present=("claude",)):
+            self.assertEqual("unregistered", integration._claude_state())
 
     def test_registered_hook_reads_ready(self) -> None:
         integration = self._integration_type()(self._paths())
@@ -370,19 +592,21 @@ class BoostClaudeRegistrationTests(BoostIntegrationTests):
             }
         )
 
-        self.assertEqual("ready", integration._claude_state())
+        with patch_boost_which(present=("claude",)):
+            self.assertEqual("ready", integration._claude_state())
 
     def test_missing_hook_files_still_read_missing(self) -> None:
         integration = self._integration_type()(self._paths())
-        self.assertEqual("missing", integration._claude_state())
+        with patch_boost_which(present=("claude",)):
+            self.assertEqual("missing", integration._claude_state())
 
     def test_unparseable_settings_do_not_claim_registration(self) -> None:
         integration = self._integration_type()(self._paths())
         self._install_claude_hook_files()
         self.claude.mkdir(parents=True, exist_ok=True)
         (self.claude / "settings.json").write_text("{not json", encoding="utf-8")
-
-        self.assertEqual("unregistered", integration._claude_state())
+        with patch_boost_which(present=("claude",)):
+            self.assertEqual("unregistered", integration._claude_state())
 
 
 class BoostConfigLockTests(BoostIntegrationTests):
@@ -456,8 +680,13 @@ class BoostOffCwdTests(BoostIntegrationTests):
 
         runner.run.side_effect = run
         runner.run_interactive.return_value = CommandResult(0)
+        (self.claude / "hooks").mkdir(parents=True)
+        (self.claude / "hooks/boost-hook-claude.sh").write_text("hook\n")
+        (self.codex / "hooks").mkdir(parents=True)
+        (self.codex / "hooks/boost-hook-codex.sh").write_text("hook\n")
+        self._install_cursor_files()
 
-        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+        with patch_boost_which(boost=boost):
             BoostIntegration(self._paths(), runner=runner).off()
 
         home = self.codex.parent
@@ -466,7 +695,7 @@ class BoostOffCwdTests(BoostIntegrationTests):
             for call in runner.run_interactive.call_args_list
             if "--uninstall" in call.args[0]
         ]
-        self.assertEqual(2, len(uninstalls))
+        self.assertEqual(3, len(uninstalls))
         for call in uninstalls:
             self.assertEqual(home, call.kwargs.get("cwd"))
 
@@ -487,7 +716,7 @@ class BoostOffCwdTests(BoostIntegrationTests):
         runner.run.side_effect = run
         runner.run_interactive.return_value = CommandResult(0)
 
-        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+        with patch_boost_which(boost=boost, present=("claude", "codex")):
             BoostIntegration(self._paths(), runner=runner).setup()
 
         for call in runner.run_interactive.call_args_list:
@@ -515,17 +744,20 @@ class BoostCodexRegistrationTests(BoostIntegrationTests):
             json.dumps({"hooks": {"PreToolUse": [{"hooks": [{"command": "other.sh"}]}]}}),
             encoding="utf-8",
         )
-        self.assertEqual("unregistered", integration._codex_state())
+        with patch_boost_which(present=("codex",)):
+            self.assertEqual("unregistered", integration._codex_state())
 
     def test_registered_codex_hooks_read_ready(self) -> None:
         integration = self._integration_type()(self._paths())
         self._install_codex_files()
         (self.codex / "hooks.json").write_text(_BOOST_CODEX_HOOKS, encoding="utf-8")
-        self.assertEqual("ready", integration._codex_state())
+        with patch_boost_which(present=("codex",)):
+            self.assertEqual("ready", integration._codex_state())
 
     def test_absent_codex_integration_is_missing(self) -> None:
         integration = self._integration_type()(self._paths())
-        self.assertEqual("missing", integration._codex_state())
+        with patch_boost_which(present=("codex",)):
+            self.assertEqual("missing", integration._codex_state())
 
 
 class BoostRegisteredHookFileTests(BoostIntegrationTests):
@@ -576,18 +808,21 @@ class BoostRegisteredHookFileTests(BoostIntegrationTests):
     def test_a_registered_hook_missing_from_disk_is_partial(self) -> None:
         integration = self._integration_type()(self._paths())
         self._install_claude(hook_names=("boost-hook-claude.sh",))
-        self.assertEqual("partial", integration._claude_state())
+        with patch_boost_which(present=("claude",)):
+            self.assertEqual("partial", integration._claude_state())
 
     def test_every_registered_hook_present_is_ready(self) -> None:
         integration = self._integration_type()(self._paths())
         self._install_claude(hook_names=("boost-hook-claude.sh", "boost-sync.sh"))
-        self.assertEqual("ready", integration._claude_state())
+        with patch_boost_which(present=("claude",)):
+            self.assertEqual("ready", integration._claude_state())
 
     def test_a_missing_awareness_file_is_partial(self) -> None:
         integration = self._integration_type()(self._paths())
         self._install_claude(hook_names=("boost-hook-claude.sh", "boost-sync.sh"))
         (self.claude / "rules/boost-awareness.md").unlink()
-        self.assertEqual("partial", integration._claude_state())
+        with patch_boost_which(present=("claude",)):
+            self.assertEqual("partial", integration._claude_state())
 
 
 class BoostShadowingConfigTests(BoostIntegrationTests):
@@ -696,7 +931,7 @@ class BoostArtifactVersionTests(BoostIntegrationTests):
         runner.run.return_value = CommandResult(0, stdout=f"{version}\n")
         integration = self._integration_type()(self._paths(), runner=runner)
         integration.ensure_safe_config()
-        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+        with patch_boost_which(boost=boost, present=("claude", "codex")):
             return integration.status()
 
     def test_artifacts_from_an_older_release_are_stale(self) -> None:
@@ -735,7 +970,7 @@ class BoostArtifactVersionTests(BoostIntegrationTests):
         runner.run.return_value = CommandResult(1, stderr="boom")
         integration = self._integration_type()(self._paths(), runner=runner)
         integration.ensure_safe_config()
-        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+        with patch_boost_which(boost=boost, present=("claude", "codex")):
             status = integration.status()
         self.assertEqual((), status.stale_artifacts)
 
@@ -776,7 +1011,7 @@ class BoostFeatureFlagTests(BoostIntegrationTests):
         boost.write_text("binary", encoding="utf-8")
         runner = mock.Mock()
         runner.run.return_value = CommandResult(0, stdout="boost v0.12.6\n")
-        with mock.patch("src.boost.shutil.which", return_value=str(boost)):
+        with patch_boost_which(boost=boost):
             return self._integration_type()(self._paths(), runner=runner).status()
 
     def test_policy_declares_every_flag_agentbot_has_a_stake_in(self) -> None:
@@ -907,3 +1142,10 @@ class BoostRepositoryGraphIndexTests(BoostIntegrationTests):
         (index / "config.toml.lock").write_text("", encoding="utf-8")
         integration = self._integration_type()(self._paths())
         self.assertFalse(integration._forbidden_graph_evidence())
+
+    def test_cursor_mcp_boostgraph_config_is_forbidden(self) -> None:
+        cursor = self._cursor()
+        cursor.mkdir(parents=True, exist_ok=True)
+        (cursor / "mcp.json").write_text('{"mcpServers":{"boostgraph":{}}}\n', encoding="utf-8")
+        integration = self._integration_type()(self._paths())
+        self.assertTrue(integration._forbidden_graph_evidence())

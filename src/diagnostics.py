@@ -110,7 +110,13 @@ class Diagnostics:
                     message=self._graphify_doctor_message(facts.graphify_status),
                 )
             )
-        if facts.boost_status.cli_path is not None and facts.boost_status.state != "ready":
+        if facts.boost_status.cli_path is not None and facts.boost_status.state in {
+            "broken",
+            "forbidden",
+            "unsafe-config",
+            "partial",
+            "stale",
+        }:
             level = (
                 "error"
                 if facts.boost_status.state in {"broken", "forbidden", "unsafe-config"}

@@ -8,7 +8,7 @@ import shutil
 import stat
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
@@ -32,6 +32,7 @@ class BoostStatus:
     auto_update_disabled: bool
     claude_state: str
     codex_state: str
+    cursor_state: str
     graph_state: str
     message: str
     shadowing_configs: tuple[Path, ...] = ()
@@ -99,8 +100,20 @@ _FORBIDDEN_PLAN_RE = re.compile(
 )
 
 
+@dataclass(frozen=True)
+class _BoostHost:
+    flag: str
+    label: str
+    plan_token: str
+    cli_names: tuple[str, ...]
+    config: Path
+    hook_dir: Path
+    awareness: Path
+    extra_graph: tuple[Path, ...]
+
+
 class BoostIntegration:
-    """Configure and inspect Boost's Claude/Codex shell-output integration."""
+    """Configure and inspect Boost's Claude/Codex/Cursor shell-output integration."""
 
     def __init__(self, paths: AgentbotPaths, *, runner: CommandRunner | None = None) -> None:
         self.paths = paths
@@ -127,6 +140,12 @@ class BoostIntegration:
         upload_disabled, auto_update_disabled = self._config_flags()
         claude_state = self._claude_state()
         codex_state = self._codex_state()
+        cursor_state = self._cursor_state()
+        host_states = (
+            ("Claude", claude_state),
+            ("Codex", codex_state),
+            ("Cursor", cursor_state),
+        )
         graph_state = "forbidden" if self._forbidden_graph_evidence() else "absent"
         shadowing = self._shadowing_configs()
         stale = self._stale_artifacts(cli_version)
@@ -154,23 +173,31 @@ class BoostIntegration:
                 "repository configs replace the safe global one and leave tracing "
                 f"upload enabled inside them: {', '.join(str(path) for path in shadowing)}"
             )
-        elif claude_state == "missing" and codex_state == "missing":
+        elif all(state == "skipped" for _, state in host_states) and not any(
+            state == "orphaned" for _, state in host_states
+        ):
             state = "cli-only"
-            message = "Boost CLI is installed; Claude and Codex are not integrated."
-        elif "unregistered" in (claude_state, codex_state):
-            hosts = " and ".join(
-                name
-                for name, host_state in (("Claude", claude_state), ("Codex", codex_state))
-                if host_state == "unregistered"
+            message = "Boost CLI is installed; no supported agent CLI is present."
+        elif "unregistered" in (claude_state, codex_state, cursor_state):
+            hosts = self._join_host_names(
+                name for name, host_state in host_states if host_state == "unregistered"
             )
             state = "partial"
             message = (
                 f"Boost hook files are installed for {hosts} but no hook is registered, "
                 "so nothing is filtered. Rerun 'agentbot boost setup'."
             )
-        elif claude_state != "ready" or codex_state != "ready":
+        elif any(
+            host_state in {"missing", "partial", "orphaned"}
+            for _, host_state in host_states
+        ):
+            hosts = self._join_host_names(
+                name
+                for name, host_state in host_states
+                if host_state in {"missing", "partial", "orphaned"}
+            )
             state = "partial"
-            message = "Boost integration is incomplete for Claude or Codex."
+            message = f"Boost integration is incomplete for {hosts}."
         elif stale:
             state = "stale"
             message = (
@@ -180,7 +207,14 @@ class BoostIntegration:
             )
         else:
             state = "ready"
-            message = "Boost shell-output integration is ready for Claude and Codex."
+            ready_hosts = self._join_host_names(
+                name for name, host_state in host_states if host_state == "ready"
+            )
+            message = (
+                f"Boost shell-output integration is ready for {ready_hosts}."
+                if ready_hosts
+                else "Boost shell-output integration is ready."
+            )
 
         return BoostStatus(
             state,
@@ -191,6 +225,7 @@ class BoostIntegration:
             auto_update_disabled,
             claude_state,
             codex_state,
+            cursor_state,
             graph_state,
             message,
             shadowing,
@@ -294,12 +329,14 @@ class BoostIntegration:
         if current.state == "forbidden":
             return current
         self.ensure_safe_config()
+        selected = [host for host in self._hosts() if self._cli_present(host.cli_names)]
+        if not selected:
+            return self.status()
         base = [
             str(current.cli_path),
             "init",
             "--no-boostgraph",
-            "--claude",
-            "--codex",
+            *(host.flag for host in selected),
         ]
         dry_run = self._runner.run(
             [*base[:2], "--dry-run", *base[2:]],
@@ -318,11 +355,18 @@ class BoostIntegration:
                 state="broken",
                 message="Boost dry run contains forbidden BoostGraph, MCP, or indexing behavior.",
             )
-        if "Claude" not in plan or "Codex" not in plan:
+        missing_targets = [
+            host.label for host in selected if host.plan_token not in plan
+        ]
+        if missing_targets:
             return replace(
                 self.status(),
                 state="broken",
-                message="Boost dry run did not include both requested Claude and Codex targets.",
+                message=(
+                    "Boost dry run did not include the requested "
+                    + self._join_host_names(missing_targets)
+                    + " targets."
+                ),
             )
         result = self._runner.run_interactive(
             base,
@@ -362,14 +406,16 @@ class BoostIntegration:
         # `~/.claude` integration in place. `--codex` is unaffected. Pin cwd to
         # the home directory so the rollback hits what setup actually wrote.
         home = self.paths.codex_home.parent
-        for target in ("--claude", "--codex"):
+        for host in self._hosts():
+            if not self._host_has_artifacts(host):
+                continue
             result = self._runner.run_interactive(
                 [
                     str(current.cli_path),
                     "init",
                     "--uninstall",
                     "--no-boostgraph",
-                    target,
+                    host.flag,
                 ],
                 timeout_seconds=self._timeout_seconds(),
                 cwd=home,
@@ -379,7 +425,7 @@ class BoostIntegration:
                     self.status(),
                     state="broken",
                     message=(
-                        f"Boost integration removal failed for {target}: {result.detail()}"
+                        f"Boost integration removal failed for {host.flag}: {result.detail()}"
                     ),
                 )
         return self.status()
@@ -413,19 +459,89 @@ class BoostIntegration:
             parsed.get("update", {}).get("auto_update") is False,
         )
 
-    def _claude_state(self) -> str:
-        return self._integration_state(
-            config=self.paths.claude_home / "settings.json",
-            hook_dir=self.paths.claude_home / "hooks",
-            awareness=self.paths.claude_home / "rules" / "boost-awareness.md",
+    def _hosts(self) -> tuple[_BoostHost, ...]:
+        claude = self.paths.claude_home
+        codex = self.paths.codex_home
+        cursor = self.paths.cursor_home
+        return (
+            _BoostHost(
+                "--claude",
+                "Claude",
+                "Claude",
+                ("claude",),
+                claude / "settings.json",
+                claude / "hooks",
+                claude / "rules" / "boost-awareness.md",
+                (claude.parent / ".claude.json",),
+            ),
+            _BoostHost(
+                "--codex",
+                "Codex",
+                "Codex",
+                ("codex",),
+                codex / "hooks.json",
+                codex / "hooks",
+                codex / "BOOST.md",
+                (codex / "config.toml",),
+            ),
+            _BoostHost(
+                "--cursor",
+                "Cursor",
+                "Cursor",
+                ("agent", "cursor"),
+                cursor / "hooks.json",
+                cursor / "hooks",
+                cursor / "rules" / "boost-awareness.mdc",
+                (cursor / "mcp.json",),
+            ),
         )
 
-    def _codex_state(self) -> str:
-        return self._integration_state(
-            config=self.paths.codex_home / "hooks.json",
-            hook_dir=self.paths.codex_home / "hooks",
-            awareness=self.paths.codex_home / "BOOST.md",
+    def _cli_present(self, names: tuple[str, ...]) -> bool:
+        home_bin = self.paths.codex_home.parent / ".local" / "bin"
+        for name in names:
+            if shutil.which(name):
+                return True
+            fallback = home_bin / name
+            if fallback.is_file() and os.access(fallback, os.X_OK):
+                return True
+        return False
+
+    def _host_has_artifacts(self, host: _BoostHost) -> bool:
+        if host.awareness.is_file():
+            return True
+        if host.hook_dir.is_dir() and any(host.hook_dir.glob("boost-*")):
+            return True
+        return bool(self._registered_hook_names(host.config))
+
+    def _host_state(self, host: _BoostHost) -> str:
+        integration = self._integration_state(
+            config=host.config,
+            hook_dir=host.hook_dir,
+            awareness=host.awareness,
         )
+        if self._cli_present(host.cli_names):
+            return integration
+        return "orphaned" if integration != "missing" else "skipped"
+
+    def _claude_state(self) -> str:
+        return self._host_state(self._hosts()[0])
+
+    def _codex_state(self) -> str:
+        return self._host_state(self._hosts()[1])
+
+    def _cursor_state(self) -> str:
+        return self._host_state(self._hosts()[2])
+
+    @staticmethod
+    def _join_host_names(names: Iterable[str]) -> str:
+        labels = [name for name in names if name]
+        if not labels:
+            return ""
+        if len(labels) == 1:
+            return labels[0]
+        if len(labels) == 2:
+            return f"{labels[0]} and {labels[1]}"
+        return f"{', '.join(labels[:-1])}, and {labels[-1]}"
 
     def _integration_state(self, *, config: Path, hook_dir: Path, awareness: Path) -> str:
         """Judge a host by what its config actually registers.
@@ -536,25 +652,14 @@ class BoostIntegration:
     def _installed_artifacts(self) -> tuple[Path, ...]:
         """Every hook script a host registers, plus its awareness file."""
         artifacts: list[Path] = []
-        for config, hook_dir, awareness in (
-            (
-                self.paths.claude_home / "settings.json",
-                self.paths.claude_home / "hooks",
-                self.paths.claude_home / "rules" / "boost-awareness.md",
-            ),
-            (
-                self.paths.codex_home / "hooks.json",
-                self.paths.codex_home / "hooks",
-                self.paths.codex_home / "BOOST.md",
-            ),
-        ):
+        for host in self._hosts():
             artifacts.extend(
-                hook_dir / name
-                for name in sorted(self._registered_hook_names(config))
-                if (hook_dir / name).is_file()
+                host.hook_dir / name
+                for name in sorted(self._registered_hook_names(host.config))
+                if (host.hook_dir / name).is_file()
             )
-            if awareness.is_file():
-                artifacts.append(awareness)
+            if host.awareness.is_file():
+                artifacts.append(host.awareness)
         return tuple(artifacts)
 
     @staticmethod
@@ -596,12 +701,10 @@ class BoostIntegration:
         return tuple(shadowing)
 
     def _forbidden_graph_evidence(self) -> bool:
-        candidates = (
-            self.paths.claude_home / "settings.json",
-            self.paths.claude_home.parent / ".claude.json",
-            self.paths.codex_home / "config.toml",
-            self.paths.codex_home / "hooks.json",
-        )
+        candidates: list[Path] = []
+        for host in self._hosts():
+            candidates.append(host.config)
+            candidates.extend(host.extra_graph)
         for path in candidates:
             try:
                 content = path.read_text(encoding="utf-8")

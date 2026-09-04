@@ -1,10 +1,12 @@
 import json
 import os
 import re
+import stat
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tests.support import agentbot_paths
 
@@ -232,6 +234,80 @@ class ClaudeStatuslineTests(unittest.TestCase):
         self.assertEqual("dark", settings["theme"])
         self.assertEqual("opus", settings["model"])
         self.assertEqual("~/.claude/statusline-command.sh", settings["statusLine"]["command"])
+
+    def test_settings_fsync_failure_preserves_original_json_and_mode(self) -> None:
+        from src.claude_statusline import install_claude_statusline
+
+        self.claude_home.mkdir(parents=True)
+        settings_path = self.claude_home / "settings.json"
+        original = json.dumps({"theme": "dark", "model": "opus"}, indent=2) + "\n"
+        settings_path.write_text(original, encoding="utf-8")
+        os.chmod(settings_path, 0o640)
+        real_fsync = os.fsync
+
+        def fail_settings_fsync(fd: int) -> None:
+            try:
+                name = os.readlink(f"/proc/self/fd/{fd}")
+            except OSError:
+                name = ""
+            if "settings.json" in Path(name).name:
+                raise OSError("temporary write failed")
+            real_fsync(fd)
+
+        with (
+            mock.patch("os.fsync", side_effect=fail_settings_fsync),
+            self.assertRaisesRegex(OSError, "temporary write failed"),
+        ):
+            install_claude_statusline(self._paths())
+
+        self.assertEqual(original, settings_path.read_text(encoding="utf-8"))
+        self.assertEqual(0o640, stat.S_IMODE(settings_path.stat().st_mode))
+        self.assertEqual(
+            [],
+            list(self.claude_home.glob(".settings.json.agentbot-*")),
+        )
+
+    def test_settings_replace_failure_preserves_original_json(self) -> None:
+        from src.claude_statusline import install_claude_statusline
+
+        self.claude_home.mkdir(parents=True)
+        settings_path = self.claude_home / "settings.json"
+        original = json.dumps({"theme": "dark", "model": "opus"}, indent=2) + "\n"
+        settings_path.write_text(original, encoding="utf-8")
+        real_replace = os.replace
+
+        def fail_settings_replace(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> None:
+            if Path(dst).name == "settings.json":
+                raise OSError("replace failed")
+            real_replace(src, dst)
+
+        with (
+            mock.patch("os.replace", side_effect=fail_settings_replace),
+            self.assertRaisesRegex(OSError, "replace failed"),
+        ):
+            install_claude_statusline(self._paths())
+
+        self.assertEqual(original, settings_path.read_text(encoding="utf-8"))
+        json.loads(settings_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            [],
+            list(self.claude_home.glob(".settings.json.agentbot-*")),
+        )
+
+    def test_settings_symlink_destination_is_rejected(self) -> None:
+        from src.claude_statusline import install_claude_statusline
+
+        self.claude_home.mkdir(parents=True)
+        real_settings = self.root / "real-settings.json"
+        original = json.dumps({"theme": "dark"}, indent=2) + "\n"
+        real_settings.write_text(original, encoding="utf-8")
+        (self.claude_home / "settings.json").symlink_to(real_settings)
+
+        with self.assertRaisesRegex(ValueError, "symlink"):
+            install_claude_statusline(self._paths())
+
+        self.assertEqual(original, real_settings.read_text(encoding="utf-8"))
+        self.assertTrue((self.claude_home / "settings.json").is_symlink())
 
     def test_install_preserves_foreign_statusline_command(self) -> None:
         from src.claude_statusline import install_claude_statusline

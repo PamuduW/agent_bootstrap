@@ -10,6 +10,7 @@ import stat
 from dataclasses import dataclass
 from pathlib import Path
 
+from .atomic_io import write_text_atomic
 from .models import DoctorIssue
 from .paths import AgentbotPaths
 
@@ -259,13 +260,13 @@ def _sync_statusline_script(destination: Path, desired: str) -> str:
             _ensure_executable(destination)
             return "preserved"
         if existing != desired:
-            destination.write_text(desired, encoding="utf-8")
+            write_text_atomic(destination, desired)
             _ensure_executable(destination)
             return "updated"
         _ensure_executable(destination)
         return "unchanged"
 
-    destination.write_text(desired, encoding="utf-8")
+    write_text_atomic(destination, desired)
     _ensure_executable(destination)
     return "created"
 
@@ -317,7 +318,11 @@ def _ensure_statusline_settings(settings_path: Path) -> str:
         data["statusLine"] = desired_block
 
     settings_path.parent.mkdir(parents=True, exist_ok=True)
-    settings_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    write_text_atomic(
+        settings_path,
+        json.dumps(data, indent=2) + "\n",
+        backup=True,
+    )
     return "updated"
 
 

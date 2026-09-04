@@ -61,7 +61,10 @@ class Diagnostics:
             global_lock_exists=self.paths.global_skill_lock.exists(),
             global_lock_skills=self._count_global_lock_skills(self.paths),
             managed_skill_count=len(facts.managed_names),
-            manual_skill_count=len(facts.prune_candidates),
+            manual_skill_count=sum(
+                1 for candidate in facts.prune_candidates if candidate.reason == "manual"
+            ),
+            prune_candidate_count=len(facts.prune_candidates),
             claude_bridge_links=claude_bridge_links,
             claude_statusline_state=facts.statusline.status_label,
             issues=issues,
@@ -258,6 +261,7 @@ class Diagnostics:
             "global_lock_skills": snapshot.global_lock_skills,
             "managed_skill_count": snapshot.managed_skill_count,
             "manual_skill_count": snapshot.manual_skill_count,
+            "prune_candidate_count": snapshot.prune_candidate_count,
             "claude_bridge_links": snapshot.claude_bridge_links,
             "claude_statusline_state": snapshot.claude_statusline_state,
             "doctor_issue_count": len(snapshot.issues),

@@ -32,6 +32,7 @@ class DiagnosticsSnapshot:
     claude_bridge_links: int
     claude_statusline_state: str
     issues: tuple[DoctorIssue, ...]
+    prune_candidate_count: int = 0
 
 
 @dataclass(frozen=True)

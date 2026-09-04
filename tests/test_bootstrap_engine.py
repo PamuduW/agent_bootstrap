@@ -449,6 +449,7 @@ sources:
         # Four manual directories plus two stale pins already present in this
         # fixture; the stamped Graphify integration is protected.
         self.assertEqual(6, summary["manual_skill_count"])
+        self.assertEqual(6, summary["prune_candidate_count"])
 
 
 if __name__ == "__main__":

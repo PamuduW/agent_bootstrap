@@ -1,8 +1,14 @@
+import io
 import json
 import unittest
 from unittest import mock
 
-from tests.support import isolated_agentbot_paths, write_skills_manifest
+from tests.support import (
+    create_skill,
+    isolated_agentbot_paths,
+    write_global_lock,
+    write_skills_manifest,
+)
 
 
 class DiagnosticsTests(unittest.TestCase):
@@ -37,7 +43,51 @@ class DiagnosticsTests(unittest.TestCase):
             messages = [issue.message for issue in snapshot.issues]
             self.assertTrue(any("Orphaned skill 'leftover'" in item for item in messages))
             self.assertFalse(any("Manual skill 'leftover'" in item for item in messages))
+            self.assertEqual(0, snapshot.manual_skill_count)
+            self.assertEqual(1, snapshot.prune_candidate_count)
+
+    def test_status_counts_only_manual_prune_candidates(self) -> None:
+        from src.cli import print_status_json
+        from src.diagnostics import Diagnostics
+
+        with isolated_agentbot_paths() as (root, paths):
+            write_skills_manifest(
+                root,
+                sources=(
+                    "sources:\n"
+                    "  - id: owner\n"
+                    "    repo: owner/repo\n"
+                    "    skills: all\n"
+                    "    exclude:\n"
+                    "      - dropped\n"
+                ),
+            )
+            for name in ("keeper", "dropped", "leftover", "handmade"):
+                create_skill(paths, name)
+            write_global_lock(
+                paths,
+                {
+                    "keeper": {"source": "owner/repo"},
+                    "dropped": {"source": "owner/repo"},
+                    "leftover": {"source": "gone/repo"},
+                    "ghost": {"source": "owner/repo"},
+                },
+            )
+
+            diagnostics = Diagnostics(paths)
+            snapshot = diagnostics.collect()
+            summary = diagnostics.status_summary()
+            stdout = io.StringIO()
+            with mock.patch("sys.stdout", stdout):
+                print_status_json(diagnostics)
+            payload = json.loads(stdout.getvalue())
+
             self.assertEqual(1, snapshot.manual_skill_count)
+            self.assertEqual(4, snapshot.prune_candidate_count)
+            self.assertEqual(1, summary["manual_skill_count"])
+            self.assertEqual(4, summary["prune_candidate_count"])
+            self.assertEqual(1, payload["manual_skill_count"])
+            self.assertEqual(4, payload["prune_candidate_count"])
 
     def test_collect_reads_shared_general_diagnostics_facts_once(self) -> None:
         from src.claude_statusline import StatuslineState

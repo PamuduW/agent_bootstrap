@@ -26,6 +26,48 @@ def _sandboxed(root: Path) -> AgentbotPaths:
     )
 
 
+class PathConstructionGuardTests(unittest.TestCase):
+    """Tests must not build AgentbotPaths positionally.
+
+    Break caught: `AgentbotPaths(root, root / "codex", ...)` looks sandboxed but
+    leaves `config_home` and `agents_home` at their real-home defaults, so the
+    suite read and wrote the operator's own ~/.agents skill lock. That stayed
+    invisible while nothing in the covered path wrote the lock, and surfaced the
+    moment `Lifecycle.install()` began migrating renamed source pins.
+    """
+
+    def test_no_test_builds_agentbot_paths_without_the_injected_homes(self) -> None:
+        import ast
+
+        tests_root = Path(__file__).resolve().parent
+        offenders = []
+        for module in sorted(tests_root.rglob("*.py")):
+            if module.name in {"support.py", Path(__file__).name}:
+                continue
+            tree = ast.parse(module.read_text(encoding="utf-8"), filename=str(module))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                name = node.func.id if isinstance(node.func, ast.Name) else None
+                if name != "AgentbotPaths":
+                    continue
+                keywords = {keyword.arg for keyword in node.keywords}
+                positional = len(node.args)
+                # config_home is the fifth positional parameter and agents_home
+                # the sixth, so a long positional call is injected too.
+                if ("config_home" in keywords or positional >= 5) and (
+                    "agents_home" in keywords or positional >= 6
+                ):
+                    continue
+                offenders.append(f"{module.name}:{node.lineno}")
+        self.assertEqual(
+            [],
+            offenders,
+            "use tests.support.agentbot_paths(root), or pass agents_home and "
+            "config_home explicitly",
+        )
+
+
 class PathIsolationTests(unittest.TestCase):
     def test_every_managed_path_stays_inside_an_injected_root(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -58,6 +58,8 @@ class ReconcileApplyTests(unittest.TestCase):
             codex_home=self.codex,
             claude_home=self.claude,
             cursor_home=self.root / "cursor",
+            config_home=self.root / ".config" / "agentbot",
+            agents_home=self.root / ".agents",
         )
         patches = (
             mock.patch.object(type(paths), "agents_skills_home", new_callable=lambda: property(lambda _self: self.agents)),

@@ -114,6 +114,7 @@ class CliTests(unittest.TestCase):
                 codex_home=home / ".codex",
                 claude_home=home / ".claude",
                 cursor_home=home / ".cursor",
+                config_home=home / ".config" / "agentbot",
                 agents_home=home / ".agents",
             )
             paths.agents_skills_home.mkdir(parents=True)
@@ -147,6 +148,7 @@ class CliTests(unittest.TestCase):
                 codex_home=home / ".codex",
                 claude_home=home / ".claude",
                 cursor_home=home / ".cursor",
+                config_home=home / ".config" / "agentbot",
                 agents_home=home / ".agents",
             )
             paths.agents_skills_home.mkdir(parents=True)
@@ -534,7 +536,14 @@ class CliTests(unittest.TestCase):
         from src.models import DiagnosticsSnapshot, InstallOutcome, OutputRefreshOutcome
         from src.paths import AgentbotPaths
 
-        paths = AgentbotPaths(Path("/repo"), Path("/codex"), Path("/claude"), Path("/cursor"))
+        paths = AgentbotPaths(
+            Path("/repo"),
+            Path("/codex"),
+            Path("/claude"),
+            Path("/cursor"),
+            config_home=Path("/config/agentbot"),
+            agents_home=Path("/agents"),
+        )
         outcome = InstallOutcome(
             skills=(),
             graphify=GraphifyStatus(

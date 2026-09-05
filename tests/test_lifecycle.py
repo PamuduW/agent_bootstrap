@@ -3,6 +3,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from tests.support import agentbot_paths
+
 
 class LifecycleTests(unittest.TestCase):
     def test_one_injected_runner_reaches_lifecycle_installer_and_workspace(self) -> None:
@@ -10,7 +12,6 @@ class LifecycleTests(unittest.TestCase):
         from src.command_runner import CommandResult
         from src.graphify import GraphifyStatus
         from src.lifecycle import Lifecycle
-        from src.paths import AgentbotPaths
         from src.workspace_service import WorkspaceReport
 
         with tempfile.TemporaryDirectory() as temporary:
@@ -36,7 +37,7 @@ class LifecycleTests(unittest.TestCase):
                 (Path(__file__).parents[1] / "base" / "AGENTS.md").read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
-            paths = AgentbotPaths(root, root / "codex", root / "claude", root / "cursor")
+            paths = agentbot_paths(root)
             runner = mock.Mock()
 
             def run(argv, **_kwargs):
@@ -83,11 +84,10 @@ class LifecycleTests(unittest.TestCase):
         from src.graphify import GraphifyStatus
         from src.lifecycle import Lifecycle
         from src.models import DiagnosticsSnapshot, OutputRefreshOutcome
-        from src.paths import AgentbotPaths
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            paths = AgentbotPaths(root, root / "codex", root / "claude", root / "cursor")
+            paths = agentbot_paths(root)
             events: list[str] = []
             graphify_status = GraphifyStatus(
                 "not-installed",

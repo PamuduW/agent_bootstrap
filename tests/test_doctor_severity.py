@@ -17,7 +17,14 @@ class DoctorSeverityTests(unittest.TestCase):
             root = Path(temporary)
             (root / "global").mkdir()
             (root / "global/AGENTS.md").write_text("# baseline\n", encoding="utf-8")
-            paths = AgentbotPaths(root, root / "codex", root / "claude", root / "cursor")
+            paths = AgentbotPaths(
+                root,
+                root / "codex",
+                root / "claude",
+                root / "cursor",
+                config_home=root / ".config" / "agentbot",
+                agents_home=root / ".agents",
+            )
             status = BoostStatus(
                 "unsafe-config",
                 root / "boost",
@@ -46,7 +53,14 @@ class DoctorSeverityTests(unittest.TestCase):
             root = Path(temporary)
             (root / "global").mkdir()
             (root / "global/AGENTS.md").write_text("# baseline\n", encoding="utf-8")
-            paths = AgentbotPaths(root, root / "codex", root / "claude", root / "cursor")
+            paths = AgentbotPaths(
+                root,
+                root / "codex",
+                root / "claude",
+                root / "cursor",
+                config_home=root / ".config" / "agentbot",
+                agents_home=root / ".agents",
+            )
             # `_find_cli` falls back to PATH, which is the developer's real PATH
             # here -- without this the result depends on whether the machine
             # running the suite happens to have Boost installed.
@@ -149,6 +163,7 @@ class DoctorSeverityTests(unittest.TestCase):
                 root / "codex",
                 root / "claude",
                 root / "cursor",
+                config_home=home / ".config" / "agentbot",
                 agents_home=home / ".agents",
             )
 
@@ -175,6 +190,7 @@ class DoctorSeverityTests(unittest.TestCase):
                 root / "codex",
                 root / "claude",
                 root / "cursor",
+                config_home=home / ".config" / "agentbot",
                 agents_home=home / ".agents",
             )
 
@@ -204,6 +220,7 @@ class DoctorSeverityTests(unittest.TestCase):
                 root / "codex",
                 root / "claude",
                 root / "cursor",
+                config_home=home / ".config" / "agentbot",
                 agents_home=home / ".agents",
             )
             service = Diagnostics(paths)
@@ -260,6 +277,7 @@ class DoctorSeverityTests(unittest.TestCase):
                 root / "codex",
                 root / "claude",
                 root / "cursor",
+                config_home=root / ".config" / "agentbot",
                 agents_home=agents,
             )
 

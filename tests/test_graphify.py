@@ -53,6 +53,7 @@ class GraphifyIntegrationTests(unittest.TestCase):
             self.root / "codex",
             self.root / "claude",
             self.root / "cursor",
+            config_home=self.home / ".config" / "agentbot",
             agents_home=self.home / ".agents",
         )
 

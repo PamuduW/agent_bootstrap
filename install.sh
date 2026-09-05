@@ -405,6 +405,11 @@ EOF
 }
 
 main() {
+	# Record where the operator actually invoked us from before leaving it.
+	# run_cli needs the checkout as its working directory, so without this the
+	# CLI resolves every relative workspace path against the checkout instead.
+	AGENTBOT_CALLER_PWD="$PWD"
+	export AGENTBOT_CALLER_PWD
 	cd "$REPO_ROOT"
 
 	# This must happen in main: `set --` inside a helper only changes that

@@ -176,16 +176,36 @@ def _handle_update(context: CommandContext) -> int:
     return 1 if _workspace_report_has_failures(workspace_report) else 0
 
 
+def caller_path(value: str) -> Path:
+    """Resolve a user-supplied path against the directory the operator ran from.
+
+    `install.sh` cd's to the Agentbot checkout before dispatching, so the
+    process working directory is never the operator's. It exports the original
+    directory first; without this, every relative workspace path -- including
+    `boot`'s `.` default -- silently resolved to the Agentbot checkout itself.
+    """
+    path = Path(value).expanduser()
+    if path.is_absolute():
+        return path
+    caller = os.environ.get("AGENTBOT_CALLER_PWD")
+    if caller:
+        base = Path(caller)
+        if base.is_absolute() and base.is_dir():
+            return base / path
+    return path
+
+
 def _handle_workspace(context: CommandContext) -> int:
     args = context.args
     targets = parse_workspace_targets(args.targets)
+    path = caller_path(args.path)
     if args.yes:
         result = context.lifecycle.apply_workspace(
-            Path(args.path), profile=args.profile, targets=targets, register=True
+            path, profile=args.profile, targets=targets, register=True
         )
     else:
         result = context.lifecycle.preview_workspace(
-            Path(args.path), profile=args.profile, targets=targets
+            path, profile=args.profile, targets=targets
         )
     print_workspace_report(result)
     return 1 if result.status in {"conflict", "failed"} else 0
@@ -193,19 +213,24 @@ def _handle_workspace(context: CommandContext) -> int:
 
 def _handle_boot(context: CommandContext) -> int:
     args = context.args
-    target = Path(args.path)
+    target = caller_path(args.path)
     if not target.is_dir() or not os.access(target, os.W_OK):
         raise ValueError(f"boot target must be a writable directory: {target}")
     selectors_seen = args.agents or args.claude or args.cursor
-    targets = ["agents"]
-    if not selectors_seen or args.claude:
-        targets.append("claude")
-    if not selectors_seen or args.cursor:
-        targets.append("cursor")
+    # No selector means the profile decides. Hardcoding the full target list
+    # here rendered the opt-in Cursor rule into every booted workspace.
+    targets: tuple[str, ...] | None = None
+    if selectors_seen:
+        selected = ["agents"]
+        if args.claude:
+            selected.append("claude")
+        if args.cursor:
+            selected.append("cursor")
+        targets = tuple(selected)
     result = context.lifecycle.apply_workspace(
         target,
         profile=args.profile,
-        targets=tuple(targets),
+        targets=targets,
         register=True,
     )
     print_workspace_report(result)
@@ -215,7 +240,7 @@ def _handle_boot(context: CommandContext) -> int:
 def _handle_workspaces(context: CommandContext) -> int:
     args = context.args
     if args.remove:
-        print_workspace_removed(context.lifecycle.remove_workspace(Path(args.remove)))
+        print_workspace_removed(context.lifecycle.remove_workspace(caller_path(args.remove)))
     elif args.paths0:
         for record in context.lifecycle.list_workspaces():
             sys.stdout.write(f"{record.path}\0")
@@ -234,7 +259,7 @@ def _handle_resync(context: CommandContext) -> int:
         raise ValueError("resync requires --all or at least one PATH")
     report = context.lifecycle.resync_workspaces(
         apply=bool(args.yes),
-        paths=() if args.all else tuple(Path(path) for path in args.paths),
+        paths=() if args.all else tuple(caller_path(path) for path in args.paths),
     )
     print_workspace_resync_report(report)
     return 1 if any(item.status in {"conflict", "failed"} for item in report.results) else 0
@@ -360,8 +385,16 @@ def build_parser() -> argparse.ArgumentParser:
         dest="agents",
         help="Select only canonical AGENTS.md unless combined with another selector",
     )
-    boot.add_argument("--claude", action="store_true", help="Include generated Claude output")
-    boot.add_argument("--cursor", action="store_true", help="Include generated Cursor rules")
+    boot.add_argument(
+        "--claude",
+        action="store_true",
+        help="Include generated Claude output (overrides the profile defaults)",
+    )
+    boot.add_argument(
+        "--cursor",
+        action="store_true",
+        help="Include generated Cursor rules (overrides the profile defaults)",
+    )
     boot.add_argument("path", nargs="?", default=".", help="Workspace directory")
 
     workspaces = subparsers.add_parser(

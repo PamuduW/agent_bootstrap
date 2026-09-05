@@ -122,9 +122,16 @@ test_boot_selectors_and_atomic_validation() {
 	local target="$TEST_ROOT/boot-target" config="$TEST_ROOT/boot-config" rc
 	mkdir -p "$target"
 	XDG_CONFIG_HOME="$config" AGENTBOT_HOME="$ROOT" "$AGENTBOT" boot "$target" >/dev/null
-	[[ -f "$target/AGENTS.md" && -f "$target/CLAUDE.md" && -f "$target/.cursor/rules/agentbot-policy.mdc" ]] || return 1
+	[[ -f "$target/AGENTS.md" && -f "$target/CLAUDE.md" ]] || return 1
+	# safe-default lists cursor as allowed, not default. A bare boot must honour
+	# that; it used to hardcode every target and render the rule regardless.
+	[[ ! -e "$target/.cursor/rules/agentbot-policy.mdc" ]] || return 1
 	# Copilot is no longer a supported target; no boot path may produce one.
 	[[ ! -e "$target/.github/copilot-instructions.md" ]] || return 1
+	rm -rf "$target" "$config"
+	mkdir -p "$target"
+	XDG_CONFIG_HOME="$config" AGENTBOT_HOME="$ROOT" "$AGENTBOT" boot --cursor "$target" >/dev/null
+	[[ -f "$target/.cursor/rules/agentbot-policy.mdc" && ! -e "$target/CLAUDE.md" ]] || return 1
 	rm -rf "$target" "$config"
 	mkdir -p "$target"
 	set +e
@@ -132,6 +139,19 @@ test_boot_selectors_and_atomic_validation() {
 	rc=$?
 	set -e
 	[[ "$rc" -ne 0 && ! -e "$target/AGENTS.md" && ! -e "$target/CLAUDE.md" ]]
+}
+
+test_workspace_paths_resolve_against_the_caller_directory() {
+	# Break caught: install.sh cd's to the checkout, so a relative workspace
+	# path -- including boot's "." default -- rendered into Agentbot itself.
+	local target="$TEST_ROOT/caller-target" config="$TEST_ROOT/caller-config" output
+	mkdir -p "$target/nested"
+	(cd "$target" && XDG_CONFIG_HOME="$config" AGENTBOT_HOME="$ROOT" "$AGENTBOT" boot >/dev/null)
+	[[ -f "$target/AGENTS.md" ]] || return 1
+	[[ ! -e "$ROOT/AGENTS_temp.md" ]] || return 1
+	output="$(cd "$target" && XDG_CONFIG_HOME="$config" AGENTBOT_HOME="$ROOT" \
+		NO_COLOR=1 "$AGENTBOT" workspace nested)"
+	[[ "$output" == *"$target/nested"* ]]
 }
 
 test_install_repo_gate_link_and_failure_status() (
@@ -293,6 +313,7 @@ check 'public dispatcher preserves commands and exit statuses' test_dispatch_mat
 check 'token command opens the existing token menu' test_token_route_loads_existing_menu
 check 'install.sh forwards public commands unchanged' test_install_forwards_public_commands
 check 'boot selectors render safely and invalid input is atomic' test_boot_selectors_and_atomic_validation
+check 'workspace paths resolve against the caller directory' test_workspace_paths_resolve_against_the_caller_directory
 check 'install gates backend work, links launcher, and reports failure truthfully' test_install_repo_gate_link_and_failure_status
 check 'launcher linking preserves foreign paths and verifies owned targets' test_link_agentbot_only_replaces_owned_launchers
 check 'one backend remains and help documents the public surface' test_one_backend_and_complete_help

@@ -218,10 +218,10 @@ class CliTests(unittest.TestCase):
 
     @patch("src.cli.default_paths")
     @patch("src.cli.Lifecycle")
-    def test_boot_delegates_selector_defaults_to_the_workspace_lifecycle(
+    def test_boot_defers_target_selection_to_the_active_profile(
         self, lifecycle_type, _default_paths
     ) -> None:
-        """Break caught: shell-owned boot parsing drifts from the Python workspace contract."""
+        """Break caught: boot hardcoded every target and ignored the profile defaults."""
         from src.workspace_service import WorkspaceResult
 
         with tempfile.TemporaryDirectory() as temporary:
@@ -241,7 +241,7 @@ class CliTests(unittest.TestCase):
         lifecycle.apply_workspace.assert_called_once_with(
             target,
             profile=None,
-            targets=("agents", "claude", "cursor"),
+            targets=None,
             register=True,
         )
 
@@ -274,6 +274,81 @@ class CliTests(unittest.TestCase):
             profile=None,
             targets=("agents", "cursor"),
             register=True,
+        )
+
+    def test_caller_path_resolves_relative_paths_against_the_invoking_directory(self) -> None:
+        """Break caught: install.sh cd's to the checkout, so "." meant Agentbot itself."""
+        from src.cli import caller_path
+
+        with tempfile.TemporaryDirectory() as temporary:
+            caller = Path(temporary) / "caller"
+            (caller / "nested").mkdir(parents=True)
+            with patch.dict(os.environ, {"AGENTBOT_CALLER_PWD": str(caller)}):
+                self.assertEqual(caller / ".", caller_path("."))
+                self.assertEqual(caller / "nested", caller_path("nested"))
+                self.assertEqual(Path("/absolute/repo"), caller_path("/absolute/repo"))
+
+    def test_caller_path_ignores_an_unusable_caller_directory(self) -> None:
+        """Break caught: a stale or relative caller value silently redirected the render."""
+        from src.cli import caller_path
+
+        with tempfile.TemporaryDirectory() as temporary:
+            missing = Path(temporary) / "gone"
+            for value in (str(missing), "relative/dir", ""):
+                with self.subTest(value=value):
+                    with patch.dict(os.environ, {"AGENTBOT_CALLER_PWD": value}):
+                        self.assertEqual(Path("nested"), caller_path("nested"))
+            with patch.dict(os.environ, {}, clear=True):
+                self.assertEqual(Path("nested"), caller_path("nested"))
+
+    @patch("src.cli.default_paths")
+    @patch("src.cli.Lifecycle")
+    def test_boot_default_path_targets_the_caller_directory(
+        self, lifecycle_type, _default_paths
+    ) -> None:
+        """Break caught: a bare boot rendered into the Agentbot checkout, not the repository."""
+        from src.workspace_service import WorkspaceResult
+
+        with tempfile.TemporaryDirectory() as temporary:
+            caller = Path(temporary) / "caller"
+            caller.mkdir()
+            lifecycle = MagicMock()
+            lifecycle.apply_workspace.return_value = WorkspaceResult(
+                caller, "applied", (), "rendered"
+            )
+            lifecycle_type.return_value = lifecycle
+
+            with patch.dict(os.environ, {"AGENTBOT_CALLER_PWD": str(caller)}):
+                rc, _stdout, stderr = run_cli_main(["agentbot", "boot"])
+
+        self.assertEqual(0, rc, stderr)
+        self.assertEqual(caller / ".", lifecycle.apply_workspace.call_args.args[0])
+
+    @patch("src.cli.default_paths")
+    @patch("src.cli.Lifecycle")
+    def test_workspace_relative_path_targets_the_caller_directory(
+        self, lifecycle_type, _default_paths
+    ) -> None:
+        """Break caught: `agentbot workspace .` previewed the Agentbot checkout."""
+        from src.workspace_service import WorkspaceResult
+
+        with tempfile.TemporaryDirectory() as temporary:
+            caller = Path(temporary) / "caller"
+            (caller / "nested").mkdir(parents=True)
+            lifecycle = MagicMock()
+            lifecycle.preview_workspace.return_value = WorkspaceResult(
+                caller / "nested", "preview", (), "previewed"
+            )
+            lifecycle_type.return_value = lifecycle
+
+            with patch.dict(os.environ, {"AGENTBOT_CALLER_PWD": str(caller)}):
+                rc, _stdout, stderr = run_cli_main(["agentbot", "workspace", "nested"])
+
+        self.assertEqual(0, rc, stderr)
+        lifecycle.preview_workspace.assert_called_once_with(
+            caller / "nested",
+            profile=None,
+            targets=None,
         )
 
     def test_command_specs_cover_parser_and_public_dispatcher(self) -> None:

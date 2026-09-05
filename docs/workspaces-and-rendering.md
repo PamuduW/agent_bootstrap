@@ -30,6 +30,11 @@ successful apply. `agentbot resync` refreshes registered workspaces. Both flows
 preview unless `--yes` authorizes writes. Removing a registry record never
 deletes workspace files.
 
+Relative paths -- including `boot`'s current-directory default -- resolve
+against the directory the command was invoked from, not the Agentbot checkout.
+`boot` renders the active profile's `default_targets` unless a selector flag
+overrides them.
+
 ## Global outputs
 
 Global Codex and Claude policy adapters, Claude skill links, and the managed

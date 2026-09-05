@@ -104,8 +104,8 @@ COMMANDS: tuple[CommandSpec, ...] = (
         "Create or preserve Agentbot policy outputs in one target and register it.",
         (
             option("--agents | --codex", "Include canonical AGENTS.md.", "always"),
-            option("--claude", "Include generated Claude output.", "selected"),
-            option("--cursor", "Include generated Cursor rules.", "selected"),
+            option("--claude", "Include generated Claude output.", "profile default"),
+            option("--cursor", "Include generated Cursor rules.", "profile default"),
             option("--profile NAME", "Select a workspace profile.", "active profile"),
             option("TARGET", "Target directory.", "current directory"),
         ),

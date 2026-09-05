@@ -21,8 +21,9 @@ cd /any/path/agent_bootstrap
 ```
 
 Then in any project folder or project repo: `agentbot boot`. It creates or
-preserves `AGENTS.md`, renders the default Claude/Cursor surfaces, and records
-the canonical folder or Git root in private local state.
+preserves `AGENTS.md`, renders the compatibility surfaces the active profile
+lists in `default_targets`, and records the canonical folder or Git root in
+private local state. A selector flag overrides the profile for that run.
 
 Useful explicit selections:
 

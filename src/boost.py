@@ -287,7 +287,14 @@ class BoostIntegration:
             updated = self._set_section_bool(
                 updated, f'feature_flags."{flag}"', "user", value
             )
-        parsed = tomllib.loads(updated)
+        try:
+            parsed = tomllib.loads(updated)
+        except tomllib.TOMLDecodeError as error:
+            # The input parsed a moment ago, so an unparseable result is our
+            # rendering at fault. Say so rather than blaming the user's file.
+            raise ValueError(
+                f"Agentbot produced an invalid Boost config while pinning safety keys: {error}"
+            ) from error
         if parsed.get("tracing", {}).get("upload") is not False:
             raise ValueError("Boost tracing.upload could not be disabled")
         if parsed.get("update", {}).get("auto_update") is not False:
@@ -328,7 +335,17 @@ class BoostIntegration:
             )
         if current.state == "forbidden":
             return current
-        self.ensure_safe_config()
+        try:
+            self.ensure_safe_config()
+        except ValueError as error:
+            # An unusable config must not abort the caller. Lifecycle.install()
+            # calls this between skills and managed outputs, and an exception
+            # here used to leave the rest of the install unrun.
+            return replace(
+                self.status(),
+                state="broken",
+                message=f"Boost config could not be made safe: {error}",
+            )
         selected = [host for host in self._hosts() if self._cli_present(host.cli_names)]
         if not selected:
             return self.status()
@@ -772,5 +789,10 @@ class BoostIntegration:
                 newline = match.group(2) or ""
                 lines[index] = f"{match.group(1)}{key} = {rendered}{newline}"
                 return "".join(lines)
+        # A final line with no newline would otherwise absorb the inserted key
+        # and produce `something = 1upload = false`. The absent-section branch
+        # above already normalizes this; the insert path has to as well.
+        if section_end > 0 and not lines[section_end - 1].endswith("\n"):
+            lines[section_end - 1] += "\n"
         lines.insert(section_end, f"{key} = {rendered}\n")
         return "".join(lines)

@@ -11,6 +11,7 @@ from typing import Any
 
 import yaml
 
+from .atomic_io import write_text_atomic
 from .command_runner import CommandRunner
 from .skill_catalog import discover_checkout_skills, skill_name_from_file
 from .skills_sources import SkillsSourcesConfig
@@ -359,13 +360,15 @@ def apply_reconcile_plan(
     try:
         if explicit_removals:
             manifest_text = _manifest_after_removals(paths.skills_sources_file, explicit_removals)
-            paths.skills_sources_file.write_text(manifest_text, encoding="utf-8")
+            write_text_atomic(paths.skills_sources_file, manifest_text)
             changed.append(paths.skills_sources_file)
             for canonical in (paths.root / "base" / "AGENTS.md", paths.root / "AGENTS.md"):
                 if canonical.exists():
-                    canonical.write_text(
-                        _canonical_after_removals(canonical, {skill for _source, skill in explicit_removals}),
-                        encoding="utf-8",
+                    write_text_atomic(
+                        canonical,
+                        _canonical_after_removals(
+                            canonical, {skill for _source, skill in explicit_removals}
+                        ),
                     )
                     changed.append(canonical)
 
@@ -407,7 +410,7 @@ def apply_reconcile_plan(
 
         if added or removed:
             lock_path.parent.mkdir(parents=True, exist_ok=True)
-            lock_path.write_text(json.dumps(lock, indent=2) + "\n", encoding="utf-8")
+            write_text_atomic(lock_path, json.dumps(lock, indent=2) + "\n")
             changed.append(lock_path)
 
         from .claude_bridge import bridge_claude_skills

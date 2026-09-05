@@ -1149,3 +1149,101 @@ class BoostRepositoryGraphIndexTests(BoostIntegrationTests):
         (cursor / "mcp.json").write_text('{"mcpServers":{"boostgraph":{}}}\n', encoding="utf-8")
         integration = self._integration_type()(self._paths())
         self.assertTrue(integration._forbidden_graph_evidence())
+
+
+class BoostConfigNewlineTests(BoostIntegrationTests):
+    """A config whose last line has no newline used to block every safety key.
+
+    `_set_section_bool` appended the key straight onto that line, producing
+    `something = 1upload = false`. The rendered text then failed to parse, so
+    `ensure_safe_config` raised, `tracing.upload` stayed enabled, and the
+    exception aborted `agentbot install` partway through.
+    """
+
+    def _config(self, text: str) -> Path:
+        path = self.root / ".boost/config.toml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def test_inserting_a_key_never_joins_an_unterminated_final_line(self) -> None:
+        BoostIntegration = self._integration_type()
+        cases = {
+            "no trailing newline": "[tracing]\nsomething = 1",
+            "trailing newline": "[tracing]\nsomething = 1\n",
+            "header only": "[tracing]\n",
+            "header without newline": "[tracing]",
+            "empty file": "",
+            "crlf": "[tracing]\r\nsomething = 1\r\n",
+            "another section follows": "[tracing]\nsomething = 1\n[update]\nauto_update = true\n",
+        }
+        for label, text in cases.items():
+            with self.subTest(case=label):
+                rendered = BoostIntegration._set_section_bool(text, "tracing", "upload", False)
+                parsed = tomllib.loads(rendered)
+                self.assertIs(False, parsed["tracing"]["upload"])
+                self.assertNotIn("1upload", rendered)
+
+    def test_unterminated_config_is_still_pinned_safely(self) -> None:
+        from src.boost import BOOST_FEATURE_POLICY
+
+        BoostIntegration = self._integration_type()
+        config = self._config("[tracing]\nsomething = 1")
+        tomllib.loads(config.read_text(encoding="utf-8"))
+
+        integration = BoostIntegration(self._paths())
+        integration.ensure_safe_config()
+
+        self.assertEqual((True, True), integration._config_flags())
+        parsed = tomllib.loads(config.read_text(encoding="utf-8"))
+        self.assertEqual(1, parsed["tracing"]["something"])
+        for flag, value in BOOST_FEATURE_POLICY.items():
+            self.assertIs(value, parsed["feature_flags"][flag]["user"])
+
+    def test_a_config_that_cannot_be_pinned_reports_broken_instead_of_raising(self) -> None:
+        """Break caught: an unusable Boost config aborted the whole install."""
+        from src.command_runner import CommandResult
+
+        BoostIntegration = self._integration_type()
+        self._config("[tracing]\nupload = false\n")
+        boost = self.root / "boost"
+        boost.write_text("binary", encoding="utf-8")
+        runner = mock.Mock()
+        runner.run.return_value = CommandResult(0, stdout="boost v0.12.6\n")
+
+        integration = BoostIntegration(self._paths(), runner=runner)
+        with (
+            patch_boost_which(boost=boost, present=("claude",)),
+            mock.patch.object(
+                BoostIntegration,
+                "ensure_safe_config",
+                side_effect=ValueError("Boost config is invalid TOML: boom"),
+            ),
+        ):
+            status = integration.setup()
+
+        self.assertEqual("broken", status.state)
+        self.assertIn("could not be made safe", status.message)
+
+    def test_install_completes_when_boost_config_cannot_be_pinned(self) -> None:
+        """Break caught: managed outputs and diagnostics were skipped after a Boost failure."""
+        BoostIntegration = self._integration_type()
+        self._config("[tracing]\nupload = false\n")
+        boost = self.root / "boost"
+        boost.write_text("binary", encoding="utf-8")
+
+        integration = BoostIntegration(self._paths())
+        with (
+            patch_boost_which(boost=boost, present=("claude",)),
+            mock.patch.object(
+                BoostIntegration,
+                "ensure_safe_config",
+                side_effect=ValueError("Boost config is invalid TOML: boom"),
+            ),
+            mock.patch.object(
+                BoostIntegration, "_cli_version", return_value="boost v0.12.6"
+            ),
+        ):
+            status = integration.setup_if_cli_available()
+
+        self.assertEqual("broken", status.state)

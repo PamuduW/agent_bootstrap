@@ -558,5 +558,105 @@ sources:
         self.assertNotIn("npm notice", str(raised.exception))
 
 
+class ManagedStateWriteTests(unittest.TestCase):
+    """Managed state files are replaced atomically and never written through a link.
+
+    Break caught: the global skill lock was written with a bare `write_text`,
+    which opens through a symlink and truncates in place. A link planted at the
+    lock path redirected Agentbot's write into an unrelated file, and an
+    interrupted write left the lock truncated.
+    """
+
+    def _fixture(self, root: Path) -> tuple[Path, Path]:
+        agents_home = root / "home" / ".agents"
+        (agents_home / "skills" / "demo").mkdir(parents=True)
+        (agents_home / "skills" / "demo" / "SKILL.md").write_text(
+            "---\nname: demo\n---\n", encoding="utf-8"
+        )
+        checkout = root / "checkout"
+        (checkout / "demo").mkdir(parents=True)
+        (checkout / "demo" / "SKILL.md").write_text("---\nname: demo\n---\n", encoding="utf-8")
+        return agents_home, checkout
+
+    def _source(self):
+        from src.skills_sources import SkillSourceEntry
+
+        return SkillSourceEntry(id="demo-source", repo="owner/repo", skills=["demo"])
+
+    def test_lock_write_refuses_a_symlinked_destination(self) -> None:
+        from src.skills_installer import _record_checkout_lock
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            agents_home, checkout = self._fixture(root)
+            victim = root / "victim.json"
+            victim.write_text('{"important": "user data"}\n', encoding="utf-8")
+            lock_file = agents_home / ".skill-lock.json"
+            lock_file.symlink_to(victim)
+
+            with self.assertRaises(ValueError) as raised:
+                _record_checkout_lock(self._source(), checkout, lock_file)
+
+            self.assertIn("symlink", str(raised.exception))
+            self.assertEqual('{"important": "user data"}\n', victim.read_text(encoding="utf-8"))
+            self.assertTrue(lock_file.is_symlink())
+
+    def test_lock_write_replaces_the_file_atomically(self) -> None:
+        from src.skills_installer import _record_checkout_lock
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            agents_home, checkout = self._fixture(root)
+            lock_file = agents_home / ".skill-lock.json"
+            lock_file.write_text('{"skills": {}}\n', encoding="utf-8")
+
+            _record_checkout_lock(self._source(), checkout, lock_file)
+
+            recorded = json.loads(lock_file.read_text(encoding="utf-8"))
+            self.assertIn("demo", recorded["skills"])
+            self.assertFalse(
+                [entry.name for entry in agents_home.iterdir() if ".agentbot-" in entry.name],
+                "atomic write left a temporary file behind",
+            )
+
+    def test_a_failed_lock_write_leaves_the_original_intact(self) -> None:
+        from src.skills_installer import _record_checkout_lock
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            agents_home, checkout = self._fixture(root)
+            lock_file = agents_home / ".skill-lock.json"
+            original = '{"skills": {"kept": {"source": "owner/other"}}}\n'
+            lock_file.write_text(original, encoding="utf-8")
+
+            with patch("src.skills_installer.write_text_atomic", side_effect=OSError("no space")):
+                with self.assertRaises(OSError):
+                    _record_checkout_lock(self._source(), checkout, lock_file)
+
+            self.assertEqual(original, lock_file.read_text(encoding="utf-8"))
+
+    def test_managed_state_is_never_written_with_a_bare_write_text(self) -> None:
+        """Break caught: a new writer reintroduces the symlink-following path."""
+        source_root = Path(__file__).resolve().parents[1] / "src"
+        # Writes into a freshly created private backup directory, which cannot
+        # be a caller-controlled path.
+        allowed = {("skill_reconcile.py", '(backup / "paths.tsv").write_text')}
+        offenders = []
+        for module in sorted(source_root.rglob("*.py")):
+            if module.name == "atomic_io.py":
+                continue
+            for number, line in enumerate(
+                module.read_text(encoding="utf-8").splitlines(), start=1
+            ):
+                if ".write_text(" not in line:
+                    continue
+                if any(
+                    module.name == name and marker in line for name, marker in allowed
+                ):
+                    continue
+                offenders.append(f"{module.name}:{number}: {line.strip()}")
+        self.assertEqual([], offenders)
+
+
 if __name__ == "__main__":
     unittest.main()

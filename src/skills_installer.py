@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 
+from .atomic_io import write_text_atomic
 from .command_runner import CommandResult, CommandRunner
 from .models import DoctorIssue
 from .paths import AgentbotPaths
@@ -278,7 +279,7 @@ def _record_checkout_lock(source: SkillSourceEntry, checkout: Path, lock_file: P
         }
     lock["version"] = 3
     lock_file.parent.mkdir(parents=True, exist_ok=True)
-    lock_file.write_text(json.dumps(lock, indent=2) + "\n", encoding="utf-8")
+    write_text_atomic(lock_file, json.dumps(lock, indent=2) + "\n")
 
 
 def _lock_skill_names(lock_file: Path) -> set[str] | None:

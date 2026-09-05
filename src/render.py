@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .atomic_io import write_text_atomic
 from .claude_bridge import run_claude_bridge
 from .claude_statusline import (
     STATUSLINE_SCRIPT_NAME,
@@ -191,7 +192,7 @@ def _render_global_output(destination: Path, desired: str) -> None:
 
     if existing is None or GENERATED_AGENTS_HEADER in existing:
         if existing != desired:
-            destination.write_text(desired, encoding="utf-8")
+            write_text_atomic(destination, desired)
     else:
         action = build_review_template_action(str(destination), desired, review_files)
         _apply_review_action(action)
@@ -230,7 +231,7 @@ def _apply_review_action(action: RenderAction) -> None:
         return
     destination = Path(action.relative_path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(action.content or "", encoding="utf-8")
+    write_text_atomic(destination, action.content or "")
 
 
 def _project_skills_lock(paths: AgentbotPaths) -> Path:

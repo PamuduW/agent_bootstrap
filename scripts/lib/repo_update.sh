@@ -222,7 +222,7 @@ repo_update_run() {
 	# Contract: 0 continue, 1 stopped, 2 the checkout changed and all
 	# higher-level work must stop so the user can rerun from the new state.
 	local repo="$1" decision_fn="$2" outcome_name="$3" reason_name="$4"
-	local repository="${5:-agent_bootstrap}"
+	local repository="${5:-agentbot}"
 	local slug="PamuduW/${repository}"
 	local outcome reason rc=0
 

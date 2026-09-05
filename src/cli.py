@@ -61,7 +61,7 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
 
-    command = args.command or "bootstrap"
+    command = args.command or "install"
     if command == "help":
         help_topic = " ".join(getattr(args, "help_topic", ())) or None
         return print_help_command(
@@ -265,8 +265,8 @@ def _handle_resync(context: CommandContext) -> int:
     return 1 if any(item.status in {"conflict", "failed"} for item in report.results) else 0
 
 
-def _handle_bootstrap(context: CommandContext) -> int:
-    return run_bootstrap_command(context.lifecycle, context.paths)
+def _handle_install(context: CommandContext) -> int:
+    return run_agentbot_install(context.lifecycle, context.paths)
 
 
 def _handle_skills(context: CommandContext) -> int:
@@ -300,7 +300,7 @@ COMMAND_HANDLERS: dict[str, Callable[[CommandContext], int]] = {
     "boot": _handle_boot,
     "workspaces": _handle_workspaces,
     "resync": _handle_resync,
-    "bootstrap": _handle_bootstrap,
+    "install": _handle_install,
     "skills": _handle_skills,
 }
 
@@ -324,7 +324,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=argparse.SUPPRESS,
     )
 
-    subparsers.add_parser("bootstrap", help="Run fresh-machine bootstrap flow")
+    subparsers.add_parser("install", help="Install Agentbot into this machine's agent homes")
     status_parser = subparsers.add_parser("status", help="Show skills and global render status")
     status_output = status_parser.add_mutually_exclusive_group()
     status_output.add_argument("--json", action="store_true", dest="status_json")
@@ -680,7 +680,7 @@ def print_skills_error(error: Exception) -> int:
     return 1
 
 
-def run_bootstrap_command(lifecycle: Lifecycle, paths: AgentbotPaths) -> int:
+def run_agentbot_install(lifecycle: Lifecycle, paths: AgentbotPaths) -> int:
     print_header("Install Agentbot", "Agentbot › Install Agentbot")
     outcome = lifecycle.install()
     skills_rc = print_skills_report(list(outcome.skills), title="Skills install")

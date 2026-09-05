@@ -28,7 +28,7 @@ from .skill_catalog import (
     verified_source_checkouts,
 )
 from .skill_reconcile import apply_reconcile_plan, build_reconcile_plan
-from .skills_installer import InstallResult, list_installed_skills
+from .skills_installer import InstallResult, list_installed_skills, migrate_renamed_lock_sources
 from .skills_installer import install_skills as install_skills_default
 from .skills_installer import update_skills as update_skills_default
 from .skills_sources import SkillsSourcesConfig, load_skills_sources
@@ -113,6 +113,10 @@ class Lifecycle:
         )
 
     def install(self) -> InstallOutcome:
+        # Before anything reads ownership: a lock still pinned to a renamed
+        # upstream repository makes its skills look unowned, which shows up as
+        # prune candidates rather than as an error.
+        migrate_renamed_lock_sources(self.paths.global_skill_lock)
         skills = tuple(self._install_skills(self.paths))
         graphify = self.graphify.refresh_if_enabled()
         boost = self.boost.setup_if_cli_available()

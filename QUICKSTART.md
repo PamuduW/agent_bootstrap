@@ -7,16 +7,19 @@ See **[README.md](README.md)** for the full slim bootstrap guide.
 **Sibling of dotfiles (recommended):**
 
 ```bash
-git clone <your-remote>/agent_bootstrap ~/Dev/agent_bootstrap   # next to ~/Dev/dotfiles
-cd ~/Dev/agent_bootstrap
+git clone <your-remote>/agentbot ~/agentbot   # next to ~/dotfiles
+cd ~/agentbot
 ./install.sh install
 ```
+
+`dotfiles full-update` resolves Agentbot as the sibling of the Dotfiles
+checkout, so keep the two directories under the same parent.
 
 **Standalone anywhere:**
 
 ```bash
-git clone <your-remote>/agent_bootstrap /any/path/agent_bootstrap
-cd /any/path/agent_bootstrap
+git clone <your-remote>/agentbot /any/path/agentbot
+cd /any/path/agentbot
 ./install.sh install
 ```
 

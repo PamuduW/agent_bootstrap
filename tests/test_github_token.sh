@@ -184,7 +184,7 @@ test_canary_absent_from_output_and_harness_logs() (
 	: >"$git_log"
 	process_sample="$(ps -o args= -p "$$" 2>/dev/null || true)"
 	diff_sample="$($TEST_REAL_GIT -C "$ROOT" diff --no-ext-diff 2>/dev/null || true)"
-	report_path="${ROOT%/agent_bootstrap}/temp/sdd/task-07-agentbot-token-report.md"
+	report_path="${ROOT%/agentbot}/temp/sdd/task-07-agentbot-token-report.md"
 	[[ "$process_sample" != *"$canary"* ]] || return 1
 	[[ "$diff_sample" != *"$canary"* ]] || return 1
 	if [[ -f "$report_path" ]] && grep -Fq -- "$canary" "$report_path"; then return 1; fi

@@ -24,14 +24,14 @@ case "$cmd" in
   'remote get-url origin')
     case "$scenario" in
       invalid-origin) printf 'https://github.com/other/repo.git\n' ;;
-      token-origin) printf 'https://credential@github.com/PamuduW/agent_bootstrap.git\n' ;;
+      token-origin) printf 'https://credential@github.com/PamuduW/agentbot.git\n' ;;
       alias-origin|alias-wrong-path)
         alias_owner='Other'
         [[ "$scenario" == alias-origin ]] && alias_owner='PamuduW'
-        printf 'git@github-personal:%s/agent_bootstrap.git\n' "$alias_owner"
+        printf 'git@github-personal:%s/agentbot.git\n' "$alias_owner"
         ;;
       absent-origin) exit 2 ;;
-      *) printf 'https://github.com/PamuduW/agent_bootstrap.git\n' ;;
+      *) printf 'https://github.com/PamuduW/agentbot.git\n' ;;
     esac ;;
   'config --global --get-regexp ^url\..*\.insteadof$')
     [[ "$scenario" == alias-origin || "$scenario" == alias-wrong-path ]] &&

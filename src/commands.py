@@ -53,7 +53,7 @@ COMMANDS: tuple[CommandSpec, ...] = (
         ("agentbot install",),
         ("status", "doctor"),
         "public",
-        ("bootstrap",),
+        ("install",),
     ),
     CommandSpec(
         "full",

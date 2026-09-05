@@ -112,13 +112,13 @@ test_repo_update_child_is_authenticated() (
 	grep -q $'^python3\t-m\tsrc\.cli\t--root\t[^\t]*\tupdate\t--dry-run\tvalid=yes\tsource=saved$' "$TEST_COMMAND_LOG"
 )
 
-test_bootstrap_child_is_authenticated() (
+test_agentbot_install_child_is_authenticated() (
 	reset_state
 	write_token_file "$(active_file)" "saved_$(token saved)"
 	AGENTBOT_SOURCE_ONLY=1 source "$ROOT/install.sh"
 	check_skills_deps() { :; }
-	run_bootstrap_backend >/dev/null || return 1
-	grep -q $'^python3\t-m\tsrc\.cli\t--root\t[^\t]*\tbootstrap\tvalid=yes\tsource=saved$' "$TEST_COMMAND_LOG"
+	run_agentbot_install_backend >/dev/null || return 1
+	grep -q $'^python3\t-m\tsrc\.cli\t--root\t[^\t]*\tinstall\tvalid=yes\tsource=saved$' "$TEST_COMMAND_LOG"
 )
 
 test_environment_precedence() (
@@ -207,7 +207,7 @@ expect 'install.sh sources only the local token helper' test_sources_local_helpe
 expect 'mutating skills commands authenticate only their Python child' test_mutating_skills_children_are_authenticated
 expect 'read-only skills commands neither authenticate nor warn' test_readonly_skills_children_are_unwrapped
 expect 'repository update authenticates only the Python update child' test_repo_update_child_is_authenticated
-expect 'bootstrap authenticates only its Python child' test_bootstrap_child_is_authenticated
+expect 'Agentbot install authenticates only its Python child' test_agentbot_install_child_is_authenticated
 expect 'valid environment token takes precedence over saved state' test_environment_precedence
 expect 'stateless installation token reaches only the authenticated child' test_stateless_token_reaches_only_the_authenticated_child
 expect 'child nonzero status propagates unchanged' test_child_status_propagates

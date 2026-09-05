@@ -30,9 +30,10 @@ must use Agentbot and agentbot.
 | Durable memory | workspace `docs/designs/memory/` design | Pending cross-agent memory comparison |
 | Graphify CLI and assistant integration | sibling dotfiles component plus Agentbot integration | Live (Phase 5) |
 
-Agentbot is the installed product and public command. agent_bootstrap remains
-the Git repository and clone directory. AGENTBOT_TUI is the active TUI
-environment variable.
+Agentbot is the product, the public command, the Git repository, and the
+clone directory. The repository was renamed from `agent_bootstrap` to
+`agentbot` on 2026-09-05; GitHub redirects the old clone URL. AGENTBOT_TUI is
+the active TUI environment variable.
 
 ## Phase dependency
 

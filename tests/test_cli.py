@@ -511,7 +511,7 @@ class CliTests(unittest.TestCase):
 
     @patch("src.cli.default_paths")
     @patch("src.cli.Lifecycle")
-    def test_bootstrap_skill_failure_is_a_clean_cli_error(
+    def test_install_skill_failure_is_a_clean_cli_error(
         self, service_type, _default_paths
     ) -> None:
         from src.skills_installer import SkillsInstallError
@@ -520,7 +520,7 @@ class CliTests(unittest.TestCase):
         service.install.side_effect = SkillsInstallError("failed to install source 'test': offline")
         service_type.return_value = service
 
-        rc, _stdout, stderr = run_cli_main(["agentbot", "bootstrap"])
+        rc, _stdout, stderr = run_cli_main(["agentbot", "install"])
 
         self.assertEqual(1, rc)
         self.assertIn("Error: failed to install source 'test': offline", stderr)
@@ -529,7 +529,7 @@ class CliTests(unittest.TestCase):
         from pathlib import Path
 
         from src.boost import BoostStatus
-        from src.cli import run_bootstrap_command
+        from src.cli import run_agentbot_install
         from src.graphify import GraphifyStatus
         from src.models import DiagnosticsSnapshot, InstallOutcome, OutputRefreshOutcome
         from src.paths import AgentbotPaths
@@ -568,7 +568,7 @@ class CliTests(unittest.TestCase):
         output = io.StringIO()
 
         with patch("sys.stdout", output):
-            rc = run_bootstrap_command(lifecycle, paths)
+            rc = run_agentbot_install(lifecycle, paths)
 
         self.assertEqual(0, rc)
         self.assertIn("Agentbot › Install Agentbot", output.getvalue())
@@ -1126,7 +1126,7 @@ class CliTests(unittest.TestCase):
         from src.paths import AgentbotPaths, default_paths
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir) / "agent_bootstrap"
+            root = Path(temp_dir) / "agentbot"
             xdg = Path(temp_dir) / "config"
             with patch.dict(
                 os.environ,

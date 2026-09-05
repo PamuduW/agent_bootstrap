@@ -163,7 +163,7 @@ test_install_repo_gate_link_and_failure_status() (
 		printf -v "$3" '%s' current
 		printf -v "$4" '%s' current
 	}
-	run_bootstrap_backend() {
+	run_agentbot_install_backend() {
 		printf 'backend\n' >>"$calls"
 		return 7
 	}

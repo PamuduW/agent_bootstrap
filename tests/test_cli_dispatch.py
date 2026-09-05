@@ -99,10 +99,10 @@ class HandlerTests(unittest.TestCase):
         self.assertEqual(cli._handle_global(context), 0)
         context.lifecycle.render_global.assert_called_once_with()
 
-    def test_bootstrap_delegates_to_the_bootstrap_command(self):
+    def test_install_delegates_to_the_agentbot_install_command(self):
         context = _context()
-        with mock.patch.object(cli, "run_bootstrap_command", return_value=7) as run:
-            self.assertEqual(cli._handle_bootstrap(context), 7)
+        with mock.patch.object(cli, "run_agentbot_install", return_value=7) as run:
+            self.assertEqual(cli._handle_install(context), 7)
         run.assert_called_once_with(context.lifecycle, context.paths)
 
     def test_skills_delegates_with_the_parsed_subcommand(self):

@@ -24,8 +24,8 @@ python3 -m venv .venv
 ## Quick start
 
 ```bash
-git clone <your-remote>/agent_bootstrap ~/agent_bootstrap
-cd ~/agent_bootstrap
+git clone <your-remote>/agentbot ~/agentbot
+cd ~/agentbot
 ./install.sh install
 ```
 

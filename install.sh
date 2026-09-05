@@ -150,12 +150,12 @@ link_agentbot() {
 	log_info "linked ${target} -> ${source}"
 }
 
-run_bootstrap_backend() {
+run_agentbot_install_backend() {
 	check_skills_deps
 	log_info "installing Agentbot from ${REPO_ROOT}"
 
 	local rc=0
-	github_token_child run_cli bootstrap || rc=$?
+	github_token_child run_cli install || rc=$?
 
 	return "$rc"
 }
@@ -164,7 +164,7 @@ run_install() {
 	run_install_repo_gate || return $?
 	[[ "${AGENTBOT_REPOSITORY_UPDATE_DECLINED:-false}" == true ]] && return 0
 	local rc=0
-	run_bootstrap_backend || rc=$?
+	run_agentbot_install_backend || rc=$?
 	cleanup_owned_old_agentboot_link
 	link_agentbot
 	if ((rc == 0)); then
@@ -264,7 +264,7 @@ run_install_repo_gate() {
 	local update_outcome update_reason repo_rc=0
 	AGENTBOT_REPOSITORY_UPDATE_DECLINED=false
 	AGENTBOT_REPOSITORY_UPDATE_DECLINE_REPORTED=false
-	repo_update_run "$REPO_ROOT" run_install_decision update_outcome update_reason agent_bootstrap || repo_rc=$?
+	repo_update_run "$REPO_ROOT" run_install_decision update_outcome update_reason agentbot || repo_rc=$?
 	case "$repo_rc" in
 	0) return 0 ;;
 	2)
@@ -388,7 +388,7 @@ usage() {
 Usage: ./install.sh <command> [args]
 
   Commands:
-  install                    Run the complete bootstrap and link Agentbot
+  install                    Install Agentbot and link its launcher
   full                       Run install, then update, in one command
   update [--dry-run|--yes]   Run the repository-first update flow
   status [--json]            Show current Agentbot state

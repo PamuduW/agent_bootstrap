@@ -46,7 +46,7 @@ class ProductRenameTests(unittest.TestCase):
         hits = []
         for path in active_files():
             text = path.read_text(encoding="utf-8", errors="replace")
-            if "agent_bootstrap ›" in text or 'prog="agent_bootstrap"' in text:
+            if "agentbot ›" in text and "Agentbot ›" not in text:
                 hits.append(str(path.relative_to(ROOT)))
             if "agentboot" in text and path not in allowed_old_link_files:
                 hits.append(f"{path.relative_to(ROOT)}: agentboot")
@@ -66,20 +66,20 @@ class ProductRenameTests(unittest.TestCase):
                 hits.append(str(path.relative_to(ROOT)))
         self.assertEqual([], hits)
 
-    def test_repository_identity_and_origin_allowlist_remain_agent_bootstrap(self) -> None:
-        """Agentbot must keep trusting exactly PamuduW/agent_bootstrap.
+    def test_repository_identity_and_origin_allowlist_are_agentbot(self) -> None:
+        """Agentbot must keep trusting exactly PamuduW/agentbot.
 
         The URL matching moved into the shared state machine, which is written
         once against an expected-slug argument. The identity is therefore
         asserted in two halves: the adapter supplies the slug, and the shared
         core builds only github.com URLs from it.
         """
-        self.assertEqual("agent_bootstrap", ROOT.name)
+        self.assertEqual("agentbot", ROOT.name)
 
         adapter = (ROOT / "scripts/lib/repo_update.sh").read_text(encoding="utf-8")
-        self.assertIn('repository="${5:-agent_bootstrap}"', adapter)
+        self.assertIn('repository="${5:-agentbot}"', adapter)
         self.assertIn('slug="PamuduW/${repository}"', adapter)
-        self.assertNotIn("PamuduW/agentbot", adapter)
+        self.assertNotIn("agent" "_bootstrap", adapter)
 
         core = (ROOT / "scripts/lib/shared/repo_update.sh").read_text(encoding="utf-8")
         for form in (
@@ -98,7 +98,7 @@ class ProductRenameTests(unittest.TestCase):
         from src.paths import AgentbotPaths, default_paths
 
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary) / "agent_bootstrap"
+            root = Path(temporary) / "agentbot"
             config = Path(temporary) / "config"
             previous_home = os.environ.get("AGENTBOT_HOME")
             previous_config = os.environ.get("XDG_CONFIG_HOME")
@@ -162,7 +162,7 @@ class ProductRenameTests(unittest.TestCase):
             self.assertEqual("keep", old_link.read_text(encoding="utf-8"))
             old_link.unlink()
 
-            for target in (Path(temporary) / "foreign/agentboot", Path(temporary) / "other/agent_bootstrap/bin/agentboot"):
+            for target in (Path(temporary) / "foreign/agentboot", Path(temporary) / "other/agentbot-checkout/bin/agentboot"):
                 old_link.symlink_to(target)
                 self.assertEqual(0, cleanup().returncode)
                 self.assertTrue(old_link.is_symlink())

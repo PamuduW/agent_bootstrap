@@ -105,7 +105,7 @@ def agentbot_paths(root: Path) -> AgentbotPaths:
 @contextmanager
 def isolated_agentbot_paths() -> Iterator[tuple[Path, AgentbotPaths]]:
     with tempfile.TemporaryDirectory() as temporary:
-        root = Path(temporary) / "agent_bootstrap"
+        root = Path(temporary) / "agentbot"
         root.mkdir()
         yield root, agentbot_paths(root)
 

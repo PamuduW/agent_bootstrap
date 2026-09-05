@@ -1,4 +1,4 @@
-# skills.sources.yaml — curated upstream skill sources for agent_bootstrap
+# skills.sources.yaml — curated upstream skill sources for agentbot
 # Install template (every entry):
 #   npx --yes skills add <repo> --skill <name> ... \
 #     -a cursor -a codex -a claude-code -g -y
@@ -119,7 +119,7 @@ sources:
       - prototype
 
   - id: pamudu-agent-bootstrap-skills
-    repo: PamuduW/agent_bootstrap_skills
+    repo: PamuduW/agentbot_skills
     skills: all
 
   - id: gitlab-ci-official

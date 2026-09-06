@@ -352,6 +352,13 @@ class BoostIntegration:
         base = [
             str(current.cli_path),
             "init",
+            # Boost asks for the Online Preview Agreement and Privacy Notice on
+            # first run. Unanswered it sat for the full command timeout and
+            # then failed the install, which on an unattended bootstrap is five
+            # minutes of silence for a question nobody saw. Accepting it is a
+            # deliberate, recorded decision -- see docs/skills.md -- not a
+            # prompt Agentbot suppressed to save time.
+            "--accept-terms",
             "--no-boostgraph",
             *(host.flag for host in selected),
         ]

@@ -172,7 +172,15 @@ class BoostIntegrationTests(unittest.TestCase):
         self.assertFalse(parsed["tracing"]["upload"])
         self.assertFalse(parsed["update"]["auto_update"])
 
-    def test_setup_runs_gated_shell_only_plan_without_accept_terms(self) -> None:
+    def test_setup_runs_gated_shell_only_plan_accepting_terms(self) -> None:
+        """Agentbot accepts Boost's preview terms on the operator's behalf.
+
+        Reversed deliberately on 2026-09-06 at the operator's request, after a
+        fresh-machine bootstrap sat for the full command timeout on the
+        unanswered prompt and then failed the whole Agentbot install. Boost
+        records the acceptance in its own config, so this only changes what
+        happens the first time on a given machine.
+        """
         from src.command_runner import CommandResult
 
         BoostIntegration = self._integration_type()
@@ -233,6 +241,7 @@ class BoostIntegrationTests(unittest.TestCase):
         expected = [
             str(boost),
             "init",
+            "--accept-terms",
             "--no-boostgraph",
             "--claude",
             "--codex",
@@ -240,7 +249,10 @@ class BoostIntegrationTests(unittest.TestCase):
         ]
         self.assertIn([*expected[:2], "--dry-run", *expected[2:]], runner.calls)
         self.assertEqual([expected], runner.interactive_calls)
-        self.assertNotIn("--accept-terms", runner.interactive_calls[0])
+        # The dry run is gated first and the real invocation carries the same
+        # flags, acceptance included, so the plan that was checked is the plan
+        # that runs.
+        self.assertIn("--accept-terms", runner.interactive_calls[0])
         self.assertEqual("ready", status.state)
 
     def test_setup_rejects_forbidden_graph_plan_before_writing(self) -> None:
@@ -394,7 +406,7 @@ class BoostIntegrationTests(unittest.TestCase):
 
         argv = runner.run_interactive.call_args.args[0]
         self.assertEqual(
-            [str(boost), "init", "--no-boostgraph", "--cursor"],
+            [str(boost), "init", "--accept-terms", "--no-boostgraph", "--cursor"],
             argv,
         )
         self.assertNotIn("--claude", argv)

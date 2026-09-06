@@ -50,3 +50,13 @@ MCP changes disabled, and writes the declared policy from
 `BOOST_FEATURE_POLICY` in `src/boost.py`. Repository `.boost/config.toml` files
 can shadow global configuration; Doctor reports registered workspaces that
 violate policy.
+
+**Setup accepts Boost's preview terms on your behalf.** `boost init` is passed
+`--accept-terms`, which accepts the JFrog Online Preview Agreement and Privacy
+Notice without prompting. This is a deliberate choice recorded here rather than
+a prompt suppressed quietly: on a fresh machine the unanswered prompt sat for
+the full command timeout and then failed the whole Agentbot install. Boost
+stores the acceptance in its own `~/.boost/config.toml`, so it only ever
+applies the first time on a given machine. Selecting the Boost CLI component is
+what opts you into this; if you would rather accept it yourself, remove
+`--accept-terms` from `BoostIntegration.setup` and answer the prompt.

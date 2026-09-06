@@ -102,7 +102,7 @@ class LifecycleTests(unittest.TestCase):
                 install_skills=lambda _paths: [],
                 refresh_outputs=lambda: sentinel,
             )
-            lifecycle.install(progress=announced.append)
+            lifecycle.install(progress=lambda message, _elapsed: announced.append(message))
 
         self.assertEqual(
             [
@@ -111,6 +111,8 @@ class LifecycleTests(unittest.TestCase):
                 "Configuring Boost integration",
                 "Refreshing managed outputs",
                 "Running diagnostics",
+                # Closes off the last stage, so its duration is reported too.
+                "Install complete",
             ],
             announced,
         )

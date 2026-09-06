@@ -680,8 +680,13 @@ def print_skills_error(error: Exception) -> int:
     return 1
 
 
-def _install_stage(message: str) -> None:
-    print(f"  [STEP] {message}", flush=True)
+def _install_stage(message: str, elapsed: float) -> None:
+    # The first call reports the setup before any stage, which is near zero;
+    # every later one closes off the stage named in the previous line.
+    if elapsed >= 1:
+        print(f"  [OK] took {int(elapsed) // 60}m {int(elapsed) % 60:02d}s", flush=True)
+    if message != "Install complete":
+        print(f"  [STEP] {message}", flush=True)
 
 
 def run_agentbot_install(lifecycle: Lifecycle, paths: AgentbotPaths) -> int:

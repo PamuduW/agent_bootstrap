@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable
 from hashlib import sha256
 from pathlib import Path
@@ -112,17 +113,30 @@ class Lifecycle:
             )
         )
 
-    def install(self, *, progress: Callable[[str], None] | None = None) -> InstallOutcome:
+    def install(
+        self, *, progress: Callable[[str, float], None] | None = None
+    ) -> InstallOutcome:
         # Every stage reports only after all of them finish, so without this an
         # install is minutes of silence with no way to tell work from a hang.
+        # Each stage also reports how long the previous one took, because
+        # "which stage is slow" is the question a long install actually raises.
+        started = time.monotonic()
+
         def stage(message: str) -> None:
-            if progress is not None:
-                progress(message)
+            nonlocal started
+            if progress is None:
+                return
+            elapsed = time.monotonic() - started
+            started = time.monotonic()
+            progress(message, elapsed)
+
+        stage_start = time.monotonic()
 
         # Before anything reads ownership: a lock still pinned to a renamed
         # upstream repository makes its skills look unowned, which shows up as
         # prune candidates rather than as an error.
         migrate_renamed_lock_sources(self.paths.global_skill_lock)
+        started = stage_start
         stage("Installing skill sources")
         skills = tuple(self._install_skills(self.paths))
         stage("Refreshing Graphify integration")
@@ -133,6 +147,7 @@ class Lifecycle:
         outputs = self.refresh_outputs()
         stage("Running diagnostics")
         diagnostics = self.diagnostics.collect()
+        stage("Install complete")
         return InstallOutcome(skills, graphify, boost, outputs, diagnostics)
 
     def render_global(self) -> None:

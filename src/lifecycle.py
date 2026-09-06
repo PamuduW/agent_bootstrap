@@ -112,15 +112,26 @@ class Lifecycle:
             )
         )
 
-    def install(self) -> InstallOutcome:
+    def install(self, *, progress: Callable[[str], None] | None = None) -> InstallOutcome:
+        # Every stage reports only after all of them finish, so without this an
+        # install is minutes of silence with no way to tell work from a hang.
+        def stage(message: str) -> None:
+            if progress is not None:
+                progress(message)
+
         # Before anything reads ownership: a lock still pinned to a renamed
         # upstream repository makes its skills look unowned, which shows up as
         # prune candidates rather than as an error.
         migrate_renamed_lock_sources(self.paths.global_skill_lock)
+        stage("Installing skill sources")
         skills = tuple(self._install_skills(self.paths))
+        stage("Refreshing Graphify integration")
         graphify = self.graphify.refresh_if_enabled()
+        stage("Configuring Boost integration")
         boost = self.boost.setup_if_cli_available()
+        stage("Refreshing managed outputs")
         outputs = self.refresh_outputs()
+        stage("Running diagnostics")
         diagnostics = self.diagnostics.collect()
         return InstallOutcome(skills, graphify, boost, outputs, diagnostics)
 

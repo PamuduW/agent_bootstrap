@@ -3,7 +3,9 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import sys
 import tempfile
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -453,6 +455,7 @@ def install_source(
         )
 
     argv = build_add_argv(source, agents=agents, global_scope=global_scope, npx=npx)
+    started = time.monotonic()
     if progress is not None:
         progress(f"[STEP] Installing skill source: {source.id} ({source.repo})")
     clone_url = source_clone_url(source.repo)
@@ -510,10 +513,10 @@ def install_source(
             raise SkillsInstallError(f"failed to install source {source.id!r}: {detail}")
     except Exception:
         if progress is not None:
-            progress(f"[FAIL] Skill source: {source.id}")
+            progress(f"[FAIL] Skill source: {source.id} ({_elapsed(started)})")
         raise
     if progress is not None:
-        progress(f"[OK] Skill source installed: {source.id}")
+        progress(f"[OK] Skill source installed: {source.id} ({_elapsed(started)})")
     return result
 
 
@@ -580,7 +583,15 @@ def install_skills(
     from .skill_prune import enforce_exclusions
 
     config = load_skills_sources(paths.skills_sources_file)
-    progress = _print_install_progress if os.environ.get("AGENTBOT_TUI") else None
+    # Each source is a network clone, so a dozen of them is minutes of silence
+    # if nothing is emitted. Progress was gated on AGENTBOT_TUI, which the
+    # install.sh path does not set, so exactly the long unattended run reported
+    # nothing at all. Emit whenever someone is watching.
+    progress = (
+        _print_install_progress
+        if os.environ.get("AGENTBOT_TUI") or sys.stdout.isatty()
+        else None
+    )
     results = install_all(
         config,
         dry_run=dry_run,
@@ -596,6 +607,11 @@ def install_skills(
         for name in enforce_exclusions(paths, config):
             _print_install_progress(f"excluded by manifest, removed: {name}")
     return results
+
+
+def _elapsed(started: float) -> str:
+    seconds = int(time.monotonic() - started)
+    return f"{seconds // 60}m {seconds % 60:02d}s" if seconds >= 60 else f"{seconds}s"
 
 
 def _print_install_progress(message: str) -> None:

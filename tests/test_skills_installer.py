@@ -391,12 +391,16 @@ sources:
         )
 
         mock_clone.assert_called_once()
+        self.assertEqual(2, len(progress))
         self.assertEqual(
-            [
-                "[STEP] Installing skill source: superpowers (obra/superpowers)",
-                "[OK] Skill source installed: superpowers",
-            ],
-            progress,
+            "[STEP] Installing skill source: superpowers (obra/superpowers)",
+            progress[0],
+        )
+        # The completion line carries how long the clone took, so a slow source
+        # reads as slow rather than stuck. The duration itself is not pinned.
+        self.assertRegex(
+            progress[1],
+            r"^\[OK\] Skill source installed: superpowers \((\d+s|\d+m \d{2}s)\)$",
         )
 
     @patch("src.skills_installer.shutil.which", return_value="/usr/bin/npx")
@@ -556,6 +560,58 @@ sources:
         self.assertIn("child log line 19", str(raised.exception))
         self.assertNotIn("child log line 0", str(raised.exception))
         self.assertNotIn("npm notice", str(raised.exception))
+
+
+class InstallProgressTests(unittest.TestCase):
+    """Break caught: per-source progress was gated on AGENTBOT_TUI.
+
+    install.sh never sets it, so the one path that runs unattended for minutes
+    -- a dozen network clones during bootstrap -- was the one path that
+    reported nothing at all.
+    """
+
+    def test_progress_is_emitted_when_a_terminal_is_attached(self) -> None:
+        from src import skills_installer
+
+        with tempfile.TemporaryDirectory() as temporary:
+            paths = agentbot_paths(Path(temporary))
+            paths.skills_sources_file.parent.mkdir(parents=True, exist_ok=True)
+            paths.skills_sources_file.write_text(
+                "version: 1\nagents: [claude-code]\nscope: global\nsources: []\n",
+                encoding="utf-8",
+            )
+            seen = {}
+
+            def capture(config, **kwargs):
+                seen["progress"] = kwargs.get("progress")
+                return []
+
+            for isatty, tui, expected in ((True, None, True), (False, None, False), (False, "1", True)):
+                with self.subTest(isatty=isatty, tui=tui):
+                    seen.clear()
+                    environment = {"AGENTBOT_TUI": tui} if tui else {}
+                    with (
+                        patch.object(skills_installer, "install_all", capture),
+                        patch.object(
+                            skills_installer.sys.stdout,
+                            "isatty",
+                            # Bound now: a bare lambda would read the loop
+                            # variable at call time.
+                            (lambda value: lambda: value)(isatty),
+                        ),
+                        patch.dict(os.environ, environment, clear=not tui),
+                    ):
+                        skills_installer.install_skills(paths)
+                    self.assertEqual(expected, seen["progress"] is not None)
+
+    def test_elapsed_reads_as_time_not_a_raw_count(self) -> None:
+        from src.skills_installer import _elapsed
+
+        now = 1000.0
+        with patch("src.skills_installer.time.monotonic", return_value=now + 9):
+            self.assertEqual("9s", _elapsed(now))
+        with patch("src.skills_installer.time.monotonic", return_value=now + 125):
+            self.assertEqual("2m 05s", _elapsed(now))
 
 
 class RenamedSourceMigrationTests(unittest.TestCase):

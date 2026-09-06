@@ -680,9 +680,17 @@ def print_skills_error(error: Exception) -> int:
     return 1
 
 
+def _install_stage(message: str) -> None:
+    print(f"  [STEP] {message}", flush=True)
+
+
 def run_agentbot_install(lifecycle: Lifecycle, paths: AgentbotPaths) -> int:
     print_header("Install Agentbot", "Agentbot › Install Agentbot")
-    outcome = lifecycle.install()
+    # Only when someone is watching: piped and logged runs keep the report-only
+    # output they had.
+    outcome = lifecycle.install(
+        progress=_install_stage if sys.stdout.isatty() else None
+    )
     skills_rc = print_skills_report(list(outcome.skills), title="Skills install")
     print_output_refresh_report(
         linked=outcome.outputs.claude_linked,

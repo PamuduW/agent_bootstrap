@@ -79,6 +79,42 @@ class LifecycleTests(unittest.TestCase):
             self.assertTrue(any(command[:3] == ["git", "-C", str(workspace)] for command in commands))
             self.assertEqual("head123", plan.snapshot.repository_head)
 
+    def test_install_reports_each_stage_as_it_starts(self) -> None:
+        """Break caught: install printed nothing until every stage had finished.
+
+        A dozen network clones behind a silent prompt is indistinguishable from
+        a hang, which is exactly what an unattended bootstrap looked like.
+        `install` passes these results straight through, so the stand-ins only
+        need to be distinguishable.
+        """
+        from src.lifecycle import Lifecycle
+
+        with tempfile.TemporaryDirectory() as temporary:
+            paths = agentbot_paths(Path(temporary))
+            announced: list[str] = []
+            sentinel = object()
+
+            lifecycle = Lifecycle(
+                paths,
+                diagnostics=mock.Mock(collect=mock.Mock(return_value=sentinel)),
+                graphify=mock.Mock(refresh_if_enabled=mock.Mock(return_value=sentinel)),
+                boost=mock.Mock(setup_if_cli_available=mock.Mock(return_value=sentinel)),
+                install_skills=lambda _paths: [],
+                refresh_outputs=lambda: sentinel,
+            )
+            lifecycle.install(progress=announced.append)
+
+        self.assertEqual(
+            [
+                "Installing skill sources",
+                "Refreshing Graphify integration",
+                "Configuring Boost integration",
+                "Refreshing managed outputs",
+                "Running diagnostics",
+            ],
+            announced,
+        )
+
     def test_install_orders_each_stage_once_and_returns_typed_outcome(self) -> None:
         from src.boost import BoostStatus
         from src.graphify import GraphifyStatus

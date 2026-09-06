@@ -62,7 +62,12 @@ test_draw_clears_line_tails_and_matches_frame_height() (
 	frame="$(tui_menu_lines 0)"
 	[[ "$output" == *$'\033[K\n'* ]] || return 1
 	[[ "$frame" -eq "$(printf '%s\n' "$output" | wc -l)" ]] || return 1
-	[[ "$(tui_redraw_up "$frame")" == $'\033['"${frame}"'A' ]]
+	# Cursor control goes to the terminal adapter rather than stdout, so that
+	# it shares a stream with the menu body it positions. Capture the seam.
+	local capture="$TEST_ROOT/redraw-capture"
+	: >"$capture"
+	DOTFILES_TTY_OUTPUT="$capture" tui_redraw_up "$frame"
+	[[ "$(cat "$capture")" == $'\033['"${frame}"'A' ]]
 )
 
 test_shortcuts_use_cyan_tokens() (

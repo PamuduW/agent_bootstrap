@@ -400,6 +400,7 @@ class CliTests(unittest.TestCase):
                 "doctor",
                 "graphify",
                 "boost",
+                "vscode",
                 "help",
             },
             {spec.name for spec in commands_for_surface("public")},

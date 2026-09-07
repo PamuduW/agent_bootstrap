@@ -31,6 +31,7 @@ from .ui import (
     print_status_summary,
     print_update_outcome,
     print_update_plan,
+    print_vscode_report,
     print_workspace_list,
     print_workspace_removed,
     print_workspace_report,
@@ -131,6 +132,34 @@ def _handle_graphify(context: CommandContext) -> int:
     if graphify_command == "status":
         return 1 if status.state == "broken" else 0
     return 0 if status.state in {"ready", "conflict", "stale"} else 1
+
+
+def _handle_vscode(context: CommandContext) -> int:
+    from . import vscode as vscode_module
+
+    command = getattr(context.args, "vscode_command", None) or "status"
+    root = context.paths.root
+    home = Path.home()
+    if command == "seed":
+        hosts = vscode_module.resolve_hosts(home)
+        target = vscode_module.manifest_path(root)
+        manifest = vscode_module.seed_manifest(target, hosts)
+        counts = ", ".join(
+            f"{host}: {len(values)}" for host, values in sorted(manifest.extensions.items())
+        )
+        print(f"Recorded installed extensions in {target}")
+        print(f"  {counts or 'no hosts available'}")
+        return 0
+
+    report = (
+        vscode_module.apply(home, root, context.lifecycle.command_runner)
+        if command == "apply"
+        else vscode_module.preview(home, root)
+    )
+    print_vscode_report(report)
+    if report.manifest_error:
+        return 1
+    return 1 if report.failures else 0
 
 
 def _handle_boost(context: CommandContext) -> int:
@@ -294,6 +323,7 @@ COMMAND_HANDLERS: dict[str, Callable[[CommandContext], int]] = {
     "doctor": _handle_doctor,
     "graphify": _handle_graphify,
     "boost": _handle_boost,
+    "vscode": _handle_vscode,
     "update": _handle_update,
     "upgrade": _handle_update,
     "workspace": _handle_workspace,
@@ -345,6 +375,11 @@ def build_parser() -> argparse.ArgumentParser:
     boost_sub.add_parser("status", help="Show Boost CLI, safety, and integration state")
     boost_sub.add_parser("setup", help="Set up Boost for installed Claude, Codex, and Cursor CLIs")
     boost_sub.add_parser("off", help="Remove Boost integration from Claude, Codex, and Cursor")
+    vscode = subparsers.add_parser("vscode", help="Manage VS Code extensions and settings")
+    vscode_sub = vscode.add_subparsers(dest="vscode_command")
+    vscode_sub.add_parser("status", help="Preview VS Code changes without writing")
+    vscode_sub.add_parser("seed", help="Record installed extensions into vscode.yaml")
+    vscode_sub.add_parser("apply", help="Install extensions and merge owned settings")
     for command in ("update", "upgrade"):
         update = subparsers.add_parser(
             command,

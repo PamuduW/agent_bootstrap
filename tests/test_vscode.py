@@ -10,12 +10,19 @@ from dataclasses import replace
 from pathlib import Path
 
 from src.vscode import (
+    VSCodeManifestError,
     apply_settings,
+    install_extensions,
     installed_extensions,
+    load_manifest,
+    manifest_path,
     merge_settings_text,
     plan_extensions,
     plan_settings,
+    preview,
     read_settings,
+    render_manifest,
+    seed_manifest,
     strip_jsonc,
     windows_host,
     wsl_host,
@@ -239,7 +246,7 @@ class SettingsMergeTests(unittest.TestCase):
 
         merged = merge_settings_text(original, {"b": 2})
 
-        self.assertNotIn("\n  \"b\"", merged.replace("\r\n", "\r"))
+        self.assertNotIn('\n  "b"', merged.replace("\r\n", "\r"))
         self.assertEqual(json.loads(strip_jsonc(merged)), {"a": 1, "b": 2})
 
     def test_the_plan_separates_additions_from_changes(self) -> None:
@@ -278,6 +285,164 @@ class SettingsMergeTests(unittest.TestCase):
         self.assertTrue(apply_settings(self.settings, {"a": 2}).is_noop)
         self.assertEqual(self.settings.read_text(encoding="utf-8"), after_first)
         self.assertIn("// hi", after_first)
+
+
+class ManifestTests(unittest.TestCase):
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+
+    def test_a_missing_manifest_is_empty_not_an_error(self) -> None:
+        """Nothing selected yet is a normal state, not a broken install."""
+        manifest = load_manifest(manifest_path(self.root))
+
+        self.assertTrue(manifest.is_empty)
+        self.assertEqual(manifest.extensions_for("wsl"), ())
+
+    def test_an_unsupported_version_is_refused(self) -> None:
+        manifest_path(self.root).write_text("version: 99\n", encoding="utf-8")
+
+        with self.assertRaises(VSCodeManifestError):
+            load_manifest(manifest_path(self.root))
+
+    def test_a_malformed_extensions_list_is_refused(self) -> None:
+        manifest_path(self.root).write_text(
+            "version: 1\nextensions:\n  wsl: not-a-list\n", encoding="utf-8"
+        )
+
+        with self.assertRaises(VSCodeManifestError):
+            load_manifest(manifest_path(self.root))
+
+    def test_hosts_keep_separate_lists(self) -> None:
+        """An extension installed in WSL is not evidence about Windows."""
+        manifest_path(self.root).write_text(
+            "version: 1\nextensions:\n  wsl: [a.one]\n  windows: [b.two]\n",
+            encoding="utf-8",
+        )
+
+        manifest = load_manifest(manifest_path(self.root))
+
+        self.assertEqual(manifest.extensions_for("wsl"), ("a.one",))
+        self.assertEqual(manifest.extensions_for("windows"), ("b.two",))
+
+    def test_seeding_records_installed_extensions_and_round_trips(self) -> None:
+        extensions = self.root / "wsl-extensions"
+        extensions.mkdir()
+        (extensions / "a.one-1.0.0").mkdir()
+        host = replace(wsl_host(self.root), extensions_dir=extensions)
+
+        seeded = seed_manifest(manifest_path(self.root), {"wsl": host})
+
+        self.assertEqual(seeded.extensions_for("wsl"), ("a.one",))
+        self.assertEqual(load_manifest(manifest_path(self.root)).extensions_for("wsl"), ("a.one",))
+
+    def test_seeding_never_records_settings(self) -> None:
+        """Copying a settings file wholesale would claim ownership of every key
+        in it, and explicit ownership is the point of the manifest."""
+        manifest_path(self.root).write_text(
+            'version: 1\nsettings:\n  shared:\n    "a": 1\n', encoding="utf-8"
+        )
+        extensions = self.root / "wsl-extensions"
+        extensions.mkdir()
+        host = replace(wsl_host(self.root), extensions_dir=extensions)
+
+        seeded = seed_manifest(manifest_path(self.root), {"wsl": host})
+
+        self.assertEqual(seeded.settings_for("shared"), {"a": 1})
+        self.assertNotIn("editor", render_manifest(seeded))
+
+    def test_seeding_skips_a_host_that_is_not_there(self) -> None:
+        seeded = seed_manifest(manifest_path(self.root), {"wsl": wsl_host(self.root)})
+
+        self.assertEqual(seeded.extensions_for("wsl"), ())
+
+
+class InstallExecutionTests(unittest.TestCase):
+    class _Runner:
+        def __init__(self, returncode: int = 0) -> None:
+            self.calls: list[list[str]] = []
+            self._returncode = returncode
+
+        def run(self, argv, **kwargs):
+            self.calls.append(list(argv))
+
+            class _Result:
+                returncode = self._returncode
+
+                def detail(self, max_length: int = 240) -> str:
+                    return "boom"
+
+            return _Result()
+
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+
+    def _host(self, cli: Path | None):
+        return replace(wsl_host(self.root), cli=cli)
+
+    def test_each_extension_is_installed_through_that_host_s_cli(self) -> None:
+        """One invocation per extension: a batched call reports one exit status,
+        so a single failure would be recorded against all of them."""
+        cli = self.root / "remote-cli-code"
+        runner = self._Runner()
+
+        results = install_extensions(self._host(cli), ("a.one", "b.two"), runner)
+
+        self.assertEqual([call[0] for call in runner.calls], [str(cli), str(cli)])
+        self.assertEqual(runner.calls[0][1:3], ["--install-extension", "a.one"])
+        self.assertEqual(results, {"a.one": "installed", "b.two": "installed"})
+
+    def test_a_host_without_a_cli_reports_rather_than_running_anything(self) -> None:
+        runner = self._Runner()
+
+        results = install_extensions(self._host(None), ("a.one",), runner)
+
+        self.assertEqual(runner.calls, [])
+        self.assertEqual(results, {"a.one": "no CLI for this host"})
+
+    def test_a_failed_install_is_reported_against_that_extension(self) -> None:
+        runner = self._Runner(returncode=1)
+
+        results = install_extensions(self._host(self.root / "code"), ("a.one",), runner)
+
+        self.assertEqual(results, {"a.one": "boom"})
+
+
+class PreviewTests(unittest.TestCase):
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.home = self.root / "home"
+        self.home.mkdir()
+        self.mount = self.root / "mnt"
+        self.mount.mkdir()
+
+    def test_preview_writes_nothing(self) -> None:
+        (self.home / ".vscode-server/extensions").mkdir(parents=True)
+        settings = self.home / ".vscode-server/data/Machine/settings.json"
+        settings.parent.mkdir(parents=True)
+        settings.write_text('{"a": 1}\n', encoding="utf-8")
+        manifest_path(self.root).write_text(
+            'version: 1\nsettings:\n  wsl:\n    "a": 2\n', encoding="utf-8"
+        )
+
+        report = preview(self.home, self.root, self.mount)
+
+        self.assertTrue(report.has_work)
+        self.assertEqual(settings.read_text(encoding="utf-8"), '{"a": 1}\n')
+        self.assertFalse(report.applied)
+
+    def test_a_broken_manifest_stops_before_any_planning(self) -> None:
+        manifest_path(self.root).write_text("version: 99\n", encoding="utf-8")
+
+        report = preview(self.home, self.root, self.mount)
+
+        self.assertIsNotNone(report.manifest_error)
+        self.assertEqual(report.extensions, {})
 
 
 if __name__ == "__main__":

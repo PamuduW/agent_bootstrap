@@ -352,6 +352,15 @@ class Lifecycle:
     def list_workspaces(self) -> tuple[WorkspaceRecord, ...]:
         return self.workspace_service.store.load()
 
+    @property
+    def command_runner(self) -> CommandRunner:
+        """The one runner this lifecycle injects everywhere.
+
+        Exposed so a command handler reuses it rather than constructing a
+        second one, which is the arrangement tests/test_lifecycle.py pins.
+        """
+        return self._command_runner
+
     def remove_workspace(self, path: Path) -> WorkspaceRecord:
         return self.workspace_service.remove(path)
 

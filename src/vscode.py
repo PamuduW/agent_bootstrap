@@ -16,7 +16,13 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import yaml
+
 from .atomic_io import write_text_atomic
+from .command_runner import CommandRunner
+
+SUPPORTED_VERSION = 1
+INSTALL_TIMEOUT_SECONDS = 300.0
 
 WINDOWS_MOUNT_ROOT = Path("/mnt/c")
 
@@ -125,9 +131,7 @@ def _newest_remote_cli(server: Path) -> Path | None:
     using it here would install into the other host.
     """
     candidates = [
-        candidate
-        for candidate in server.glob("bin/*/bin/remote-cli/code")
-        if candidate.is_file()
+        candidate for candidate in server.glob("bin/*/bin/remote-cli/code") if candidate.is_file()
     ]
     if not candidates:
         return None
@@ -388,3 +392,231 @@ def apply_settings(path: Path, desired: dict[str, object]) -> SettingsPlan:
     merged = merge_settings_text(original, desired)
     write_text_atomic(path, merged, backup=True)
     return plan
+
+
+class VSCodeManifestError(ValueError):
+    """Raised when vscode.yaml is present but unusable."""
+
+
+@dataclass(frozen=True)
+class VSCodeManifest:
+    """Desired state, kept per host because the hosts are not interchangeable.
+
+    `settings.shared` is the Windows user-scope file, which both hosts read.
+    `settings.wsl` is the WSL server's machine-scope file, which only the remote
+    reads. There is deliberately no windows-specific settings bucket: it would
+    address the same file as `shared` and the two would fight.
+    """
+
+    extensions: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    settings: dict[str, dict[str, object]] = field(default_factory=dict)
+
+    def extensions_for(self, host: str) -> tuple[str, ...]:
+        return self.extensions.get(host, ())
+
+    def settings_for(self, host: str) -> dict[str, object]:
+        return dict(self.settings.get(host, {}))
+
+    @property
+    def is_empty(self) -> bool:
+        return not any(self.extensions.values()) and not any(self.settings.values())
+
+
+def manifest_path(root: Path) -> Path:
+    return root / "vscode.yaml"
+
+
+def load_manifest(path: Path) -> VSCodeManifest:
+    """Read vscode.yaml. A missing file is an empty manifest, not an error."""
+    if not path.is_file():
+        return VSCodeManifest()
+    try:
+        document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as error:
+        raise VSCodeManifestError(f"cannot parse {path}: {error}") from error
+    if not isinstance(document, dict):
+        raise VSCodeManifestError(f"{path} must be a mapping")
+    version = document.get("version", SUPPORTED_VERSION)
+    if version != SUPPORTED_VERSION:
+        raise VSCodeManifestError(f"{path} has unsupported version {version!r}")
+
+    extensions: dict[str, tuple[str, ...]] = {}
+    for host, values in (document.get("extensions") or {}).items():
+        if not isinstance(values, list):
+            raise VSCodeManifestError(f"{path}: extensions.{host} must be a list")
+        extensions[str(host)] = tuple(str(value) for value in values)
+
+    settings: dict[str, dict[str, object]] = {}
+    for scope, values in (document.get("settings") or {}).items():
+        if not isinstance(values, dict):
+            raise VSCodeManifestError(f"{path}: settings.{scope} must be a mapping")
+        settings[str(scope)] = dict(values)
+
+    return VSCodeManifest(extensions=extensions, settings=settings)
+
+
+def seed_manifest(path: Path, hosts: dict[str, VSCodeHost]) -> VSCodeManifest:
+    """Write the currently installed extensions into the manifest.
+
+    Settings are never seeded: copying a whole settings file into the manifest
+    would claim ownership of every key in it, and ownership is the one thing
+    this manifest is supposed to make explicit.
+    """
+    existing = load_manifest(path)
+    extensions = dict(existing.extensions)
+    for name, host in hosts.items():
+        if host.available:
+            extensions[name] = installed_extensions(host)
+    seeded = VSCodeManifest(extensions=extensions, settings=existing.settings)
+    write_text_atomic(path, render_manifest(seeded), backup=path.is_file())
+    return seeded
+
+
+def render_manifest(manifest: VSCodeManifest) -> str:
+    document: dict[str, object] = {"version": SUPPORTED_VERSION}
+    if manifest.extensions:
+        document["extensions"] = {
+            host: list(values) for host, values in sorted(manifest.extensions.items())
+        }
+    if manifest.settings:
+        document["settings"] = {
+            scope: dict(values) for scope, values in sorted(manifest.settings.items())
+        }
+    return yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
+
+
+def install_extensions(
+    host: VSCodeHost,
+    identifiers: tuple[str, ...],
+    runner: CommandRunner,
+) -> dict[str, str]:
+    """Install each identifier through this host's own CLI.
+
+    One invocation per extension: a single call with several `--install-extension`
+    flags reports one exit status for the batch, so a partial failure would be
+    recorded against all of them.
+    """
+    results: dict[str, str] = {}
+    if not identifiers:
+        return results
+    if host.cli is None:
+        return dict.fromkeys(identifiers, "no CLI for this host")
+    for identifier in identifiers:
+        outcome = runner.run(
+            [str(host.cli), "--install-extension", identifier, "--force"],
+            timeout_seconds=INSTALL_TIMEOUT_SECONDS,
+        )
+        results[identifier] = "installed" if outcome.returncode == 0 else outcome.detail()
+    return results
+
+
+@dataclass
+class VSCodeReport:
+    """One preview or one applied run, across every resolved host."""
+
+    hosts: dict[str, VSCodeHost] = field(default_factory=dict)
+    extensions: dict[str, ExtensionPlan] = field(default_factory=dict)
+    settings: dict[str, SettingsPlan] = field(default_factory=dict)
+    installed: dict[str, dict[str, str]] = field(default_factory=dict)
+    applied: bool = False
+    manifest_error: str | None = None
+
+    @property
+    def has_work(self) -> bool:
+        return any(not plan.is_noop for plan in self.extensions.values()) or any(
+            not plan.is_noop for plan in self.settings.values()
+        )
+
+    @property
+    def failures(self) -> tuple[str, ...]:
+        problems = [
+            f"{scope}: {plan.unreadable}"
+            for scope, plan in sorted(self.settings.items())
+            if plan.unreadable
+        ]
+        for host, outcomes in sorted(self.installed.items()):
+            problems.extend(
+                f"{host}: {identifier} ({detail})"
+                for identifier, detail in sorted(outcomes.items())
+                if detail != "installed"
+            )
+        return tuple(problems)
+
+
+def resolve_hosts(home: Path, mount_root: Path = WINDOWS_MOUNT_ROOT) -> dict[str, VSCodeHost]:
+    return {"wsl": wsl_host(home), "windows": windows_host(mount_root)}
+
+
+def _settings_targets(hosts: dict[str, VSCodeHost]) -> dict[str, Path | None]:
+    """Where each settings scope is written.
+
+    `shared` is the Windows user-scope file both hosts read, so it depends on
+    the Windows host being resolvable even when the operator only uses WSL.
+    """
+    windows = hosts.get("windows")
+    wsl = hosts.get("wsl")
+    return {
+        "shared": windows.settings_path if windows and windows.available else None,
+        "wsl": wsl.settings_path if wsl and wsl.available else None,
+    }
+
+
+def preview(home: Path, root: Path, mount_root: Path = WINDOWS_MOUNT_ROOT) -> VSCodeReport:
+    """What a run would change. Writes nothing."""
+    report = VSCodeReport(hosts=resolve_hosts(home, mount_root))
+    try:
+        manifest = load_manifest(manifest_path(root))
+    except VSCodeManifestError as error:
+        report.manifest_error = str(error)
+        return report
+
+    for name, host in report.hosts.items():
+        report.extensions[name] = plan_extensions(host, list(manifest.extensions_for(name)))
+
+    for scope, target in _settings_targets(report.hosts).items():
+        desired = manifest.settings_for(scope)
+        if not desired:
+            continue
+        if target is None:
+            report.settings[scope] = SettingsPlan(
+                path=Path(scope),
+                unreadable=f"no host for {scope} settings",
+            )
+            continue
+        report.settings[scope] = plan_settings(target, desired)
+    return report
+
+
+def apply(
+    home: Path,
+    root: Path,
+    runner: CommandRunner,
+    mount_root: Path = WINDOWS_MOUNT_ROOT,
+) -> VSCodeReport:
+    """Install missing extensions and merge owned settings keys.
+
+    Settings are merged before extensions: a settings file that cannot be read
+    stops that scope, and finding that out after a five-minute extension install
+    wastes the operator's time for no gain.
+    """
+    report = preview(home, root, mount_root)
+    if report.manifest_error:
+        return report
+    manifest = load_manifest(manifest_path(root))
+
+    for scope, target in _settings_targets(report.hosts).items():
+        settings_plan = report.settings.get(scope)
+        if settings_plan is None or settings_plan.unreadable or settings_plan.is_noop:
+            continue
+        if target is None:
+            continue
+        report.settings[scope] = apply_settings(target, manifest.settings_for(scope))
+
+    for name, host in report.hosts.items():
+        extension_plan = report.extensions.get(name)
+        if extension_plan is None or extension_plan.is_noop:
+            continue
+        report.installed[name] = install_extensions(host, extension_plan.missing, runner)
+
+    report.applied = True
+    return report

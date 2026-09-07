@@ -214,6 +214,22 @@ COMMANDS: tuple[CommandSpec, ...] = (
         ("boost status", "boost setup", "boost off"),
     ),
     CommandSpec(
+        "vscode",
+        "agentbot vscode status|seed|apply",
+        "mutating",
+        "Reconcile the selected VS Code extensions and settings for each host.",
+        (
+            option("status", "Preview what a run would change. Writes nothing.", "default"),
+            option("seed", "Record the currently installed extensions in vscode.yaml.", "explicit"),
+            option("apply", "Install missing extensions and merge owned settings keys.", "explicit"),
+        ),
+        "Status is read-only; apply installs extensions and merges owned settings after backing files up.",
+        ("agentbot vscode status", "agentbot vscode seed", "agentbot vscode apply"),
+        ("doctor", "status"),
+        "public",
+        ("vscode status", "vscode seed", "vscode apply"),
+    ),
+    CommandSpec(
         "help",
         "agentbot help [COMMAND]",
         "read-only",

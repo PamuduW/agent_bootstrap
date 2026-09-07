@@ -606,3 +606,65 @@ def print_manual_skill_removal_report(report) -> int:
             "select exact skill names and rerun with --yes."
         )
     return 0
+
+
+def print_vscode_report(report) -> None:
+    """Render a VS Code preview or applied run.
+
+    Hosts that could not be resolved are shown rather than omitted: "no Windows
+    profile" is the answer to "why did nothing happen there", and hiding it
+    turns a reported skip into an apparent no-op.
+    """
+    print_header("VS Code", "Agentbot \u203a VS Code")
+    if report.manifest_error:
+        print_table([("Manifest", report.manifest_error, "check")])
+        print()
+        return
+
+    print_table(
+        [
+            (
+                f"{name} host",
+                host.detail if host.available else f"unavailable - {host.detail}",
+                "ok" if host.available else "skipped",
+            )
+            for name, host in sorted(report.hosts.items())
+        ]
+    )
+    print()
+
+    extension_rows: list[tuple[str, str, str]] = []
+    for name, plan in sorted(report.extensions.items()):
+        if plan.skipped:
+            extension_rows.append((name, plan.skipped, "skipped"))
+            continue
+        outcomes = report.installed.get(name, {})
+        if outcomes:
+            extension_rows.extend(
+                (name, f"{identifier}: {detail}", "ok" if detail == "installed" else "check")
+                for identifier, detail in sorted(outcomes.items())
+            )
+        elif plan.is_noop:
+            extension_rows.append(
+                (name, f"nothing to install; {len(plan.unmanaged)} unmanaged left alone", "ok")
+            )
+        else:
+            extension_rows.append((name, f"{len(plan.missing)} to install", "check"))
+    if extension_rows:
+        print_section("\u2500\u2500 Extensions \u2500\u2500")
+        print_table(extension_rows)
+        print()
+
+    settings_rows: list[tuple[str, str, str]] = []
+    for scope, plan in sorted(report.settings.items()):
+        if plan.unreadable:
+            settings_rows.append((scope, plan.unreadable, "check"))
+        elif plan.is_noop:
+            settings_rows.append((scope, "current", "ok"))
+        else:
+            summary = f"{len(plan.additions)} to add, {len(plan.changes)} to change"
+            settings_rows.append((scope, f"{summary} in {plan.path}", "check"))
+    if settings_rows:
+        print_section("\u2500\u2500 Settings \u2500\u2500")
+        print_table(settings_rows)
+        print()

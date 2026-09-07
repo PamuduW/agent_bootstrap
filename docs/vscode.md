@@ -23,10 +23,15 @@ interchangeable.
 An extension installed in WSL is not evidence that its Windows counterpart is
 installed, so the manifest keeps a list per host.
 
-The Windows user settings file is read by **both** hosts, which is why the
-manifest calls that scope `shared`. There is deliberately no windows-specific
-settings scope: it would address the same file as `shared` and the two would
-fight over it.
+`settings.universal` is written to **every** available host's settings file,
+and `settings.wsl` / `settings.windows` layer per-host overrides on top of it.
+
+Writing universal keys into both files, rather than only into the Windows
+user-scope file both hosts read, is deliberate. User-scope settings do reach a
+remote window, but machine-scoped keys do not — an interpreter path is
+machine-specific whether or not the editor is. A single shared file would
+therefore work for some settings and silently fail for exactly the ones the
+per-host file exists to hold.
 
 **`code` on `PATH` inside WSL is the Windows executable**, reached through
 interop. It is the correct CLI for the Windows host and the wrong one for the
@@ -44,10 +49,12 @@ extensions:
   windows:
     - ms-vscode-remote.remote-wsl
 settings:
-  shared:
+  universal:            # applied to both hosts
     editor.fontSize: 13
-  wsl:
+  wsl:                  # overrides, applied only to the WSL host
     terminal.integrated.defaultProfile.linux: bash
+  windows:              # overrides, applied only to the Windows host
+    terminal.integrated.defaultProfile.windows: PowerShell
 ```
 
 `agentbot vscode seed` fills in `extensions` from what is currently installed,

@@ -12,6 +12,7 @@ from pathlib import Path
 from src.vscode import (
     VSCodeManifestError,
     apply_settings,
+    desired_settings,
     install_extensions,
     installed_extensions,
     load_manifest,
@@ -409,6 +410,63 @@ class InstallExecutionTests(unittest.TestCase):
         results = install_extensions(self._host(self.root / "code"), ("a.one",), runner)
 
         self.assertEqual(results, {"a.one": "boom"})
+
+
+class UniversalSettingsTests(unittest.TestCase):
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.home = self.root / "home"
+        self.mount = self.root / "mnt"
+        (self.home / ".vscode-server/data/Machine").mkdir(parents=True)
+        (self.home / ".vscode-server/extensions").mkdir(parents=True)
+        windows_user = self.mount / "Users/pamud/AppData/Roaming/Code/User"
+        windows_user.mkdir(parents=True)
+        (self.mount / "Users/pamud/.vscode/extensions").mkdir(parents=True)
+        self.wsl_settings = self.home / ".vscode-server/data/Machine/settings.json"
+        self.windows_settings = windows_user / "settings.json"
+
+    def test_universal_keys_reach_every_host(self) -> None:
+        """One universal settings set, applied to both files. Writing only the
+        Windows user file would silently miss machine-scoped keys on the
+        remote, which is what the per-host file exists to hold."""
+        manifest_path(self.root).write_text(
+            'version: 1\nsettings:\n  universal:\n    "editor.fontSize": 13\n',
+            encoding="utf-8",
+        )
+
+        report = preview(self.home, self.root, self.mount)
+
+        self.assertEqual(sorted(report.settings), ["windows", "wsl"])
+        for host in ("wsl", "windows"):
+            self.assertEqual(report.settings[host].additions, {"editor.fontSize": 13})
+
+    def test_a_host_override_beats_the_universal_value(self) -> None:
+        """An interpreter path is machine-specific whether or not the editor is."""
+        manifest_path(self.root).write_text(
+            'version: 1\nsettings:\n'
+            '  universal:\n    "a": 1\n    "b": 2\n'
+            '  wsl:\n    "b": 99\n',
+            encoding="utf-8",
+        )
+        manifest = load_manifest(manifest_path(self.root))
+
+        self.assertEqual(desired_settings(manifest, "wsl"), {"a": 1, "b": 99})
+        self.assertEqual(desired_settings(manifest, "windows"), {"a": 1, "b": 2})
+
+    def test_an_unavailable_host_is_reported_not_written(self) -> None:
+        import shutil
+
+        shutil.rmtree(self.mount / "Users")
+        manifest_path(self.root).write_text(
+            'version: 1\nsettings:\n  universal:\n    "a": 1\n', encoding="utf-8"
+        )
+
+        report = preview(self.home, self.root, self.mount)
+
+        self.assertIsNotNone(report.settings["windows"].unreadable)
+        self.assertEqual(report.settings["wsl"].additions, {"a": 1})
 
 
 class PreviewTests(unittest.TestCase):

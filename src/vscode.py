@@ -402,10 +402,15 @@ class VSCodeManifestError(ValueError):
 class VSCodeManifest:
     """Desired state, kept per host because the hosts are not interchangeable.
 
-    `settings.shared` is the Windows user-scope file, which both hosts read.
-    `settings.wsl` is the WSL server's machine-scope file, which only the remote
-    reads. There is deliberately no windows-specific settings bucket: it would
-    address the same file as `shared` and the two would fight.
+    `settings.universal` is applied to every available host's settings file.
+    `settings.wsl` and `settings.windows` are per-host overrides layered on top
+    of it, for keys that cannot be the same on both -- an interpreter path is
+    machine-specific whether or not the editor is.
+
+    Writing universal keys into both files rather than only the Windows
+    user-scope file is deliberate. User-scope settings do reach a remote window,
+    but machine-scoped keys do not, so a single shared file would silently fail
+    for exactly the settings the per-host file exists to hold.
     """
 
     extensions: dict[str, tuple[str, ...]] = field(default_factory=dict)
@@ -547,18 +552,14 @@ def resolve_hosts(home: Path, mount_root: Path = WINDOWS_MOUNT_ROOT) -> dict[str
     return {"wsl": wsl_host(home), "windows": windows_host(mount_root)}
 
 
-def _settings_targets(hosts: dict[str, VSCodeHost]) -> dict[str, Path | None]:
-    """Where each settings scope is written.
+UNIVERSAL_SCOPE = "universal"
 
-    `shared` is the Windows user-scope file both hosts read, so it depends on
-    the Windows host being resolvable even when the operator only uses WSL.
-    """
-    windows = hosts.get("windows")
-    wsl = hosts.get("wsl")
-    return {
-        "shared": windows.settings_path if windows and windows.available else None,
-        "wsl": wsl.settings_path if wsl and wsl.available else None,
-    }
+
+def desired_settings(manifest: VSCodeManifest, host: str) -> dict[str, object]:
+    """Universal keys, with this host's overrides layered on top."""
+    merged = dict(manifest.settings_for(UNIVERSAL_SCOPE))
+    merged.update(manifest.settings_for(host))
+    return merged
 
 
 def preview(home: Path, root: Path, mount_root: Path = WINDOWS_MOUNT_ROOT) -> VSCodeReport:
@@ -573,17 +574,17 @@ def preview(home: Path, root: Path, mount_root: Path = WINDOWS_MOUNT_ROOT) -> VS
     for name, host in report.hosts.items():
         report.extensions[name] = plan_extensions(host, list(manifest.extensions_for(name)))
 
-    for scope, target in _settings_targets(report.hosts).items():
-        desired = manifest.settings_for(scope)
+    for name, host in report.hosts.items():
+        desired = desired_settings(manifest, name)
         if not desired:
             continue
-        if target is None:
-            report.settings[scope] = SettingsPlan(
-                path=Path(scope),
-                unreadable=f"no host for {scope} settings",
+        if not host.available:
+            report.settings[name] = SettingsPlan(
+                path=host.settings_path,
+                unreadable=f"host unavailable ({host.detail})",
             )
             continue
-        report.settings[scope] = plan_settings(target, desired)
+        report.settings[name] = plan_settings(host.settings_path, desired)
     return report
 
 
@@ -604,13 +605,13 @@ def apply(
         return report
     manifest = load_manifest(manifest_path(root))
 
-    for scope, target in _settings_targets(report.hosts).items():
-        settings_plan = report.settings.get(scope)
+    for name, host in report.hosts.items():
+        settings_plan = report.settings.get(name)
         if settings_plan is None or settings_plan.unreadable or settings_plan.is_noop:
             continue
-        if target is None:
-            continue
-        report.settings[scope] = apply_settings(target, manifest.settings_for(scope))
+        report.settings[name] = apply_settings(
+            host.settings_path, desired_settings(manifest, name)
+        )
 
     for name, host in report.hosts.items():
         extension_plan = report.extensions.get(name)

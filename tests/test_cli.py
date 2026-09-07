@@ -400,6 +400,7 @@ class CliTests(unittest.TestCase):
                 "doctor",
                 "graphify",
                 "boost",
+                "cursor",
                 "vscode",
                 "help",
             },

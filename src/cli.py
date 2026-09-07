@@ -29,6 +29,7 @@ from .ui import (
     print_skills_report,
     print_skills_update_report,
     print_status_summary,
+    print_table,
     print_update_outcome,
     print_update_plan,
     print_vscode_report,
@@ -132,6 +133,21 @@ def _handle_graphify(context: CommandContext) -> int:
     if graphify_command == "status":
         return 1 if status.state == "broken" else 0
     return 0 if status.state in {"ready", "conflict", "stale"} else 1
+
+
+def _handle_cursor(context: CommandContext) -> int:
+    from .cursor_statusline import inspect_cursor_statusline, install_cursor_statusline
+
+    command = getattr(context.args, "cursor_command", None) or "status"
+    state = (
+        install_cursor_statusline(context.paths)
+        if command == "statusline"
+        else inspect_cursor_statusline(context.paths)
+    )
+    print_header("Cursor", "Agentbot \u203a Cursor")
+    print_table([("Statusline", f"{state.state}: {state.detail}", state.result)])
+    print()
+    return 0 if state.state in {"ready", "unowned"} else 1
 
 
 def _handle_vscode(context: CommandContext) -> int:
@@ -323,6 +339,7 @@ COMMAND_HANDLERS: dict[str, Callable[[CommandContext], int]] = {
     "doctor": _handle_doctor,
     "graphify": _handle_graphify,
     "boost": _handle_boost,
+    "cursor": _handle_cursor,
     "vscode": _handle_vscode,
     "update": _handle_update,
     "upgrade": _handle_update,
@@ -375,6 +392,10 @@ def build_parser() -> argparse.ArgumentParser:
     boost_sub.add_parser("status", help="Show Boost CLI, safety, and integration state")
     boost_sub.add_parser("setup", help="Set up Boost for installed Claude, Codex, and Cursor CLIs")
     boost_sub.add_parser("off", help="Remove Boost integration from Claude, Codex, and Cursor")
+    cursor = subparsers.add_parser("cursor", help="Inspect or install the Cursor statusline")
+    cursor_sub = cursor.add_subparsers(dest="cursor_command")
+    cursor_sub.add_parser("status", help="Report the Cursor statusline state")
+    cursor_sub.add_parser("statusline", help="Install the managed Cursor statusline")
     vscode = subparsers.add_parser("vscode", help="Manage VS Code extensions and settings")
     vscode_sub = vscode.add_subparsers(dest="vscode_command")
     vscode_sub.add_parser("status", help="Preview VS Code changes without writing")

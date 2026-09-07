@@ -214,6 +214,21 @@ COMMANDS: tuple[CommandSpec, ...] = (
         ("boost status", "boost setup", "boost off"),
     ),
     CommandSpec(
+        "cursor",
+        "agentbot cursor status|statusline",
+        "mutating",
+        "Inspect or install the managed Cursor CLI statusline.",
+        (
+            option("status", "Report the Cursor statusline state. Read-only.", "default"),
+            option("statusline", "Install the managed statusline and point Cursor at it.", "explicit"),
+        ),
+        "Status is read-only; statusline writes ~/.cursor/statusline-command.sh and the statusLine block in cli-config.json.",
+        ("agentbot cursor status", "agentbot cursor statusline"),
+        ("doctor", "status"),
+        "public",
+        ("cursor status", "cursor statusline"),
+    ),
+    CommandSpec(
         "vscode",
         "agentbot vscode status|seed|apply",
         "mutating",

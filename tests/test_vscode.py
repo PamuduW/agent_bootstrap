@@ -24,6 +24,7 @@ from src.vscode import (
     read_settings,
     render_manifest,
     seed_manifest,
+    settings_source,
     strip_jsonc,
     windows_host,
     wsl_host,
@@ -341,17 +342,13 @@ class ManifestTests(unittest.TestCase):
     def test_seeding_never_records_settings(self) -> None:
         """Copying a settings file wholesale would claim ownership of every key
         in it, and explicit ownership is the point of the manifest."""
-        manifest_path(self.root).write_text(
-            'version: 1\nsettings:\n  shared:\n    "a": 1\n', encoding="utf-8"
-        )
         extensions = self.root / "wsl-extensions"
         extensions.mkdir()
         host = replace(wsl_host(self.root), extensions_dir=extensions)
 
         seeded = seed_manifest(manifest_path(self.root), {"wsl": host})
 
-        self.assertEqual(seeded.settings_for("shared"), {"a": 1})
-        self.assertNotIn("editor", render_manifest(seeded))
+        self.assertNotIn("settings", render_manifest(seeded))
 
     def test_seeding_skips_a_host_that_is_not_there(self) -> None:
         seeded = seed_manifest(manifest_path(self.root), {"wsl": wsl_host(self.root)})
@@ -427,14 +424,16 @@ class UniversalSettingsTests(unittest.TestCase):
         self.wsl_settings = self.home / ".vscode-server/data/Machine/settings.json"
         self.windows_settings = windows_user / "settings.json"
 
+    def _write_scope(self, scope: str, text: str) -> None:
+        target = settings_source(self.root, scope)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+
     def test_universal_keys_reach_every_host(self) -> None:
         """One universal settings set, applied to both files. Writing only the
         Windows user file would silently miss machine-scoped keys on the
         remote, which is what the per-host file exists to hold."""
-        manifest_path(self.root).write_text(
-            'version: 1\nsettings:\n  universal:\n    "editor.fontSize": 13\n',
-            encoding="utf-8",
-        )
+        self._write_scope("universal", '{"editor.fontSize": 13}')
 
         report = preview(self.home, self.root, self.mount)
 
@@ -442,26 +441,53 @@ class UniversalSettingsTests(unittest.TestCase):
         for host in ("wsl", "windows"):
             self.assertEqual(report.settings[host].additions, {"editor.fontSize": 13})
 
+    def test_a_string_valued_setting_survives_authoring(self) -> None:
+        """Why settings are JSON and not a YAML block: `files.autoSave: off` is
+        the string "off" to VS Code and the boolean false to YAML, and
+        `editor.wordWrap: on` is the string "on". Authored as JSON, they stay
+        the values VS Code actually accepts."""
+        self._write_scope(
+            "universal",
+            '{"files.autoSave": "off", "editor.wordWrap": "on"}',
+        )
+
+        desired, error = desired_settings(self.root, "wsl")
+
+        self.assertIsNone(error)
+        self.assertEqual(desired, {"files.autoSave": "off", "editor.wordWrap": "on"})
+
+    def test_settings_left_in_the_yaml_manifest_are_refused(self) -> None:
+        """A silent move would leave the old block being ignored while the
+        report claimed everything was current."""
+        manifest_path(self.root).write_text(
+            'version: 1\nsettings:\n  universal:\n    a: 1\n', encoding="utf-8"
+        )
+
+        report = preview(self.home, self.root, self.mount)
+
+        self.assertIsNotNone(report.manifest_error)
+        self.assertIn("settings.<scope>.json", report.manifest_error)
+
+    def test_an_unparseable_desired_settings_file_stops_that_host(self) -> None:
+        self._write_scope("universal", '{"a": ')
+
+        report = preview(self.home, self.root, self.mount)
+
+        self.assertIsNotNone(report.settings["wsl"].unreadable)
+
     def test_a_host_override_beats_the_universal_value(self) -> None:
         """An interpreter path is machine-specific whether or not the editor is."""
-        manifest_path(self.root).write_text(
-            'version: 1\nsettings:\n'
-            '  universal:\n    "a": 1\n    "b": 2\n'
-            '  wsl:\n    "b": 99\n',
-            encoding="utf-8",
-        )
-        manifest = load_manifest(manifest_path(self.root))
+        self._write_scope("universal", '{"a": 1, "b": 2}')
+        self._write_scope("wsl", '{"b": 99}')
 
-        self.assertEqual(desired_settings(manifest, "wsl"), {"a": 1, "b": 99})
-        self.assertEqual(desired_settings(manifest, "windows"), {"a": 1, "b": 2})
+        self.assertEqual(desired_settings(self.root, "wsl")[0], {"a": 1, "b": 99})
+        self.assertEqual(desired_settings(self.root, "windows")[0], {"a": 1, "b": 2})
 
     def test_an_unavailable_host_is_reported_not_written(self) -> None:
         import shutil
 
         shutil.rmtree(self.mount / "Users")
-        manifest_path(self.root).write_text(
-            'version: 1\nsettings:\n  universal:\n    "a": 1\n', encoding="utf-8"
-        )
+        self._write_scope("universal", '{"a": 1}')
 
         report = preview(self.home, self.root, self.mount)
 
@@ -484,9 +510,9 @@ class PreviewTests(unittest.TestCase):
         settings = self.home / ".vscode-server/data/Machine/settings.json"
         settings.parent.mkdir(parents=True)
         settings.write_text('{"a": 1}\n', encoding="utf-8")
-        manifest_path(self.root).write_text(
-            'version: 1\nsettings:\n  wsl:\n    "a": 2\n', encoding="utf-8"
-        )
+        scope = settings_source(self.root, "wsl")
+        scope.parent.mkdir(parents=True)
+        scope.write_text('{"a": 2}', encoding="utf-8")
 
         report = preview(self.home, self.root, self.mount)
 

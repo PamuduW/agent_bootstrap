@@ -23,8 +23,9 @@ interchangeable.
 An extension installed in WSL is not evidence that its Windows counterpart is
 installed, so the manifest keeps a list per host.
 
-`settings.universal` is written to **every** available host's settings file,
-and `settings.wsl` / `settings.windows` layer per-host overrides on top of it.
+`vscode/settings.universal.json` is written to **every** available host's
+settings file, and `vscode/settings.wsl.json` / `vscode/settings.windows.json`
+layer per-host overrides on top of it.
 
 Writing universal keys into both files, rather than only into the Windows
 user-scope file both hosts read, is deliberate. User-scope settings do reach a
@@ -48,14 +49,32 @@ extensions:
     - charliermarsh.ruff
   windows:
     - ms-vscode-remote.remote-wsl
-settings:
-  universal:            # applied to both hosts
-    editor.fontSize: 13
-  wsl:                  # overrides, applied only to the WSL host
-    terminal.integrated.defaultProfile.linux: bash
-  windows:              # overrides, applied only to the Windows host
-    terminal.integrated.defaultProfile.windows: PowerShell
 ```
+
+Settings are authored as JSON, in the same JSONC syntax as `settings.json`
+itself, so a block can be pasted straight across:
+
+```
+vscode/settings.universal.json   # applied to both hosts
+vscode/settings.wsl.json         # overrides, WSL only
+vscode/settings.windows.json     # overrides, Windows only
+```
+
+```jsonc
+{
+  // Comments are fine here too.
+  "editor.fontSize": 13,
+  "files.autoSave": "off"
+}
+```
+
+**They are JSON rather than a YAML block for a concrete reason.** YAML's
+implicit typing rewrites real VS Code values: `files.autoSave: off` is the
+string `"off"` to VS Code and the boolean `false` to YAML, and
+`editor.wordWrap: on` is the string `"on"`. Authoring settings in YAML would
+silently write values VS Code does not accept. Extensions stay in
+`vscode.yaml`, where the values are plain identifier strings that YAML cannot
+misread.
 
 `agentbot vscode seed` fills in `extensions` from what is currently installed,
 so an existing setup becomes the baseline. It never seeds `settings`: copying a

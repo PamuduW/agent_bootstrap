@@ -23,6 +23,7 @@ from .command_runner import CommandRunner
 
 SUPPORTED_VERSION = 1
 INSTALL_TIMEOUT_SECONDS = 300.0
+SETTINGS_DIRECTORY = "vscode"
 
 WINDOWS_MOUNT_ROOT = Path("/mnt/c")
 
@@ -402,29 +403,19 @@ class VSCodeManifestError(ValueError):
 class VSCodeManifest:
     """Desired state, kept per host because the hosts are not interchangeable.
 
-    `settings.universal` is applied to every available host's settings file.
-    `settings.wsl` and `settings.windows` are per-host overrides layered on top
-    of it, for keys that cannot be the same on both -- an interpreter path is
-    machine-specific whether or not the editor is.
-
-    Writing universal keys into both files rather than only the Windows
-    user-scope file is deliberate. User-scope settings do reach a remote window,
-    but machine-scoped keys do not, so a single shared file would silently fail
-    for exactly the settings the per-host file exists to hold.
+    Only extensions live here. Settings are authored as JSON under `vscode/`,
+    because YAML's implicit typing corrupts real VS Code values: `files.autoSave:
+    off` is the string "off" to VS Code and the boolean false to YAML.
     """
 
     extensions: dict[str, tuple[str, ...]] = field(default_factory=dict)
-    settings: dict[str, dict[str, object]] = field(default_factory=dict)
 
     def extensions_for(self, host: str) -> tuple[str, ...]:
         return self.extensions.get(host, ())
 
-    def settings_for(self, host: str) -> dict[str, object]:
-        return dict(self.settings.get(host, {}))
-
     @property
     def is_empty(self) -> bool:
-        return not any(self.extensions.values()) and not any(self.settings.values())
+        return not any(self.extensions.values())
 
 
 def manifest_path(root: Path) -> Path:
@@ -451,28 +442,28 @@ def load_manifest(path: Path) -> VSCodeManifest:
             raise VSCodeManifestError(f"{path}: extensions.{host} must be a list")
         extensions[str(host)] = tuple(str(value) for value in values)
 
-    settings: dict[str, dict[str, object]] = {}
-    for scope, values in (document.get("settings") or {}).items():
-        if not isinstance(values, dict):
-            raise VSCodeManifestError(f"{path}: settings.{scope} must be a mapping")
-        settings[str(scope)] = dict(values)
+    if document.get("settings"):
+        raise VSCodeManifestError(
+            f"{path}: settings moved to {SETTINGS_DIRECTORY}/settings.<scope>.json. "
+            "YAML turns VS Code values like `files.autoSave: off` into booleans."
+        )
 
-    return VSCodeManifest(extensions=extensions, settings=settings)
+    return VSCodeManifest(extensions=extensions)
 
 
 def seed_manifest(path: Path, hosts: dict[str, VSCodeHost]) -> VSCodeManifest:
     """Write the currently installed extensions into the manifest.
 
-    Settings are never seeded: copying a whole settings file into the manifest
-    would claim ownership of every key in it, and ownership is the one thing
-    this manifest is supposed to make explicit.
+    Settings are never seeded: copying a whole settings file into the desired
+    state would claim ownership of every key in it, and ownership is the one
+    thing this manifest is supposed to make explicit.
     """
     existing = load_manifest(path)
     extensions = dict(existing.extensions)
     for name, host in hosts.items():
         if host.available:
             extensions[name] = installed_extensions(host)
-    seeded = VSCodeManifest(extensions=extensions, settings=existing.settings)
+    seeded = VSCodeManifest(extensions=extensions)
     write_text_atomic(path, render_manifest(seeded), backup=path.is_file())
     return seeded
 
@@ -482,10 +473,6 @@ def render_manifest(manifest: VSCodeManifest) -> str:
     if manifest.extensions:
         document["extensions"] = {
             host: list(values) for host, values in sorted(manifest.extensions.items())
-        }
-    if manifest.settings:
-        document["settings"] = {
-            scope: dict(values) for scope, values in sorted(manifest.settings.items())
         }
     return yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
 
@@ -555,11 +542,26 @@ def resolve_hosts(home: Path, mount_root: Path = WINDOWS_MOUNT_ROOT) -> dict[str
 UNIVERSAL_SCOPE = "universal"
 
 
-def desired_settings(manifest: VSCodeManifest, host: str) -> dict[str, object]:
-    """Universal keys, with this host's overrides layered on top."""
-    merged = dict(manifest.settings_for(UNIVERSAL_SCOPE))
-    merged.update(manifest.settings_for(host))
-    return merged
+def settings_source(root: Path, scope: str) -> Path:
+    """Where a scope's desired settings are authored.
+
+    JSON, not a YAML block: these files are pasted from and compared against
+    real settings.json, and YAML's implicit typing silently rewrites VS Code
+    values -- `files.autoSave: off` is the string "off" to VS Code and the
+    boolean false to YAML.
+    """
+    return root / SETTINGS_DIRECTORY / f"settings.{scope}.json"
+
+
+def desired_settings(root: Path, host: str) -> tuple[dict[str, object], str | None]:
+    """Universal keys with this host's overrides on top, plus any read error."""
+    merged: dict[str, object] = {}
+    for scope in (UNIVERSAL_SCOPE, host):
+        values, error = read_settings(settings_source(root, scope))
+        if error:
+            return {}, error
+        merged.update(values)
+    return merged, None
 
 
 def preview(home: Path, root: Path, mount_root: Path = WINDOWS_MOUNT_ROOT) -> VSCodeReport:
@@ -575,7 +577,10 @@ def preview(home: Path, root: Path, mount_root: Path = WINDOWS_MOUNT_ROOT) -> VS
         report.extensions[name] = plan_extensions(host, list(manifest.extensions_for(name)))
 
     for name, host in report.hosts.items():
-        desired = desired_settings(manifest, name)
+        desired, source_error = desired_settings(root, name)
+        if source_error:
+            report.settings[name] = SettingsPlan(path=host.settings_path, unreadable=source_error)
+            continue
         if not desired:
             continue
         if not host.available:
@@ -603,15 +608,14 @@ def apply(
     report = preview(home, root, mount_root)
     if report.manifest_error:
         return report
-    manifest = load_manifest(manifest_path(root))
-
     for name, host in report.hosts.items():
         settings_plan = report.settings.get(name)
         if settings_plan is None or settings_plan.unreadable or settings_plan.is_noop:
             continue
-        report.settings[name] = apply_settings(
-            host.settings_path, desired_settings(manifest, name)
-        )
+        desired, source_error = desired_settings(root, name)
+        if source_error:
+            continue
+        report.settings[name] = apply_settings(host.settings_path, desired)
 
     for name, host in report.hosts.items():
         extension_plan = report.extensions.get(name)

@@ -31,6 +31,19 @@ bar at a managed command. That surface is VS Code's, reachable only from an
 extension, and there is no documented width or layout signal for it. Claiming
 IDE coverage would be claiming something untested, so the IDE is left alone.
 
+## It reads like the Claude statusline
+
+Same palette, same separator, same segment order, same wording:
+
+```
+ Claude Opus 5 · ~/Dev/new_setup · main * · Context 34% used     (Claude)
+ Composer 1    · ~/Dev/new_setup · main * · Context 34% used     (Cursor)
+```
+
+Cursor adds two segments Claude has no equivalent for, and only when the
+payload carries them: `wt:<name>` in a worktree, and the vim mode when vim mode
+is on. A test pins the shared layout so it cannot drift apart.
+
 ## Why this is not the Claude statusline pointed at a second file
 
 The contracts are aligned but not identical, and each difference is a silent

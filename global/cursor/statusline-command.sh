@@ -52,40 +52,52 @@ vim_mode="${_fields[3]-}"
 worktree="${_fields[4]-}"
 width="${_fields[5]-0}"
 
-DIM=$'\033[90m'
+# The same palette, separator, segment order and wording as the Claude
+# statusline, so both agents read identically. Only the fields Cursor actually
+# supplies differ.
 RESET=$'\033[0m'
-ACCENT=$'\033[36m'
+FG_MODEL=$'\033[38;2;217;119;87m'      # Claude orange
+FG_DIRECTORY=$'\033[38;2;255;250;247m' # near-white
+FG_GIT=$'\033[38;2;230;205;190m'       # warm light tan
+FG_CONTEXT=$'\033[38;2;230;205;190m'   # warm light tan
+FG_SEPARATOR=$'\033[38;2;120;104;96m'  # dim warm gray
 
 segments=()
 
+if [[ -n "$model_name" ]]; then
+	segments+=("${FG_MODEL}${model_name}${RESET}")
+fi
+
 if [[ -n "$cwd" ]]; then
-	segments+=("${ACCENT}${cwd/#$HOME/\~}${RESET}")
+	segments+=("${FG_DIRECTORY}${cwd/#$HOME/\~}${RESET}")
 fi
 
 if [[ -n "$cwd" && -d "$cwd" ]]; then
 	branch="$("${GIT_TIMEOUT[@]}" git -C "$cwd" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 	if [[ -n "$branch" && "$branch" != HEAD ]]; then
-		segments+=("${DIM}${branch}${RESET}")
+		# " *" for a dirty worktree, the same marker the Claude statusline uses.
+		# --no-optional-locks so rendering never blocks a concurrent git command.
+		dirty=""
+		if [[ -n "$("${GIT_TIMEOUT[@]}" git -C "$cwd" --no-optional-locks status --porcelain 2>/dev/null)" ]]; then
+			dirty=" *"
+		fi
+		segments+=("${FG_GIT}${branch}${dirty}${RESET}")
 	fi
 fi
 
-# Only when running in a worktree, which is Cursor-specific and materially
-# changes where edits land.
-if [[ -n "$worktree" ]]; then
-	segments+=("${DIM}wt:${worktree}${RESET}")
-fi
-
-if [[ -n "$model_name" ]]; then
-	segments+=("${DIM}${model_name}${RESET}")
-fi
-
 if [[ -n "$context_used" && "$context_used" != null ]]; then
-	segments+=("${DIM}ctx ${context_used%%.*}%${RESET}")
+	segments+=("${FG_CONTEXT}Context ${context_used%%.*}% used${RESET}")
 fi
 
-# Only when vim mode is on; the field is absent otherwise.
+# Cursor-only, and only when present. A worktree changes where edits land, and
+# vim mode changes what a keystroke does; both are worth the space when the
+# payload carries them, and Claude has no equivalent to mirror.
+if [[ -n "$worktree" ]]; then
+	segments+=("${FG_GIT}wt:${worktree}${RESET}")
+fi
+
 if [[ -n "$vim_mode" ]]; then
-	segments+=("${ACCENT}${vim_mode}${RESET}")
+	segments+=("${FG_MODEL}${vim_mode}${RESET}")
 fi
 
 if ((${#segments[@]} == 0)); then
@@ -96,10 +108,12 @@ fi
 line=""
 for segment in "${segments[@]}"; do
 	if [[ -n "$line" ]]; then
-		line+="${DIM} · ${RESET}"
+		line+=" ${FG_SEPARATOR}·${RESET} "
 	fi
 	line+="$segment"
 done
+# Claude's line opens with a space; match it so the two sit at the same inset.
+line=" $line"
 
 # Trim to the width Cursor reports rather than guessing. Measure without ANSI
 # escapes, since those occupy no columns.

@@ -162,7 +162,7 @@ class CursorStatuslineScriptTests(unittest.TestCase):
         )
 
         self.assertIn("Composer 1", rendered)
-        self.assertIn("ctx 34%", rendered)
+        self.assertIn("Context 34% used", rendered)
         self.assertNotIn("200", rendered)
 
     def test_absent_optional_fields_do_not_shift_the_rest(self) -> None:
@@ -195,6 +195,20 @@ class CursorStatuslineScriptTests(unittest.TestCase):
         self.assertLessEqual(len(rendered), 30)
         self.assertTrue(rendered.endswith("…"))
 
+    def test_the_layout_matches_the_claude_statusline(self) -> None:
+        """`like the Claude one` is the requirement, so the palette, separator,
+        segment order and wording are pinned rather than left to drift."""
+        rendered = self._render(
+            {
+                "workspace": {"current_dir": "/tmp/p"},
+                "model": {"display_name": "Composer 1"},
+                "context_window": {"used_percentage": 34.5},
+                "render_width_chars": 200,
+            }
+        )
+
+        self.assertEqual(rendered, "Composer 1 · /tmp/p · Context 34% used")
+
     def test_an_empty_payload_still_renders_something(self) -> None:
         self.assertEqual(self._render({}), "Cursor")
 
@@ -208,7 +222,7 @@ class CursorStatuslineScriptTests(unittest.TestCase):
             }
         )
 
-        self.assertNotIn("ctx", rendered)
+        self.assertNotIn("Context", rendered)
         self.assertIn("X", rendered)
 
 
